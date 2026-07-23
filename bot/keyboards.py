@@ -21,6 +21,17 @@ def back_to_menu_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def contact_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💬 WhatsApp", url=config.contact_whatsapp_url)],
+            [InlineKeyboardButton(text="📷 Instagram", url=config.contact_instagram_url)],
+            [InlineKeyboardButton(text="📢 Канал", url=config.shop_channel_url)],
+            [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
+        ]
+    )
+
+
 def products_keyboard(products: list[Product]) -> InlineKeyboardMarkup:
     rows = [
         [

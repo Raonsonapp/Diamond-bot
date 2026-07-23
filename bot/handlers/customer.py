@@ -11,6 +11,7 @@ from bot.keyboards import (
     admin_order_keyboard,
     back_to_menu_keyboard,
     confirm_order_keyboard,
+    contact_keyboard,
     main_menu_keyboard,
     products_keyboard,
 )
@@ -87,12 +88,9 @@ async def menu_buy(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "menu:contact")
 async def menu_contact(callback: CallbackQuery) -> None:
     await callback.message.edit_text(
-        "📞 Тамос бо мо:\n\n"
-        f"WhatsApp: {config.contact_whatsapp}\n"
-        f"Instagram: {config.contact_instagram}\n"
-        f"Канал: {config.shop_channel_url}\n\n"
+        "📞 Тамос бо мо — тугмаро зер кунед, мустақим кушода мешавад:\n\n"
         "🛡 Бехатар · 🎧 Дастгирии 24/7 · ⏱ Дар 1-5 дақиқа",
-        reply_markup=back_to_menu_keyboard(),
+        reply_markup=contact_keyboard(),
     )
     await callback.answer()
 

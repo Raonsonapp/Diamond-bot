@@ -46,8 +46,12 @@ class Config:
     shop_channel_url: str = os.getenv("SHOP_CHANNEL_URL", "https://t.me/ALMAZ_TJ_SHOP")
     review_channel_id: str = os.getenv("REVIEW_CHANNEL_ID", "@ALMAZ_TJ_SHOP")
 
-    contact_whatsapp: str = os.getenv("CONTACT_WHATSAPP", "+992075753883")
-    contact_instagram: str = os.getenv("CONTACT_INSTAGRAM", "FF MARGEDAR")
+    # wa.me link opens WhatsApp directly to a chat with this number —
+    # digits only (country code + number, no "+", spaces or leading zeros).
+    contact_whatsapp_url: str = os.getenv("CONTACT_WHATSAPP_URL", "https://wa.me/992971769009")
+    contact_instagram_url: str = os.getenv(
+        "CONTACT_INSTAGRAM_URL", "https://www.instagram.com/ff.a1maz?igsh=aGxyNzFtaWtnNjht"
+    )
 
 
 config = Config()
