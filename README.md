@@ -38,7 +38,7 @@
 тасдиқ мешавад, алмаз бо дасти админ фиристода шуда бо як тугма қайд мешавад.
 Ин бехатар аст ва барои оғози тиҷорат кофӣ — фақат бе шумо (офлайн) кор намекунад.
 
-## Насб
+## Насб (санҷиши маҳаллӣ, дар компютери худ)
 
 ```bash
 python3 -m venv .venv
@@ -46,8 +46,46 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # .env-ро пур кунед: BOT_TOKEN аз @BotFather, ADMIN_CHAT_ID, ADMIN_USER_IDS
+# PUBLIC_URL-ро холӣ гузоред — бот дар усули polling кор мекунад
 python main.py
 ```
+
+## Фаъол доштани бот 24 соат дар Render
+
+Бот дар ду усул кор карда метавонад:
+
+- **polling** (`PUBLIC_URL` холӣ) — барои санҷиши маҳаллӣ дар компютери худ.
+- **webhook** (`PUBLIC_URL` пур) — барои Render ва дигар хостҳое, ки хидматро
+  доим фаъол нигоҳ медоранд ва URL-и оммавӣ медиҳанд.
+
+Қадамҳо дар Render (Web Service, на Background Worker, зеро webhook ба порт
+гӯш мекунад):
+
+1. Дар Render → Settings-и хидмати худ:
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `python main.py`
+2. Дар Render → Environment, ин тағйирёбандаҳоро илова кунед:
+   - `BOT_TOKEN` — токени бот аз @BotFather
+   - `ADMIN_CHAT_ID` — ID-и гурӯҳи/чати админ (барои огоҳиномаҳо)
+   - `ADMIN_USER_IDS` — ID-и телеграмии шумо (админ), бо вергул ҷудо
+   - `PUBLIC_URL` — маҳз ҳамон URL-и хидмати шумо, масалан
+     `https://diamond-bot-qakk.onrender.com` (бе `/` дар охир)
+   - `TELEGRAM_WEBHOOK_SECRET` — як сатри тасодуфии дароз (масалан аз
+     `openssl rand -hex 32`), барои амният
+   - `PORT`-ро **насозед** — Render онро худаш медиҳад
+3. Deploy кунед. Ҳангоми оғоз бот худаш ба Telegram мегӯяд "ба ин URL
+   навсозиҳоро фиристед" (`set_webhook`).
+4. Санҷиш: `https://diamond-bot-qakk.onrender.com/` бояд "OK" нишон диҳад.
+   Баъд дар Telegram ба бот `/start` фиристед.
+
+### Огоҳии муҳим — нигаҳдории маълумот
+
+Дар нақшаи ройгони Render диски маҳаллӣ доим аст, аммо баъзан ҳангоми
+редеплой/рестарт метавонад тоза шавад. Файли SQLite (`diamond_bot.db`) дар
+он ҷо нигоҳ дошта мешавад — яъне фармоишу маҳсулоти шумо метавонанд гум
+шаванд. Барои тиҷорати ҷиддӣ дар оянда беҳтараш ба базаи доимӣ (масалан
+Render PostgreSQL, нақшаи пулакӣ) гузаред. Барои оғози кор ва санҷиш ин
+кофист.
 
 ## Илова кардани маҳсулот
 

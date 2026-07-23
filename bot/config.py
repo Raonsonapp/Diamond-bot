@@ -20,6 +20,15 @@ class Config:
 
     database_path: str = os.getenv("DATABASE_PATH", "./diamond_bot.db")
 
+    # Public URL Render (or any other host) gives your service, e.g.
+    # https://diamond-bot-qakk.onrender.com — leave empty to run in local
+    # polling mode instead (see main.py).
+    public_url: str = os.getenv("PUBLIC_URL", "")
+    telegram_webhook_path: str = os.getenv("TELEGRAM_WEBHOOK_PATH", "/tg-webhook")
+    telegram_webhook_secret: str = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+    # Render sets $PORT itself at runtime; 8080 is just a local fallback.
+    port: int = int(os.getenv("PORT", "8080"))
+
     payment_provider: str = os.getenv("PAYMENT_PROVIDER", "manual")
     alif_shop_id: str = os.getenv("ALIF_SHOP_ID", "")
     alif_secret_key: str = os.getenv("ALIF_SECRET_KEY", "")
