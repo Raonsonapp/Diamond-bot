@@ -281,6 +281,42 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     await state.clear()
 
 
+@router.message(OrderFlow.awaiting_review, F.text)
+async def receive_review(message: Message, state: FSMContext) -> None:
+    from bot.db.repo import get_order
+    from bot.services.announcements import post_review_announcement
+
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    await state.clear()
+    if not order_id:
+        return
+
+    async with get_session() as session:
+        order = await get_order(session, order_id)
+        product = await get_product(session, order.product_id)
+        await post_review_announcement(message.bot, session, order, product, message.text.strip())
+
+    await message.answer("Ташаккур барои шарҳи шумо! 🙏")
+
+
+@router.callback_query(F.data.startswith("review:skip:"))
+async def skip_review(callback: CallbackQuery, state: FSMContext) -> None:
+    from bot.db.repo import get_order
+    from bot.services.announcements import post_review_announcement
+
+    order_id = int(callback.data.split(":")[2])
+    await state.clear()
+
+    async with get_session() as session:
+        order = await get_order(session, order_id)
+        product = await get_product(session, order.product_id)
+        await post_review_announcement(callback.bot, session, order, product, None)
+
+    await callback.message.edit_text("Хуб, ташаккур барои харид! 🙏")
+    await callback.answer()
+
+
 @router.message(Command("myorders"))
 async def my_orders(message: Message) -> None:
     text = await _format_orders_text(message.from_user.id)

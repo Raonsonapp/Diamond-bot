@@ -7,3 +7,4 @@ class OrderFlow(StatesGroup):
     entering_player_id = State()
     confirming = State()
     awaiting_payment_proof = State()
+    awaiting_review = State()

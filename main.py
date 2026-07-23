@@ -4,18 +4,18 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp import web
 
 from bot.config import config
 from bot.db.session import init_db
+from bot.fsm_storage import storage
 from bot.handlers import admin, customer
 
 logging.basicConfig(level=logging.INFO)
 
 
 def build_dispatcher() -> Dispatcher:
-    dp = Dispatcher(storage=MemoryStorage())
+    dp = Dispatcher(storage=storage)
     dp.include_router(admin.router)
     dp.include_router(customer.router)
     return dp

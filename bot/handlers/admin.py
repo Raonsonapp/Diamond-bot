@@ -1,16 +1,17 @@
-from datetime import datetime
-
 from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import StorageKey
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import config
-from bot.db.models import OrderStatus, User
+from bot.db.models import OrderStatus
 from bot.db.repo import get_order, get_product, list_orders_by_status, set_order_status
 from bot.db.session import get_session
-from bot.keyboards import admin_order_keyboard
+from bot.fsm_storage import storage
+from bot.keyboards import admin_order_keyboard, review_prompt_keyboard
 from bot.services.delivery import get_delivery_provider
+from bot.states import OrderFlow
 
 router = Router(name="admin")
 
@@ -19,27 +20,23 @@ def is_admin(user_id: int) -> bool:
     return user_id in config.admin_user_ids
 
 
-async def _announce_delivery(bot: Bot, session, order, product) -> None:
-    """Post a public "proof of purchase" message to the shop channel for
-    trust — requires the bot to be added there as admin with post rights.
-    Never lets a channel/permission problem break the actual delivery flow."""
+async def _prompt_for_review(bot: Bot, order) -> None:
+    """After delivery, ask the customer for a short review and remember
+    which order it's for — customer.py posts it to the shop channel once
+    they reply (or skip)."""
     if not config.review_channel_id:
         return
 
-    user = await session.get(User, order.user_id)
-    display_name = user.full_name if user and user.full_name else "Мизоҷ"
-    now = datetime.now()
+    key = StorageKey(bot_id=bot.id, chat_id=order.user_id, user_id=order.user_id)
+    customer_state = FSMContext(storage=storage, key=key)
+    await customer_state.set_state(OrderFlow.awaiting_review)
+    await customer_state.update_data(order_id=order.id)
 
-    text = (
-        "✅ Фармоиши нав иҷро шуд!\n"
-        f"👤 {display_name}\n"
-        f"💎 {product.diamonds} алмаз\n"
-        f"📅 {now.strftime('%d.%m.%Y')}  🕐 {now.strftime('%H:%M')}"
+    await bot.send_message(
+        order.user_id,
+        "🙏 Лутфан як шарҳи кӯтоҳ дар бораи хидмат нависед — ин ба дигар мизоҷон кӯмак мекунад!",
+        reply_markup=review_prompt_keyboard(order.id),
     )
-    try:
-        await bot.send_message(config.review_channel_id, text)
-    except TelegramAPIError:
-        pass
 
 
 async def _reject_non_admin(message: Message) -> None:
@@ -184,11 +181,11 @@ async def confirm_payment(callback: CallbackQuery, bot: Bot) -> None:
         async with get_session() as session:
             order = await get_order(session, order_id)
             await set_order_status(session, order, OrderStatus.DELIVERED, payment_reference=result.reference)
-            await _announce_delivery(bot, session, order, product)
         await bot.send_message(
             order.user_id,
             f"🎉 {product.diamonds}💎 ба аккаунти шумо (ID: {order.ff_player_id}) ирсол шуд!",
         )
+        await _prompt_for_review(bot, order)
         await callback.answer("Автоматӣ ирсол шуд.")
     else:
         await callback.answer("Тасдиқ шуд. Лутфан алмазро дастӣ ирсол карда, 'Delivered' -ро зер кунед.")
@@ -230,11 +227,11 @@ async def mark_delivered(callback: CallbackQuery, bot: Bot) -> None:
             return
         order = await set_order_status(session, order, OrderStatus.DELIVERED)
         product = await get_product(session, order.product_id)
-        await _announce_delivery(bot, session, order, product)
 
     await callback.message.edit_reply_markup(reply_markup=None)
     await bot.send_message(
         order.user_id,
         f"🎉 {product.diamonds}💎 ба аккаунти шумо (ID: {order.ff_player_id}) ирсол шуд!",
     )
+    await _prompt_for_review(bot, order)
     await callback.answer("Қайд шуд ҳамчун ирсолшуда.")
