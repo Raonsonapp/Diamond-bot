@@ -34,6 +34,10 @@ class Config:
     alif_secret_key: str = os.getenv("ALIF_SECRET_KEY", "")
     alif_api_base_url: str = os.getenv("ALIF_API_BASE_URL", "")
     alif_callback_path: str = os.getenv("ALIF_CALLBACK_PATH", "/webhooks/alif")
+    dc_shop_id: str = os.getenv("DC_SHOP_ID", "")
+    dc_secret_key: str = os.getenv("DC_SECRET_KEY", "")
+    dc_api_base_url: str = os.getenv("DC_API_BASE_URL", "")
+    dc_callback_path: str = os.getenv("DC_CALLBACK_PATH", "/webhooks/dc")
     webhook_server_host: str = os.getenv("WEBHOOK_SERVER_HOST", "0.0.0.0")
     webhook_server_port: int = int(os.getenv("WEBHOOK_SERVER_PORT", "8080"))
 

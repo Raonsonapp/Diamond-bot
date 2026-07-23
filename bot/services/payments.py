@@ -98,7 +98,49 @@ class AlifPayProvider(PaymentProvider):
         return False, None
 
 
+class DCBankProvider(PaymentProvider):
+    """Scaffold only, same reasoning as AlifPayProvider. Dushanbe City Bank
+    (dc.tj) does run merchant/internet-acquiring services ("Express Pay"),
+    but — like Alif — doesn't publish a public generic API spec. Contact
+    them directly as a registered business to get a Shop ID, Secret Key,
+    and their real endpoint/callback signature documentation, then fill in
+    `create_invoice` and `verify_callback` below before switching
+    PAYMENT_PROVIDER=dc in production."""
+
+    def __init__(self) -> None:
+        if not (config.dc_shop_id and config.dc_secret_key and config.dc_api_base_url):
+            raise RuntimeError(
+                "PAYMENT_PROVIDER=dc is set but DC_SHOP_ID / DC_SECRET_KEY / "
+                "DC_API_BASE_URL are empty. Get these from Dushanbe City Bank as a "
+                "registered merchant first — see bot/services/payments.py docstring."
+            )
+        self.shop_id = config.dc_shop_id
+        self.secret_key = config.dc_secret_key
+        self.api_base_url = config.dc_api_base_url
+
+    async def create_invoice(self, order_id: int, amount_somoni: float) -> InvoiceResult:
+        raise NotImplementedError(
+            "Wire this up to DC Bank's real 'create invoice' endpoint once you have "
+            "their merchant API doc. Placeholder to prevent silently taking payments "
+            "without a real gateway behind it."
+        )
+
+    def verify_callback(self, payload: dict, headers: dict) -> tuple[bool, str | None]:
+        # Placeholder HMAC check — replace with DC Bank's actual signature scheme.
+        signature = headers.get("X-Signature", "")
+        expected = hmac.new(
+            self.secret_key.encode(), str(payload).encode(), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            return False, None
+        if payload.get("status") == "paid":
+            return True, str(payload.get("transaction_id"))
+        return False, None
+
+
 def get_payment_provider() -> PaymentProvider:
     if config.payment_provider == "alif":
         return AlifPayProvider()
+    if config.payment_provider == "dc":
+        return DCBankProvider()
     return ManualBankTransferProvider()
