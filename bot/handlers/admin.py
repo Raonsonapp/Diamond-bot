@@ -16,9 +16,18 @@ def is_admin(user_id: int) -> bool:
     return user_id in config.admin_user_ids
 
 
+async def _reject_non_admin(message: Message) -> None:
+    await message.answer(
+        f"⛔ Шумо ҳамчун админ шинохта нашудед (ID-и шумо: {message.from_user.id}).\n"
+        f"Дар Render, дар ADMIN_USER_IDS ҳамин рақамро илова кунед ва хидматро "
+        f"аз нав деплой кунед."
+    )
+
+
 @router.message(Command("addproduct"))
 async def add_product(message: Message) -> None:
     if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
         return
     # /addproduct <name> <diamonds> <price_somoni> <cost_somoni>
     parts = message.text.split(maxsplit=4)
@@ -57,6 +66,7 @@ async def add_product(message: Message) -> None:
 @router.message(Command("products"))
 async def list_products(message: Message) -> None:
     if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
         return
     from bot.db.repo import list_active_products
 
@@ -77,6 +87,7 @@ async def list_products(message: Message) -> None:
 @router.message(Command("pending"))
 async def pending_orders(message: Message) -> None:
     if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
         return
 
     async with get_session() as session:
