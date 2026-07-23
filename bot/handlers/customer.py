@@ -7,7 +7,13 @@ from bot.config import config
 from bot.db.models import Product
 from bot.db.repo import create_order, get_product, list_active_products, upsert_user
 from bot.db.session import get_session
-from bot.keyboards import admin_order_keyboard, confirm_order_keyboard, products_keyboard
+from bot.keyboards import (
+    admin_order_keyboard,
+    back_to_menu_keyboard,
+    confirm_order_keyboard,
+    main_menu_keyboard,
+    products_keyboard,
+)
 from bot.services.payments import get_payment_provider
 from bot.services.pricing import quote_custom_price
 from bot.states import OrderFlow
@@ -17,25 +23,85 @@ MAX_CUSTOM_DIAMONDS = 200_000
 
 router = Router(name="customer")
 
+WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фурӯши алмази Free Fire.\n\nЧиро интихоб мекунед?"
+
+
+async def _show_main_menu(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+
+
+async def _format_orders_text(user_id: int) -> str:
+    from sqlalchemy import select
+
+    from bot.db.models import Order
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(Order).where(Order.user_id == user_id).order_by(Order.created_at.desc()).limit(10)
+        )
+        orders = list(result.scalars().all())
+
+    if not orders:
+        return "Шумо то ҳол фармоише надоред."
+
+    lines = [f"#{o.id} — {o.amount_somoni:.0f} сомонӣ — {o.status.value}" for o in orders]
+    return "📦 Фармоишҳои охирини шумо:\n" + "\n".join(lines)
+
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
-    await state.clear()
     async with get_session() as session:
         await upsert_user(session, message.from_user.id, message.from_user.username, message.from_user.full_name)
+    await _show_main_menu(message, state)
+
+
+@router.callback_query(F.data == "menu:main")
+async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.message.edit_text(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:buy")
+async def menu_buy(callback: CallbackQuery, state: FSMContext) -> None:
+    async with get_session() as session:
         products = await list_active_products(session)
 
     if not products:
-        await message.answer(
-            "Ҳозир маҳсулот дастрас нест. Лутфан баъдтар кӯшиш кунед ё бо админ тамос гиред."
+        await callback.message.edit_text(
+            "Ҳозир маҳсулот дастрас нест. Лутфан баъдтар кӯшиш кунед ё бо админ тамос гиред.",
+            reply_markup=back_to_menu_keyboard(),
         )
+        await callback.answer()
         return
 
-    await message.answer(
-        "Хуш омадед! 💎 Бастаи алмази Free Fire-ро интихоб кунед:",
+    await callback.message.edit_text(
+        "💎 Бастаи алмази Free Fire-ро интихоб кунед:",
         reply_markup=products_keyboard(products),
     )
     await state.set_state(OrderFlow.choosing_product)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:contact")
+async def menu_contact(callback: CallbackQuery) -> None:
+    await callback.message.edit_text(
+        "📞 Тамос бо мо:\n\n"
+        f"WhatsApp: {config.contact_whatsapp}\n"
+        f"Instagram: {config.contact_instagram}\n"
+        f"Канал: {config.shop_channel_url}\n\n"
+        "🛡 Бехатар · 🎧 Дастгирии 24/7 · ⏱ Дар 1-5 дақиқа",
+        reply_markup=back_to_menu_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:myorders")
+async def menu_myorders(callback: CallbackQuery) -> None:
+    text = await _format_orders_text(callback.from_user.id)
+    await callback.message.edit_text(text, reply_markup=back_to_menu_keyboard())
+    await callback.answer()
 
 
 @router.callback_query(OrderFlow.choosing_product, F.data == "product:custom")
@@ -205,21 +271,5 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
 
 @router.message(Command("myorders"))
 async def my_orders(message: Message) -> None:
-    from sqlalchemy import select
-
-    from bot.db.models import Order
-
-    async with get_session() as session:
-        result = await session.execute(
-            select(Order).where(Order.user_id == message.from_user.id).order_by(Order.created_at.desc()).limit(10)
-        )
-        orders = list(result.scalars().all())
-
-    if not orders:
-        await message.answer("Шумо то ҳол фармоише надоред.")
-        return
-
-    lines = [
-        f"#{o.id} — {o.amount_somoni:.0f} сомонӣ — {o.status.value}" for o in orders
-    ]
-    await message.answer("Фармоишҳои охирини шумо:\n" + "\n".join(lines))
+    text = await _format_orders_text(message.from_user.id)
+    await message.answer(text)

@@ -41,5 +41,13 @@ class Config:
     supplier_api_base_url: str = os.getenv("SUPPLIER_API_BASE_URL", "")
     supplier_api_key: str = os.getenv("SUPPLIER_API_KEY", "")
 
+    # Public shop channel: bot must be added there as admin with "Post
+    # Messages" permission, otherwise announcements silently fail.
+    shop_channel_url: str = os.getenv("SHOP_CHANNEL_URL", "https://t.me/ALMAZ_TJ_SHOP")
+    review_channel_id: str = os.getenv("REVIEW_CHANNEL_ID", "@ALMAZ_TJ_SHOP")
+
+    contact_whatsapp: str = os.getenv("CONTACT_WHATSAPP", "+992075753883")
+    contact_instagram: str = os.getenv("CONTACT_INSTAGRAM", "FF MARGEDAR")
+
 
 config = Config()
