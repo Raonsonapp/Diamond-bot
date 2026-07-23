@@ -1,13 +1,24 @@
-from sqlalchemy import select
+from datetime import datetime, timezone
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
-from bot.db.models import Order, OrderStatus, Product, User
+from bot.db.models import Order, OrderStatus, Product, ProductCategory, User
 
 
-async def upsert_user(session: AsyncSession, user_id: int, username: str | None, full_name: str | None) -> User:
+async def upsert_user(
+    session: AsyncSession,
+    user_id: int,
+    username: str | None,
+    full_name: str | None,
+    referred_by: int | None = None,
+) -> User:
     user = await session.get(User, user_id)
     if user is None:
-        user = User(id=user_id, username=username, full_name=full_name)
+        if referred_by == user_id:
+            referred_by = None
+        user = User(id=user_id, username=username, full_name=full_name, referred_by=referred_by)
         session.add(user)
     else:
         user.username = username
@@ -16,10 +27,59 @@ async def upsert_user(session: AsyncSession, user_id: int, username: str | None,
     return user
 
 
-async def list_active_products(session: AsyncSession) -> list[Product]:
+async def get_user(session: AsyncSession, user_id: int) -> User | None:
+    return await session.get(User, user_id)
+
+
+async def accept_terms(session: AsyncSession, user: User) -> User:
+    user.accepted_terms_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def credit_referral_balance(session: AsyncSession, user_id: int, amount: float) -> None:
+    user = await session.get(User, user_id)
+    if user is not None and amount:
+        user.referral_balance = round(user.referral_balance + amount, 2)
+        await session.commit()
+
+
+async def deduct_referral_balance(session: AsyncSession, user: User, amount: float) -> User:
+    user.referral_balance = round(user.referral_balance - amount, 2)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def count_referrals(session: AsyncSession, user_id: int) -> int:
     result = await session.execute(
-        select(Product).where(Product.is_active.is_(True)).order_by(Product.diamonds)
+        select(func.count()).select_from(User).where(User.referred_by == user_id)
     )
+    return result.scalar_one()
+
+
+async def top_referrers(session: AsyncSession, limit: int = 10) -> list[tuple[User, int]]:
+    referred = aliased(User)
+    stmt = (
+        select(User, func.count(referred.id).label("referral_count"))
+        .join(referred, referred.referred_by == User.id)
+        .group_by(User.id)
+        .order_by(func.count(referred.id).desc())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    return [(row[0], row[1]) for row in result.all()]
+
+
+async def list_active_products(
+    session: AsyncSession, category: ProductCategory | None = None
+) -> list[Product]:
+    stmt = select(Product).where(Product.is_active.is_(True))
+    if category is not None:
+        stmt = stmt.where(Product.category == category)
+    stmt = stmt.order_by(Product.diamonds)
+    result = await session.execute(stmt)
     return list(result.scalars().all())
 
 
@@ -33,6 +93,7 @@ async def create_order(
     product: Product,
     ff_player_id: str,
     payment_provider: str,
+    paid_with_referral_balance: bool = False,
 ) -> Order:
     order = Order(
         user_id=user_id,
@@ -40,7 +101,8 @@ async def create_order(
         ff_player_id=ff_player_id,
         amount_somoni=product.price_somoni,
         payment_provider=payment_provider,
-        status=OrderStatus.AWAITING_PAYMENT,
+        status=OrderStatus.PAID if paid_with_referral_balance else OrderStatus.AWAITING_PAYMENT,
+        paid_with_referral_balance=paid_with_referral_balance,
     )
     session.add(order)
     await session.commit()
@@ -96,3 +158,56 @@ async def set_order_status(
     await session.commit()
     await session.refresh(order)
     return order
+
+
+async def get_user_purchase_stats(session: AsyncSession, user_id: int) -> tuple[int, float]:
+    result = await session.execute(
+        select(func.count(Order.id), func.coalesce(func.sum(Order.amount_somoni), 0.0)).where(
+            Order.user_id == user_id, Order.status == OrderStatus.DELIVERED
+        )
+    )
+    count, total = result.one()
+    return count, float(total)
+
+
+async def top_buyers(session: AsyncSession, limit: int = 10) -> list[tuple[User, int, float]]:
+    stmt = (
+        select(
+            User,
+            func.count(Order.id).label("purchase_count"),
+            func.coalesce(func.sum(Order.amount_somoni), 0.0).label("total_spent"),
+        )
+        .join(Order, Order.user_id == User.id)
+        .where(Order.status == OrderStatus.DELIVERED)
+        .group_by(User.id)
+        .order_by(func.count(Order.id).desc())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    return [(row[0], row[1], float(row[2])) for row in result.all()]
+
+
+async def get_buyer_rank(session: AsyncSession, user_id: int) -> int | None:
+    stmt = (
+        select(Order.user_id, func.count(Order.id).label("cnt"))
+        .where(Order.status == OrderStatus.DELIVERED)
+        .group_by(Order.user_id)
+        .order_by(func.count(Order.id).desc())
+    )
+    result = await session.execute(stmt)
+    for idx, (uid, _cnt) in enumerate(result.all(), start=1):
+        if uid == user_id:
+            return idx
+    return None
+
+
+async def count_total_users(session: AsyncSession) -> int:
+    result = await session.execute(select(func.count()).select_from(User))
+    return result.scalar_one()
+
+
+async def count_total_delivered_orders(session: AsyncSession) -> int:
+    result = await session.execute(
+        select(func.count()).select_from(Order).where(Order.status == OrderStatus.DELIVERED)
+    )
+    return result.scalar_one()

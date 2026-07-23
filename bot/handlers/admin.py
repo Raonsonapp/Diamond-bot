@@ -5,8 +5,16 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import config
-from bot.db.models import OrderStatus
-from bot.db.repo import get_order, get_product, list_orders_by_status, set_order_status
+from bot.db.models import Order, OrderStatus, Product, ProductCategory
+from bot.db.repo import (
+    credit_referral_balance,
+    get_order,
+    get_product,
+    get_user,
+    list_active_products,
+    list_orders_by_status,
+    set_order_status,
+)
 from bot.db.session import get_session
 from bot.fsm_storage import storage
 from bot.keyboards import admin_order_keyboard, review_prompt_keyboard
@@ -15,9 +23,22 @@ from bot.states import OrderFlow
 
 router = Router(name="admin")
 
+REFERRAL_BONUS_RATE = 0.05
+
 
 def is_admin(user_id: int) -> bool:
     return user_id in config.admin_user_ids
+
+
+async def _credit_referral(session, order: Order) -> None:
+    """5% of a delivered order's amount goes to whoever referred the buyer,
+    once per order — call this exactly once, at the moment an order becomes
+    DELIVERED."""
+    buyer = await get_user(session, order.user_id)
+    if buyer is None or buyer.referred_by is None:
+        return
+    bonus = round(order.amount_somoni * REFERRAL_BONUS_RATE, 2)
+    await credit_referral_balance(session, buyer.referred_by, bonus)
 
 
 async def _prompt_for_review(bot: Bot, order) -> None:
@@ -47,27 +68,25 @@ async def _reject_non_admin(message: Message) -> None:
     )
 
 
-@router.message(Command("addproduct"))
-async def add_product(message: Message) -> None:
+async def _add_product(message: Message, category: ProductCategory, usage_example: str) -> None:
     if not is_admin(message.from_user.id):
         await _reject_non_admin(message)
         return
-    # /addproduct <name> <diamonds> <price_somoni> <cost_somoni>
+
     parts = message.text.split(maxsplit=4)
     if len(parts) != 5:
         await message.answer(
-            "Истифода: /addproduct <ном> <миқдори_алмаз> <нарх_фурӯш> <нарх_харид>\n"
-            "Мисол: /addproduct Starter 100 10 8"
+            f"Истифода: {usage_example} <ном> <миқдор> <нарх_фурӯш> <нарх_харид>\n"
+            f"Мисол: {usage_example} Starter 100 10 8"
         )
         return
 
-    from bot.db.models import Product
-
-    _, name, diamonds, price, cost = parts
+    _, name, amount, price, cost = parts
     try:
         product = Product(
             name=name,
-            diamonds=int(diamonds),
+            category=category,
+            diamonds=int(amount),
             price_somoni=float(price),
             cost_somoni=float(cost),
         )
@@ -81,9 +100,19 @@ async def add_product(message: Message) -> None:
         await session.refresh(product)
 
     await message.answer(
-        f"Маҳсулот сохта шуд: #{product.id} {product.name} — {product.diamonds}💎 "
+        f"Маҳсулот сохта шуд: #{product.id} {product.name} — {product.diamonds}{product.unit_label} "
         f"ба {product.price_somoni:.0f} сомонӣ (фоида {product.margin_somoni:.2f} сомонӣ)"
     )
+
+
+@router.message(Command("addproduct"))
+async def add_product(message: Message) -> None:
+    await _add_product(message, ProductCategory.DIAMONDS, "/addproduct")
+
+
+@router.message(Command("addstars"))
+async def add_stars(message: Message) -> None:
+    await _add_product(message, ProductCategory.TELEGRAM, "/addstars")
 
 
 @router.message(Command("products"))
@@ -91,17 +120,17 @@ async def list_products(message: Message) -> None:
     if not is_admin(message.from_user.id):
         await _reject_non_admin(message)
         return
-    from bot.db.repo import list_active_products
 
     async with get_session() as session:
         products = await list_active_products(session)
 
     if not products:
-        await message.answer("Ягон маҳсулот нест. Бо /addproduct илова кунед.")
+        await message.answer("Ягон маҳсулот нест. Бо /addproduct ё /addstars илова кунед.")
         return
 
     lines = [
-        f"#{p.id} {p.name}: {p.diamonds}💎 = {p.price_somoni:.0f}с (харид {p.cost_somoni:.0f}с, фоида {p.margin_somoni:.2f}с)"
+        f"#{p.id} [{p.category.value}] {p.name}: {p.diamonds}{p.unit_label} = "
+        f"{p.price_somoni:.0f}с (харид {p.cost_somoni:.0f}с, фоида {p.margin_somoni:.2f}с)"
         for p in products
     ]
     await message.answer("\n".join(lines))
@@ -144,9 +173,9 @@ async def pending_orders(message: Message) -> None:
         return
 
     lines = ["⏳ Дар интизори пардохт:"]
-    lines += [f"#{o.id} — {o.amount_somoni:.0f}с — player {o.ff_player_id}" for o in awaiting] or ["(нест)"]
+    lines += [f"#{o.id} — {o.amount_somoni:.0f}с — recipient {o.ff_player_id}" for o in awaiting] or ["(нест)"]
     lines.append("\n💰 Пардохт шуда, дар интизори ирсол:")
-    lines += [f"#{o.id} — {o.amount_somoni:.0f}с — player {o.ff_player_id}" for o in paid] or ["(нест)"]
+    lines += [f"#{o.id} — {o.amount_somoni:.0f}с — recipient {o.ff_player_id}" for o in paid] or ["(нест)"]
     await message.answer("\n".join(lines))
 
 
@@ -168,7 +197,7 @@ async def confirm_payment(callback: CallbackQuery, bot: Bot) -> None:
     await callback.message.edit_reply_markup(reply_markup=admin_order_keyboard(order))
     await bot.send_message(
         order.user_id,
-        f"✅ Пардохти фармоиши #{order.id} тасдиқ шуд. {product.diamonds}💎 ба зудӣ ба ҳисоби шумо ирсол мешавад.",
+        f"✅ Пардохти фармоиши #{order.id} тасдиқ шуд. {product.diamonds}{product.unit_label} ба зудӣ ба ҳисоби шумо ирсол мешавад.",
     )
 
     delivery = get_delivery_provider()
@@ -181,14 +210,15 @@ async def confirm_payment(callback: CallbackQuery, bot: Bot) -> None:
         async with get_session() as session:
             order = await get_order(session, order_id)
             await set_order_status(session, order, OrderStatus.DELIVERED, payment_reference=result.reference)
+            await _credit_referral(session, order)
         await bot.send_message(
             order.user_id,
-            f"🎉 {product.diamonds}💎 ба аккаунти шумо (ID: {order.ff_player_id}) ирсол шуд!",
+            f"🎉 {product.diamonds}{product.unit_label} ба аккаунти шумо ({order.ff_player_id}) ирсол шуд!",
         )
         await _prompt_for_review(bot, order)
         await callback.answer("Автоматӣ ирсол шуд.")
     else:
-        await callback.answer("Тасдиқ шуд. Лутфан алмазро дастӣ ирсол карда, 'Delivered' -ро зер кунед.")
+        await callback.answer("Тасдиқ шуд. Лутфан дастӣ ирсол карда, 'Delivered' -ро зер кунед.")
 
 
 @router.callback_query(F.data.startswith("admin:reject:"))
@@ -227,11 +257,12 @@ async def mark_delivered(callback: CallbackQuery, bot: Bot) -> None:
             return
         order = await set_order_status(session, order, OrderStatus.DELIVERED)
         product = await get_product(session, order.product_id)
+        await _credit_referral(session, order)
 
     await callback.message.edit_reply_markup(reply_markup=None)
     await bot.send_message(
         order.user_id,
-        f"🎉 {product.diamonds}💎 ба аккаунти шумо (ID: {order.ff_player_id}) ирсол шуд!",
+        f"🎉 {product.diamonds}{product.unit_label} ба аккаунти шумо ({order.ff_player_id}) ирсол шуд!",
     )
     await _prompt_for_review(bot, order)
     await callback.answer("Қайд шуд ҳамчун ирсолшуда.")

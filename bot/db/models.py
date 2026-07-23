@@ -22,6 +22,11 @@ class OrderStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class ProductCategory(str, enum.Enum):
+    DIAMONDS = "diamonds"  # Free Fire diamonds — recipient is a player ID
+    TELEGRAM = "telegram"  # Telegram Stars/Premium — recipient is a @username
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -29,18 +34,26 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    accepted_terms_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    referred_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id"), nullable=True
+    )
+    referral_balance: Mapped[float] = mapped_column(Float, default=0.0)
 
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
 
 
 class Product(Base):
-    """A diamond package the bot sells, e.g. 100 Diamonds for 10 somoni."""
+    """A diamond package or Telegram Stars/Premium package the bot sells."""
 
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(64))
-    diamonds: Mapped[int] = mapped_column(Integer)
+    category: Mapped[ProductCategory] = mapped_column(
+        Enum(ProductCategory), default=ProductCategory.DIAMONDS
+    )
+    diamonds: Mapped[int] = mapped_column(Integer)  # unit count: diamonds, or Stars
     price_somoni: Mapped[float] = mapped_column(Float)
     cost_somoni: Mapped[float] = mapped_column(Float, default=0.0)
     is_active: Mapped[bool] = mapped_column(default=True)
@@ -49,6 +62,10 @@ class Product(Base):
     def margin_somoni(self) -> float:
         return round(self.price_somoni - self.cost_somoni, 2)
 
+    @property
+    def unit_label(self) -> str:
+        return "💎" if self.category == ProductCategory.DIAMONDS else "⭐"
+
 
 class Order(Base):
     __tablename__ = "orders"
@@ -56,8 +73,11 @@ class Order(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
     product_id: Mapped[int] = mapped_column(Integer, ForeignKey("products.id"))
+    # Free Fire player ID (diamonds) or @username (Telegram Stars/Premium),
+    # depending on the product's category.
     ff_player_id: Mapped[str] = mapped_column(String(32))
     amount_somoni: Mapped[float] = mapped_column(Float)
+    paid_with_referral_balance: Mapped[bool] = mapped_column(default=False)
     status: Mapped[OrderStatus] = mapped_column(
         Enum(OrderStatus), default=OrderStatus.AWAITING_PAYMENT
     )

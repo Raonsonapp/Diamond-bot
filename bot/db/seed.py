@@ -9,8 +9,12 @@ wholesale cost and it'll be corrected.
 
 from sqlalchemy import select
 
-from bot.db.models import Product
+from bot.db.models import Product, ProductCategory
 
+# Telegram Stars packages are intentionally not seeded here — unlike the
+# Free Fire prices above (given directly by the admin), no real Stars
+# pricing was provided, and seeding made-up numbers would show customers
+# a price nobody decided on. Add real ones with /addstars.
 DEFAULT_PRODUCTS = [
     # (name, diamonds, price_somoni)
     ("100 диамонд", 100, 10),
@@ -31,6 +35,12 @@ async def seed_default_products(session) -> None:
 
     for name, diamonds, price in DEFAULT_PRODUCTS:
         session.add(
-            Product(name=name, diamonds=diamonds, price_somoni=price, cost_somoni=price)
+            Product(
+                name=name,
+                category=ProductCategory.DIAMONDS,
+                diamonds=diamonds,
+                price_somoni=price,
+                cost_somoni=price,
+            )
         )
     await session.commit()
