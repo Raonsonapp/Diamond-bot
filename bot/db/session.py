@@ -13,6 +13,11 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    from bot.db.seed import seed_default_products
+
+    async with async_session() as session:
+        await seed_default_products(session)
+
 
 @asynccontextmanager
 async def get_session():
