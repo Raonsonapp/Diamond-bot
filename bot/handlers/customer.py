@@ -230,6 +230,10 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(OrderFlow.awaiting_payment_proof)
 async def receive_payment_proof(message: Message, state: FSMContext) -> None:
+    import hashlib
+
+    from bot.db.repo import find_duplicate_proof, get_order, set_payment_proof_hash
+
     data = await state.get_data()
     order_id = data.get("order_id")
     if not order_id:
@@ -238,13 +242,23 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     caption = (
         f"🆕 Фармоиши #{order_id}\n"
         f"👤 Мизоҷ: {message.from_user.full_name} (@{message.from_user.username or '—'}, id={message.from_user.id})\n"
-        f"Расиди пардохт замима шуд. Лутфан тасдиқ ё рад кунед."
+        f"Расиди пардохт замима шуд.\n\n"
+        f"❗️ Пеш аз тасдиқ, ҳатман дар аппи бонки худ маблағи воқеиро санҷед — расм танҳо кофӣ нест."
     )
 
     async with get_session() as session:
-        from bot.db.repo import get_order
-
         order = await get_order(session, order_id)
+
+        if message.photo:
+            file_bytes = await message.bot.download(message.photo[-1].file_id)
+            proof_hash = hashlib.sha256(file_bytes.read()).hexdigest()
+            duplicate = await find_duplicate_proof(session, proof_hash, order_id)
+            order = await set_payment_proof_hash(session, order, proof_hash)
+            if duplicate is not None:
+                caption = (
+                    f"⚠️⚠️ ДИҚҚАТ: ҳамин расм қаблан барои фармоиши #{duplicate.id} "
+                    f"истифода шуда буд! Эҳтимоли фиреб — бодиққат санҷед.\n\n{caption}"
+                )
 
     if config.admin_chat_id:
         if message.photo:

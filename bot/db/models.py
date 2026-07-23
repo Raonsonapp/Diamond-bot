@@ -64,6 +64,10 @@ class Order(Base):
     payment_provider: Mapped[str] = mapped_column(String(32), default="manual")
     payment_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     admin_note: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # SHA-256 of the payment-proof photo bytes, so the same screenshot can't
+    # be reused across orders without the admin being warned. Not a
+    # substitute for actually checking the bank app — just catches replay.
+    payment_proof_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

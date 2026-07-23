@@ -62,6 +62,25 @@ async def list_orders_by_status(session: AsyncSession, status: OrderStatus) -> l
     return list(result.scalars().all())
 
 
+async def set_payment_proof_hash(session: AsyncSession, order: Order, proof_hash: str) -> Order:
+    order.payment_proof_hash = proof_hash
+    await session.commit()
+    await session.refresh(order)
+    return order
+
+
+async def find_duplicate_proof(
+    session: AsyncSession, proof_hash: str, exclude_order_id: int
+) -> Order | None:
+    result = await session.execute(
+        select(Order).where(
+            Order.payment_proof_hash == proof_hash,
+            Order.id != exclude_order_id,
+        )
+    )
+    return result.scalars().first()
+
+
 async def set_order_status(
     session: AsyncSession,
     order: Order,
