@@ -13,6 +13,9 @@ def products_keyboard(products: list[Product]) -> InlineKeyboardMarkup:
         ]
         for p in products
     ]
+    rows.append(
+        [InlineKeyboardButton(text="✏️ Миқдори дигар", callback_data="product:custom")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

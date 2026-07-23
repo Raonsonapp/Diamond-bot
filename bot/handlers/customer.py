@@ -4,11 +4,16 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import config
+from bot.db.models import Product
 from bot.db.repo import create_order, get_product, list_active_products, upsert_user
 from bot.db.session import get_session
 from bot.keyboards import admin_order_keyboard, confirm_order_keyboard, products_keyboard
 from bot.services.payments import get_payment_provider
+from bot.services.pricing import quote_custom_price
 from bot.states import OrderFlow
+
+MIN_CUSTOM_DIAMONDS = 10
+MAX_CUSTOM_DIAMONDS = 200_000
 
 router = Router(name="customer")
 
@@ -33,7 +38,59 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.set_state(OrderFlow.choosing_product)
 
 
-@router.callback_query(OrderFlow.choosing_product, F.data.startswith("product:"))
+@router.callback_query(OrderFlow.choosing_product, F.data == "product:custom")
+async def choose_custom_amount(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(OrderFlow.entering_custom_amount)
+    await callback.message.edit_text(
+        f"Чанд адад алмаз мехоҳед? Рақамро нависед (масалан 5000), аз {MIN_CUSTOM_DIAMONDS} то {MAX_CUSTOM_DIAMONDS}:"
+    )
+    await callback.answer()
+
+
+@router.message(OrderFlow.entering_custom_amount, F.text)
+async def enter_custom_amount(message: Message, state: FSMContext) -> None:
+    text = message.text.strip()
+    if not text.isdigit():
+        await message.answer("Лутфан танҳо рақам нависед, масалан 5000.")
+        return
+
+    diamonds = int(text)
+    if not (MIN_CUSTOM_DIAMONDS <= diamonds <= MAX_CUSTOM_DIAMONDS):
+        await message.answer(
+            f"Миқдор бояд аз {MIN_CUSTOM_DIAMONDS} то {MAX_CUSTOM_DIAMONDS} бошад. Боз кӯшиш кунед:"
+        )
+        return
+
+    async with get_session() as session:
+        products = await list_active_products(session)
+        if not products:
+            await message.answer("Ҳозир нархгузорӣ дастрас нест. Бо админ тамос гиред.")
+            await state.clear()
+            return
+
+        breakpoints = [(p.diamonds, p.price_somoni, p.cost_somoni) for p in products]
+        price, cost = quote_custom_price(diamonds, breakpoints)
+
+        custom_product = Product(
+            name=f"Дилхоҳ — {diamonds}",
+            diamonds=diamonds,
+            price_somoni=price,
+            cost_somoni=cost,
+            is_active=False,
+        )
+        session.add(custom_product)
+        await session.commit()
+        await session.refresh(custom_product)
+
+    await state.update_data(product_id=custom_product.id)
+    await state.set_state(OrderFlow.entering_player_id)
+    await message.answer(
+        f"💎 {diamonds} — {price:.0f} сомонӣ.\n\n"
+        f"Лутфан ID-и бозингари Free Fire-и худро ирсол кунед (рақаме, ки дар профили худ мебинед):"
+    )
+
+
+@router.callback_query(OrderFlow.choosing_product, F.data.regexp(r"^product:\d+$"))
 async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
     product_id = int(callback.data.split(":", 1)[1])
     async with get_session() as session:

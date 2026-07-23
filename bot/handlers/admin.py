@@ -84,6 +84,28 @@ async def list_products(message: Message) -> None:
     await message.answer("\n".join(lines))
 
 
+@router.message(Command("delproduct"))
+async def delete_product(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) != 2 or not parts[1].strip().isdigit():
+        await message.answer("Истифода: /delproduct <ID>\nID-ро аз /products гиред.")
+        return
+
+    async with get_session() as session:
+        product = await get_product(session, int(parts[1].strip()))
+        if product is None:
+            await message.answer("Маҳсулот ёфт нашуд.")
+            return
+        product.is_active = False
+        await session.commit()
+
+    await message.answer(f"Маҳсулот #{product.id} ({product.name}) хомӯш карда шуд.")
+
+
 @router.message(Command("pending"))
 async def pending_orders(message: Message) -> None:
     if not is_admin(message.from_user.id):
