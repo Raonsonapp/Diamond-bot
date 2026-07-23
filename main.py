@@ -10,6 +10,7 @@ from bot.config import config
 from bot.db.session import init_db
 from bot.fsm_storage import storage
 from bot.handlers import admin, customer
+from bot.services.sms_webhook import register_sms_webhook
 
 logging.basicConfig(level=logging.INFO)
 
@@ -51,6 +52,7 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
         return web.Response(text="OK")
 
     app.router.add_get("/", health)
+    register_sms_webhook(app, bot)
 
     SimpleRequestHandler(
         dispatcher=dp,

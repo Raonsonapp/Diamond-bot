@@ -124,6 +124,25 @@ async def list_orders_by_status(session: AsyncSession, status: OrderStatus) -> l
     return list(result.scalars().all())
 
 
+async def find_orders_awaiting_amount(
+    session: AsyncSession, amount_somoni: float, since: datetime
+) -> list[Order]:
+    """Candidate orders an incoming bank SMS of this amount could be for."""
+    result = await session.execute(
+        select(Order).where(
+            Order.status == OrderStatus.AWAITING_PAYMENT,
+            Order.created_at >= since,
+            func.abs(Order.amount_somoni - amount_somoni) < 0.01,
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def find_order_by_payment_reference(session: AsyncSession, reference: str) -> Order | None:
+    result = await session.execute(select(Order).where(Order.payment_reference == reference))
+    return result.scalars().first()
+
+
 async def set_payment_proof_hash(session: AsyncSession, order: Order, proof_hash: str) -> Order:
     order.payment_proof_hash = proof_hash
     await session.commit()

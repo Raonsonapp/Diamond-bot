@@ -45,6 +45,13 @@ class Config:
     supplier_api_base_url: str = os.getenv("SUPPLIER_API_BASE_URL", "")
     supplier_api_key: str = os.getenv("SUPPLIER_API_KEY", "")
 
+    # SMS-based auto payment confirmation: an app on the admin's phone
+    # forwards incoming "Zachislenie" (deposit) SMS from the bank to this
+    # webhook. Empty secret disables the endpoint entirely.
+    sms_webhook_path: str = os.getenv("SMS_WEBHOOK_PATH", "/sms-webhook")
+    sms_webhook_secret: str = os.getenv("SMS_WEBHOOK_SECRET", "")
+    sms_match_window_minutes: int = int(os.getenv("SMS_MATCH_WINDOW_MINUTES", "60"))
+
     # Public shop channel: bot must be added there as admin with "Post
     # Messages" permission, otherwise announcements silently fail.
     shop_channel_url: str = os.getenv("SHOP_CHANNEL_URL", "https://t.me/ALMAZ_TJ_SHOP")
