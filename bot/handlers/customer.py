@@ -1,3 +1,5 @@
+import uuid
+
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -26,6 +28,7 @@ from bot.db.session import get_session
 from bot.keyboards import (
     admin_order_keyboard,
     back_to_menu_keyboard,
+    cart_select_keyboard,
     confirm_order_keyboard,
     contact_keyboard,
     games_menu_keyboard,
@@ -153,6 +156,81 @@ async def menu_buy_diamonds(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "menu:telegram")
 async def menu_telegram(callback: CallbackQuery, state: FSMContext) -> None:
     await _open_catalog(callback, state, ProductCategory.TELEGRAM, "✈️ Бастаи Telegram Stars-ро интихоб кунед:")
+
+
+@router.callback_query(F.data.regexp(r"^cartmode:(?!exit:).+$"))
+async def enter_cart_mode(callback: CallbackQuery, state: FSMContext) -> None:
+    category = ProductCategory(callback.data.split(":", 1)[1])
+    async with get_session() as session:
+        products = await list_active_products(session, category=category)
+
+    await state.update_data(cart_category=category.value, cart_ids=[])
+    await state.set_state(OrderFlow.choosing_cart)
+    await callback.message.edit_text(
+        "🛒 Бастаҳоеро, ки мехоҳед якҷоя харед, интихоб кунед (якчанд адад мумкин аст):",
+        reply_markup=cart_select_keyboard(products, category, set()),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cartmode:exit:"))
+async def exit_cart_mode(callback: CallbackQuery, state: FSMContext) -> None:
+    category = ProductCategory(callback.data.split(":", 2)[2])
+    title = (
+        "💎 Бастаи алмази Free Fire-ро интихоб кунед:"
+        if category == ProductCategory.DIAMONDS
+        else "✈️ Бастаи Telegram Stars-ро интихоб кунед:"
+    )
+    await _open_catalog(callback, state, category, title)
+
+
+@router.callback_query(OrderFlow.choosing_cart, F.data.startswith("cartitem:"))
+async def toggle_cart_item(callback: CallbackQuery, state: FSMContext) -> None:
+    product_id = int(callback.data.split(":", 1)[1])
+    data = await state.get_data()
+    category = ProductCategory(data["cart_category"])
+    selected = set(data.get("cart_ids", []))
+
+    if product_id in selected:
+        selected.discard(product_id)
+    else:
+        selected.add(product_id)
+    await state.update_data(cart_ids=list(selected))
+
+    async with get_session() as session:
+        products = await list_active_products(session, category=category)
+
+    await callback.message.edit_reply_markup(reply_markup=cart_select_keyboard(products, category, selected))
+    await callback.answer()
+
+
+@router.callback_query(OrderFlow.choosing_cart, F.data == "cart:checkout")
+async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    cart_ids = data.get("cart_ids", [])
+    if not cart_ids:
+        await callback.answer("Аввал ҳадди ақал як маҳсулот интихоб кунед.", show_alert=True)
+        return
+
+    category = ProductCategory(data["cart_category"])
+    async with get_session() as session:
+        products = [await get_product(session, pid) for pid in cart_ids]
+        last_recipient = await get_last_recipient(session, callback.from_user.id, category)
+
+    await state.update_data(cart_product_ids=cart_ids)
+    await state.set_state(OrderFlow.entering_player_id)
+
+    total = sum(p.price_somoni for p in products)
+    summary = "\n".join(f"• {p.diamonds}{p.unit_label}" for p in products)
+    prompt = await _recipient_prompt(category)
+    text = f"Шумо интихоб кардед:\n{summary}\n\n💰 Ҳамагӣ: {total:.0f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
+
+    if last_recipient:
+        text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
+        await callback.message.edit_text(text, reply_markup=reuse_recipient_keyboard(last_recipient))
+    else:
+        await callback.message.edit_text(text)
+    await callback.answer()
 
 
 @router.callback_query(F.data == "menu:contact")
@@ -381,29 +459,41 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
 
 async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, answer_target) -> None:
     """Shared by both the free-text ID/username entry and the "use my
-    previous one" quick button — builds the confirmation screen."""
+    previous one" quick button — builds the confirmation screen. Handles
+    both a single product (data["product_id"]) and a multi-pack cart
+    checkout (data["cart_product_ids"])."""
     data = await state.get_data()
+    cart_ids = data.get("cart_product_ids")
+
     async with get_session() as session:
-        product = await get_product(session, data["product_id"])
         user = await get_user(session, user_id)
+        if cart_ids:
+            products = [await get_product(session, pid) for pid in cart_ids]
+        else:
+            products = [await get_product(session, data["product_id"])]
 
     await state.update_data(ff_player_id=recipient)
     await state.set_state(OrderFlow.confirming)
 
-    offer_balance = user is not None and user.referral_balance >= product.price_somoni > 0
+    total_price = sum(p.price_somoni for p in products)
+    offer_balance = user is not None and user.referral_balance >= total_price > 0
+    category = products[0].category
 
-    recipient_label = "ID-и бозингар" if product.category == ProductCategory.DIAMONDS else "Username"
-    confirm_lines = [
-        "Тасдиқ кунед:\n",
-        f"📦 Маҳсулот: {product.diamonds} {product.unit_label}",
-        f"💰 Нарх: {product.price_somoni:.0f} сомонӣ",
-        f"🎮 {recipient_label}: {recipient}",
-    ]
+    recipient_label = "ID-и бозингар" if category == ProductCategory.DIAMONDS else "Username"
+    confirm_lines = ["Тасдиқ кунед:\n"]
+    for p in products:
+        bonus = f" (+{p.bonus_diamonds} бонус)" if p.bonus_diamonds else ""
+        confirm_lines.append(f"📦 {p.diamonds}{bonus} {p.unit_label} — {p.price_somoni:.0f} сомонӣ")
+    if len(products) > 1:
+        confirm_lines.append(f"💰 Ҳамагӣ: {total_price:.0f} сомонӣ")
+    confirm_lines.append(f"🎮 {recipient_label}: {recipient}")
 
-    if product.category == ProductCategory.DIAMONDS and product.fzr_category_id:
-        player_name = await _try_validate_player_id(product.fzr_category_id, recipient)
-        if player_name:
-            confirm_lines.append(f"✅ Ном дар бозӣ: {player_name}")
+    if category == ProductCategory.DIAMONDS:
+        mapped = next((p for p in products if p.fzr_category_id), None)
+        if mapped:
+            player_name = await _try_validate_player_id(mapped.fzr_category_id, recipient)
+            if player_name:
+                confirm_lines.append(f"✅ Ном дар бозӣ: {player_name}")
 
     confirm_lines.append("\nҲама дуруст аст?")
     await answer_target.answer(
@@ -415,8 +505,9 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
 @router.message(OrderFlow.entering_player_id, F.text)
 async def enter_player_id(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    cart_ids = data.get("cart_product_ids")
     async with get_session() as session:
-        product = await get_product(session, data["product_id"])
+        product = await get_product(session, cart_ids[0] if cart_ids else data["product_id"])
 
     recipient = message.text.strip()
 
@@ -478,43 +569,58 @@ async def cancel_order(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+async def _cart_products(session, data: dict) -> list[Product]:
+    cart_ids = data.get("cart_product_ids")
+    if cart_ids:
+        return [await get_product(session, pid) for pid in cart_ids]
+    return [await get_product(session, data["product_id"])]
+
+
 @router.callback_query(OrderFlow.confirming, F.data == "order:pay_balance")
 async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
 
     async with get_session() as session:
-        product = await get_product(session, data["product_id"])
+        products = await _cart_products(session, data)
+        total = sum(p.price_somoni for p in products)
         user = await get_user(session, callback.from_user.id)
 
-        if user is None or user.referral_balance < product.price_somoni:
+        if user is None or user.referral_balance < total:
             await callback.answer("Баланси реферал кофӣ нест.", show_alert=True)
             return
 
-        await deduct_referral_balance(session, user, product.price_somoni)
-        order = await create_order(
-            session,
-            user_id=callback.from_user.id,
-            product=product,
-            ff_player_id=data["ff_player_id"],
-            payment_provider="referral_balance",
-            paid_with_referral_balance=True,
-        )
+        await deduct_referral_balance(session, user, total)
+        group_id = uuid.uuid4().hex if len(products) > 1 else None
+        orders = [
+            await create_order(
+                session,
+                user_id=callback.from_user.id,
+                product=p,
+                ff_player_id=data["ff_player_id"],
+                payment_provider="referral_balance",
+                paid_with_referral_balance=True,
+                cart_group_id=group_id,
+            )
+            for p in products
+        ]
 
+    primary = orders[0]
+    summary = "\n".join(f"📦 {p.diamonds}{p.unit_label} — {p.price_somoni:.0f} сомонӣ" for p in products)
     if config.admin_chat_id:
         await callback.bot.send_message(
             config.admin_chat_id,
-            f"🆕 Фармоиши #{order.id} (пардохт аз баланси реферал — тасдиқшуда)\n"
+            f"🆕 Фармоиши #{primary.id} (пардохт аз баланси реферал — тасдиқшуда)\n"
             f"👤 Мизоҷ: {callback.from_user.full_name} (@{callback.from_user.username or '—'}, id={callback.from_user.id})\n"
-            f"📦 {product.diamonds} {product.unit_label} — {product.price_somoni:.0f} сомонӣ\n"
-            f"🎮 {order.ff_player_id}\n\n"
+            f"{summary}\n"
+            f"🎮 {primary.ff_player_id}\n\n"
             f"Лутфан иҷро карда, 'Delivered'-ро зер кунед.",
-            reply_markup=admin_order_keyboard(order),
+            reply_markup=admin_order_keyboard(primary),
         )
 
     await state.clear()
     await callback.message.edit_text(
-        f"✅ Фармоиши #{order.id} бо баланси реферал пардохт шуд!\n"
-        f"{product.unit_label} Дар 1-5 дақиқа ба шумо мерасад."
+        f"✅ Фармоиши #{primary.id} бо баланси реферал пардохт шуд!\n"
+        f"{summary}\n\nДар 1-5 дақиқа ба шумо мерасад."
     )
     await callback.answer()
 
@@ -525,20 +631,36 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
     provider = get_payment_provider()
 
     async with get_session() as session:
-        product = await get_product(session, data["product_id"])
-        order = await create_order(
-            session,
-            user_id=callback.from_user.id,
-            product=product,
-            ff_player_id=data["ff_player_id"],
-            payment_provider=config.payment_provider,
-        )
+        products = await _cart_products(session, data)
+        group_id = uuid.uuid4().hex if len(products) > 1 else None
+        orders = [
+            await create_order(
+                session,
+                user_id=callback.from_user.id,
+                product=p,
+                ff_player_id=data["ff_player_id"],
+                payment_provider=config.payment_provider,
+                cart_group_id=group_id,
+            )
+            for p in products
+        ]
+        primary = orders[0]
+        total = sum(o.amount_somoni for o in orders)
+        if len(orders) > 1:
+            # One payment covers the whole cart — the total lives on the
+            # primary order so SMS/manual confirmation matches on it;
+            # siblings carry 0 so stats aren't double-counted.
+            primary.amount_somoni = total
+            for o in orders[1:]:
+                o.amount_somoni = 0.0
+            await session.commit()
+            await session.refresh(primary)
 
-    invoice = await provider.create_invoice(order.id, order.amount_somoni)
+    invoice = await provider.create_invoice(primary.id, total)
 
-    await state.update_data(order_id=order.id)
+    await state.update_data(order_id=primary.id)
     await state.set_state(OrderFlow.awaiting_payment_proof)
-    text = f"Фармоиши #{order.id} сабт шуд.\n\n{invoice.instructions}"
+    text = f"Фармоиши #{primary.id} сабт шуд.\n\n{invoice.instructions}"
     if invoice.pay_url:
         await callback.message.edit_text(text, reply_markup=payment_link_keyboard(invoice.pay_url))
     else:
@@ -550,15 +672,26 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
 async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     import hashlib
 
-    from bot.db.repo import find_duplicate_proof, get_order, set_payment_proof_hash
+    from bot.db.repo import find_duplicate_proof, get_order, get_orders_by_group, set_payment_proof_hash
 
     data = await state.get_data()
     order_id = data.get("order_id")
     if not order_id:
         return
 
+    async with get_session() as session:
+        order = await get_order(session, order_id)
+        group = await get_orders_by_group(session, order.cart_group_id) if order.cart_group_id else [order]
+        items_summary = ""
+        if len(group) > 1:
+            products = [await get_product(session, o.product_id) for o in group]
+            items_summary = "\n" + "\n".join(
+                f"📦 {p.diamonds}{p.unit_label} — {o.amount_somoni:.0f} сомонӣ" if o.amount_somoni else f"📦 {p.diamonds}{p.unit_label}"
+                for o, p in zip(group, products)
+            )
+
     caption = (
-        f"🆕 Фармоиши #{order_id}\n"
+        f"🆕 Фармоиши #{order_id}{items_summary}\n"
         f"👤 Мизоҷ: {message.from_user.full_name} (@{message.from_user.username or '—'}, id={message.from_user.id})\n"
         f"Расиди пардохт замима шуд.\n\n"
         f"❗️ Пеш аз тасдиқ, ҳатман дар аппи бонки худ маблағи воқеиро санҷед — расм танҳо кофӣ нест."

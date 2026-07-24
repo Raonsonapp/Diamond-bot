@@ -1,3 +1,5 @@
+import re
+
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
@@ -6,10 +8,12 @@ from bot.config import config
 from bot.db.models import OrderStatus, Product, ProductCategory
 from bot.db.repo import (
     get_order,
+    get_orders_by_group,
     get_product,
     list_active_products,
     list_orders_by_status,
     set_order_status,
+    set_product_bonus,
     set_product_fzr_mapping,
 )
 from bot.db.session import get_session
@@ -92,8 +96,9 @@ async def list_products(message: Message) -> None:
         return
 
     lines = [
-        f"#{p.id} [{p.category.value}] {p.name}: {p.diamonds}{p.unit_label} = "
-        f"{p.price_somoni:.0f}с (харид {p.cost_somoni:.0f}с, фоида {p.margin_somoni:.2f}с)"
+        f"#{p.id} [{p.category.value}] {p.name}: {p.diamonds}"
+        + (f"(+{p.bonus_diamonds})" if p.bonus_diamonds else "")
+        + f"{p.unit_label} = {p.price_somoni:.0f}с (харид {p.cost_somoni:.0f}с, фоида {p.margin_somoni:.2f}с)"
         for p in products
     ]
     await message.answer("\n".join(lines))
@@ -173,7 +178,9 @@ async def reject_payment(callback: CallbackQuery, bot: Bot) -> None:
         if order is None:
             await callback.answer("Фармоиш ёфт нашуд.", show_alert=True)
             return
-        order = await set_order_status(session, order, OrderStatus.CANCELLED)
+        group = await get_orders_by_group(session, order.cart_group_id) if order.cart_group_id else [order]
+        for o in group:
+            await set_order_status(session, o, OrderStatus.CANCELLED)
 
     await callback.message.edit_reply_markup(reply_markup=None)
     await bot.send_message(
@@ -308,8 +315,75 @@ async def map_product(message: Message) -> None:
             return
         product = await set_product_fzr_mapping(session, product, category_id, offer_id)
 
+        bonus_note = ""
+        bonus = await _guess_bonus_from_offer(category_id, offer_id, product.diamonds)
+        if bonus is not None:
+            product = await set_product_bonus(session, product, bonus)
+            bonus_note = (
+                f"\n🎁 Бонус аз рӯи офери FazerCards худкор муайян шуд: +{bonus} "
+                f"(ҳамагӣ {product.total_diamonds}{product.unit_label})."
+                if bonus > 0
+                else ""
+            )
+
     await message.answer(
         f"✅ Маҳсулот #{product.id} ({product.name}) ба FazerCards пайваст шуд:\n"
-        f"category_id={category_id}\noffer_id={offer_id}\n\n"
-        f"Барои фаъол кардани ирсоли худкор, дар Render DELIVERY_PROVIDER=fazercards гузоред."
+        f"category_id={category_id}\noffer_id={offer_id}{bonus_note}\n\n"
+        f"Барои фаъол кардани ирсоли худкор, дар Render DELIVERY_PROVIDER=fazercards гузоред.\n"
+        f"Агар бонус нодуруст бошад, бо дасти худ ислоҳ кунед: /setbonus {product.id} <бонус>"
+    )
+
+
+async def _guess_bonus_from_offer(category_id: str, offer_id: str, nominal_diamonds: int) -> int | None:
+    """FazerCards offer names/ids usually encode the *total* delivered
+    amount (e.g. "110_diamonds" for a nominal 100-pack, a 10% bonus) — read
+    it back so the bot can advertise the same bonus the supplier's own site
+    shows. Returns None (leave bonus untouched) if nothing parseable was
+    found, so a weird offer_id never overwrites a manually-set bonus with 0."""
+    from bot.services.fazercards import FazerCardsError, get_topup_offers
+
+    try:
+        data = await get_topup_offers(category_id)
+    except FazerCardsError:
+        return None
+
+    offer = next((o for o in data.get("offers", []) if o.get("offer_id") == offer_id), None)
+    if offer is None:
+        return None
+
+    for source in (offer.get("offer_id", ""), offer.get("name", "")):
+        match = re.search(r"\d+", source)
+        if match:
+            total = int(match.group())
+            if total > nominal_diamonds:
+                return total - nominal_diamonds
+            return 0
+    return None
+
+
+@router.message(Command("setbonus"))
+async def set_bonus(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = message.text.split(maxsplit=2)
+    if len(parts) != 3 or not parts[2].lstrip("-").isdigit():
+        await message.answer("Истифода: /setbonus <product_id> <бонус_диамонд>\nМисол: /setbonus 1 10")
+        return
+
+    if not parts[1].isdigit():
+        await message.answer("product_id бояд рақам бошад.")
+        return
+
+    async with get_session() as session:
+        product = await get_product(session, int(parts[1]))
+        if product is None:
+            await message.answer("Маҳсулот ёфт нашуд.")
+            return
+        product = await set_product_bonus(session, product, int(parts[2]))
+
+    await message.answer(
+        f"✅ Маҳсулот #{product.id} ({product.name}): бонус = +{product.bonus_diamonds} "
+        f"(ҳамагӣ {product.total_diamonds}{product.unit_label})."
     )

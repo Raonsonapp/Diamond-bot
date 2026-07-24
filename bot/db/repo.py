@@ -97,6 +97,13 @@ async def set_product_fzr_mapping(
     return product
 
 
+async def set_product_bonus(session: AsyncSession, product: Product, bonus_diamonds: int) -> Product:
+    product.bonus_diamonds = max(0, bonus_diamonds)
+    await session.commit()
+    await session.refresh(product)
+    return product
+
+
 async def create_order(
     session: AsyncSession,
     user_id: int,
@@ -104,6 +111,7 @@ async def create_order(
     ff_player_id: str,
     payment_provider: str,
     paid_with_referral_balance: bool = False,
+    cart_group_id: str | None = None,
 ) -> Order:
     order = Order(
         user_id=user_id,
@@ -113,11 +121,19 @@ async def create_order(
         payment_provider=payment_provider,
         status=OrderStatus.PAID if paid_with_referral_balance else OrderStatus.AWAITING_PAYMENT,
         paid_with_referral_balance=paid_with_referral_balance,
+        cart_group_id=cart_group_id,
     )
     session.add(order)
     await session.commit()
     await session.refresh(order)
     return order
+
+
+async def get_orders_by_group(session: AsyncSession, cart_group_id: str) -> list[Order]:
+    result = await session.execute(
+        select(Order).where(Order.cart_group_id == cart_group_id).order_by(Order.id)
+    )
+    return list(result.scalars().all())
 
 
 async def get_order(session: AsyncSession, order_id: int) -> Order | None:

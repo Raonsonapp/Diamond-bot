@@ -18,6 +18,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     "orders": [
         ("payment_proof_hash", "VARCHAR(64)"),
         ("paid_with_referral_balance", "BOOLEAN DEFAULT 0"),
+        ("cart_group_id", "VARCHAR(32)"),
     ],
     "users": [
         ("accepted_terms_at", "DATETIME"),
@@ -31,6 +32,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("category", "VARCHAR(16) DEFAULT 'DIAMONDS'"),
         ("fzr_category_id", "VARCHAR(64)"),
         ("fzr_offer_id", "VARCHAR(64)"),
+        ("bonus_diamonds", "INTEGER DEFAULT 0"),
     ],
 }
 

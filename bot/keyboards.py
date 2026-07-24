@@ -79,22 +79,53 @@ def contact_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def _product_label(p: Product) -> str:
+    # A plain pack's admin-given name is just its size ("100 диамонд"), so a
+    # numeric diamond count says more than the name; a voucher/subscription
+    # ("Ваучери ҳафтагӣ") has a name that carries real information the raw
+    # diamond-equivalent number would hide — show whichever is meaningful.
+    if p.name[:1].isdigit():
+        bonus = f" (+{p.bonus_diamonds} бонус)" if p.bonus_diamonds else ""
+        return f"{p.diamonds}{bonus} {p.unit_label} — {p.price_somoni:.0f} сомонӣ"
+    return f"🎟 {p.name} — {p.price_somoni:.0f} сомонӣ"
+
+
 def products_keyboard(products: list[Product], category: ProductCategory) -> InlineKeyboardMarkup:
     rows = [
-        [
-            InlineKeyboardButton(
-                text=f"{p.diamonds} {p.unit_label} — {p.price_somoni:.0f} сомонӣ",
-                callback_data=f"product:{p.id}",
-            )
-        ]
+        [InlineKeyboardButton(text=_product_label(p), callback_data=f"product:{p.id}")]
         for p in products
     ]
     rows.append(
         [InlineKeyboardButton(text="✏️ Миқдори дигар", callback_data=f"product:custom:{category.value}")]
     )
+    if category == ProductCategory.DIAMONDS:
+        rows.append(
+            [InlineKeyboardButton(text="🛒 Якчанд бастаро якҷоя харидан", callback_data=f"cartmode:{category.value}")]
+        )
     rows.append(
         [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")]
     )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def cart_select_keyboard(
+    products: list[Product], category: ProductCategory, selected_ids: set[int]
+) -> InlineKeyboardMarkup:
+    rows = []
+    for p in products:
+        mark = "✅" if p.id in selected_ids else "⬜"
+        rows.append(
+            [InlineKeyboardButton(text=f"{mark} {_product_label(p)}", callback_data=f"cartitem:{p.id}")]
+        )
+    if selected_ids:
+        total = sum(p.price_somoni for p in products if p.id in selected_ids)
+        rows.append(
+            [InlineKeyboardButton(text=f"🛍 Идома ({len(selected_ids)} — {total:.0f} сомонӣ)", callback_data="cart:checkout")]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="🔙 Якто-якто харидан", callback_data=f"cartmode:exit:{category.value}")]
+    )
+    rows.append([InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

@@ -54,6 +54,11 @@ class Product(Base):
         Enum(ProductCategory), default=ProductCategory.DIAMONDS
     )
     diamonds: Mapped[int] = mapped_column(Integer)  # unit count: diamonds, or Stars
+    # Extra units the supplier throws in on top of `diamonds` for this pack
+    # (e.g. FazerCards' "110_diamonds" offer for a 100-pack = 10 bonus) —
+    # set automatically by /mapproduct from the live offer, so the bot can
+    # advertise the same bonus the supplier's own site shows.
+    bonus_diamonds: Mapped[int] = mapped_column(Integer, default=0)
     price_somoni: Mapped[float] = mapped_column(Float)
     cost_somoni: Mapped[float] = mapped_column(Float, default=0.0)
     is_active: Mapped[bool] = mapped_column(default=True)
@@ -70,6 +75,10 @@ class Product(Base):
     @property
     def unit_label(self) -> str:
         return "💎" if self.category == ProductCategory.DIAMONDS else "⭐"
+
+    @property
+    def total_diamonds(self) -> int:
+        return self.diamonds + self.bonus_diamonds
 
 
 class Order(Base):
@@ -88,6 +97,11 @@ class Order(Base):
     )
     payment_provider: Mapped[str] = mapped_column(String(32), default="manual")
     payment_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Shared token for orders created together in one "buy several packs at
+    # once" checkout — one payment/invoice covers the whole group, and
+    # admin Paid/Delivered taps cascade to every order sharing this value.
+    # Null for ordinary single-product orders.
+    cart_group_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     admin_note: Mapped[str | None] = mapped_column(String(256), nullable=True)
     # SHA-256 of the payment-proof photo bytes, so the same screenshot can't
     # be reused across orders without the admin being warned. Not a
