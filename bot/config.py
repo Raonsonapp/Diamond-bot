@@ -10,6 +10,23 @@ def _int_list(raw: str) -> list[int]:
     return [int(x) for x in raw.split(",") if x.strip()]
 
 
+def _normalize_database_url(raw: str) -> str:
+    """Supabase (and most providers) hand out a plain "postgresql://" or
+    "postgres://" URI meant for psycopg2/libpq — SQLAlchemy needs the
+    "+asyncpg" driver suffix to use it from async code, and psycopg2 isn't
+    even installed here. Rewrite the scheme automatically instead of
+    relying on a manual find-replace step that's easy to skip and fails
+    with a confusing "No module named 'psycopg2'" traceback instead of a
+    clear error."""
+    if not raw:
+        return raw
+    if raw.startswith("postgres://"):
+        return "postgresql+asyncpg://" + raw[len("postgres://"):]
+    if raw.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + raw[len("postgresql://"):]
+    return raw
+
+
 @dataclass(frozen=True)
 class Config:
     bot_token: str = os.getenv("BOT_TOKEN", "")
@@ -22,9 +39,11 @@ class Config:
     # A real Postgres URL (e.g. from Supabase) takes over from the local
     # SQLite file when set — SQLite alone is fine for local development,
     # but on Render's free tier the disk is wiped on every deploy, taking
-    # every user/order/product edit with it. Use the "postgresql+asyncpg://"
-    # form. See README for the Supabase setup steps.
-    database_url: str = os.getenv("DATABASE_URL", "")
+    # every user/order/product edit with it. See README for the Supabase
+    # setup steps.
+    database_url: str = field(
+        default_factory=lambda: _normalize_database_url(os.getenv("DATABASE_URL", ""))
+    )
 
     # Public URL Render (or any other host) gives your service, e.g.
     # https://diamond-bot-qakk.onrender.com — leave empty to run in local

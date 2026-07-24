@@ -1,17 +1,23 @@
 from contextlib import asynccontextmanager
 
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from bot.config import config
 from bot.db.models import Base
 
 if config.database_url:
-    # Supabase's connection pooler (and pgbouncer poolers generally) don't
-    # support asyncpg's server-side prepared statement cache across
-    # pooled connections — disable it rather than have queries randomly
-    # fail with "prepared statement already exists" under load.
-    engine = create_async_engine(config.database_url, connect_args={"statement_cache_size": 0})
+    # Supabase's URI comes with libpq-only query params (sslmode,
+    # channel_binding) that asyncpg's connect() rejects outright as
+    # unexpected keyword arguments — strip them and request TLS the
+    # asyncpg way (connect_args={"ssl": True}) instead. Also disable the
+    # prepared-statement cache: Supabase's pooler (and pgbouncer poolers
+    # generally) don't support asyncpg's server-side prepared statements
+    # across pooled connections, which otherwise fails randomly under
+    # load with "prepared statement ... already exists".
+    _pg_url = make_url(config.database_url).difference_update_query(["sslmode", "channel_binding"])
+    engine = create_async_engine(_pg_url, connect_args={"ssl": True, "statement_cache_size": 0})
 else:
     engine = create_async_engine(f"sqlite+aiosqlite:///{config.database_path}")
 async_session = async_sessionmaker(engine, expire_on_commit=False)
