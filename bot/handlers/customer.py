@@ -33,10 +33,12 @@ from bot.keyboards import (
     contact_keyboard,
     games_menu_keyboard,
     main_menu_keyboard,
+    main_reply_keyboard,
     payment_link_keyboard,
     products_keyboard,
     profile_menu_keyboard,
     referral_menu_keyboard,
+    review_channel_keyboard,
     reuse_recipient_keyboard,
     terms_keyboard,
 )
@@ -55,6 +57,7 @@ WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фур
 
 async def _show_main_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
+    await message.answer("Менюи зерин ҳамеша дар поён дастрас аст 👇", reply_markup=main_reply_keyboard())
     await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
 
 
@@ -123,6 +126,128 @@ async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text(WELCOME_TEXT, reply_markup=main_menu_keyboard())
     await callback.answer()
+
+
+# --- Persistent reply-keyboard buttons (bot/keyboards.py:main_reply_keyboard) ---
+# Registered ahead of every OrderFlow-state text handler further down, so
+# tapping one of these always wins over whatever mid-flow input state the
+# user was in (typing a player ID, a custom amount, ...) — the same
+# always-available "jump to a section" behavior the inline grid's buttons
+# give, just pinned below the input instead of inside a specific message.
+
+
+@router.message(F.text == "🎮 Бозиҳо")
+async def reply_games(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("🎮 Бозиро интихоб кунед:", reply_markup=games_menu_keyboard())
+
+
+@router.message(F.text == "✈️ Telegram")
+async def reply_telegram(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await _open_catalog_message(
+        message, state, ProductCategory.TELEGRAM, "✈️ Бастаи Telegram Stars-ро интихоб кунед:"
+    )
+
+
+@router.message(F.text == "👤 Профил")
+async def reply_profile(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    async with get_session() as session:
+        user = await get_user(session, message.from_user.id)
+        count, total = await get_user_purchase_stats(session, message.from_user.id)
+
+    text = (
+        "👤 Профили шумо\n\n"
+        f"👋 Ном: {message.from_user.full_name}\n"
+        f"🆔 ID: {message.from_user.id}\n"
+        f"📱 Username: @{message.from_user.username or '—'}\n\n"
+        "📊 Омори харид:\n"
+        f"✅ Харидҳои муваффақ: {count}\n"
+        f"💰 Маблағи умумии харид: {total:.2f} сомонӣ\n"
+        f"🤝 Баланси реферал: {user.referral_balance:.2f} сомонӣ"
+    )
+    await message.answer(text, reply_markup=profile_menu_keyboard())
+
+
+@router.message(F.text == "🤝 Реферал")
+async def reply_referral(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    bot_user = await message.bot.get_me()
+    link = f"https://t.me/{bot_user.username}?start=ref_{message.from_user.id}"
+
+    async with get_session() as session:
+        user = await get_user(session, message.from_user.id)
+        invited = await count_referrals(session, message.from_user.id)
+
+    text = (
+        "🤝 Барномаи рефералӣ\n\n"
+        f"🔗 Линки даъвати шумо:\n{link}\n\n"
+        f"👥 Даъватшудагон: {invited} нафар\n"
+        f"💰 Балансӣ рефералӣ: {user.referral_balance:.2f} сомонӣ\n\n"
+        "🎁 Барои ҳар дӯсте, ки тавассути линки шумо ба бот ворид шуда, харидро анҷом медиҳад "
+        "(ва он аз ҷониби админ тасдиқ мешавад), шумо 5% аз маблағи хариди ӯро ҳамчун бонус мегиред.\n\n"
+        "💳 Бонуси ҷамъшуда ба балансии шумо илова мешавад ва метавонед онро барои пардохти "
+        "харидҳо дар бот истифода баред."
+    )
+    await message.answer(text, reply_markup=referral_menu_keyboard())
+
+
+@router.message(F.text == "⭐ Отзив")
+async def reply_review_channel(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Шарҳҳои мизоҷони моро дар канал бинед:", reply_markup=review_channel_keyboard())
+
+
+@router.message(F.text == "🆘 Дастгирӣ")
+async def reply_contact(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(
+        "📞 Тамос бо мо — тугмаро зер кунед, мустақим кушода мешавад:\n\n"
+        "🛡 Бехатар · 🎧 Дастгирии 24/7 · ⏱ Дар 1-5 дақиқа",
+        reply_markup=contact_keyboard(),
+    )
+
+
+@router.message(F.text == "❓ Саволҳои маъмул")
+async def reply_faq(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(FAQ_TEXT, reply_markup=back_to_menu_keyboard())
+
+
+@router.message(F.text == "ℹ️ Маълумот")
+async def reply_about(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    async with get_session() as session:
+        users_count = await count_total_users(session)
+        orders_count = await count_total_delivered_orders(session)
+
+    text = (
+        "ℹ️ Дар бораи ALMAZ TJ\n\n"
+        "🤖 Боти расмии фурӯши хидматҳои рақамӣ дар Тоҷикистон\n\n"
+        "🎮 Хизматҳо: Free Fire diamonds, Telegram Stars\n"
+        "🚀 Афзалиятҳо: суръати баланд (1-5 дақ.), бехатар\n\n"
+        f"📊 Корбарон: {users_count} | Фармоишҳои иҷрошуда: {orders_count}\n\n"
+        f"📢 Канал: {config.shop_channel_url}"
+    )
+    await message.answer(text, reply_markup=back_to_menu_keyboard())
+
+
+async def _open_catalog_message(
+    message: Message, state: FSMContext, category: ProductCategory, title: str
+) -> None:
+    async with get_session() as session:
+        products = await list_active_products(session, category=category)
+
+    if not products:
+        await message.answer(
+            "Ҳозир маҳсулот дастрас нест. Лутфан баъдтар кӯшиш кунед ё бо админ тамос гиред.",
+            reply_markup=back_to_menu_keyboard(),
+        )
+        return
+
+    await message.answer(title, reply_markup=products_keyboard(products, category))
+    await state.set_state(OrderFlow.choosing_product)
 
 
 @router.callback_query(F.data == "menu:games")

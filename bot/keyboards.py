@@ -1,4 +1,9 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
 
 from bot.config import config
 from bot.db.models import Order, Product, ProductCategory
@@ -7,6 +12,29 @@ from bot.db.models import Order, Product, ProductCategory
 def terms_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="✅ Қабул мекунам", callback_data="terms:accept")]]
+    )
+
+
+# Mirrors main_menu_keyboard()'s items so the same sections are reachable
+# without scrolling back up to find the inline grid — pinned below the
+# message input for the whole chat once sent, independent of whatever
+# inline keyboards later messages carry.
+def main_reply_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🎮 Бозиҳо"), KeyboardButton(text="✈️ Telegram")],
+            [KeyboardButton(text="👤 Профил"), KeyboardButton(text="🤝 Реферал")],
+            [KeyboardButton(text="⭐ Отзив"), KeyboardButton(text="🆘 Дастгирӣ")],
+            [KeyboardButton(text="❓ Саволҳои маъмул"), KeyboardButton(text="ℹ️ Маълумот")],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def review_channel_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="📢 Кушодани канал", url=config.shop_channel_url)]]
     )
 
 
