@@ -34,7 +34,10 @@ class Config:
     # set) used to build a pre-filled ExpressPay pay-by-link so the
     # customer doesn't have to type the card number/amount by hand.
     receiving_card_number: str = os.getenv("RECEIVING_CARD_NUMBER", "")
-    expresspay_base_url: str = os.getenv("EXPRESSPAY_BASE_URL", "https://pay.expresspay.tj/")
+    # Plain http:// on purpose — pay.expresspay.tj's TLS cert doesn't match
+    # this hostname (ERR_CERT_COMMON_NAME_INVALID over https); the reference
+    # bot's real working link used http:// too.
+    expresspay_base_url: str = os.getenv("EXPRESSPAY_BASE_URL", "http://pay.expresspay.tj/")
     alif_shop_id: str = os.getenv("ALIF_SHOP_ID", "")
     alif_secret_key: str = os.getenv("ALIF_SECRET_KEY", "")
     alif_api_base_url: str = os.getenv("ALIF_API_BASE_URL", "")
