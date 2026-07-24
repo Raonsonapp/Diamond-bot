@@ -30,6 +30,7 @@ from bot.keyboards import (
     contact_keyboard,
     games_menu_keyboard,
     main_menu_keyboard,
+    payment_link_keyboard,
     products_keyboard,
     profile_menu_keyboard,
     referral_menu_keyboard,
@@ -537,9 +538,11 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.update_data(order_id=order.id)
     await state.set_state(OrderFlow.awaiting_payment_proof)
-    await callback.message.edit_text(
-        f"Фармоиши #{order.id} сабт шуд.\n\n{invoice.instructions}"
-    )
+    text = f"Фармоиши #{order.id} сабт шуд.\n\n{invoice.instructions}"
+    if invoice.pay_url:
+        await callback.message.edit_text(text, reply_markup=payment_link_keyboard(invoice.pay_url))
+    else:
+        await callback.message.edit_text(text)
     await callback.answer()
 
 

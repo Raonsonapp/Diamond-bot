@@ -30,6 +30,11 @@ class Config:
     port: int = int(os.getenv("PORT", "8080"))
 
     payment_provider: str = os.getenv("PAYMENT_PROVIDER", "manual")
+    # Your own card that customers pay into — shown as plain text and (if
+    # set) used to build a pre-filled ExpressPay pay-by-link so the
+    # customer doesn't have to type the card number/amount by hand.
+    receiving_card_number: str = os.getenv("RECEIVING_CARD_NUMBER", "")
+    expresspay_base_url: str = os.getenv("EXPRESSPAY_BASE_URL", "https://pay.expresspay.tj/")
     alif_shop_id: str = os.getenv("ALIF_SHOP_ID", "")
     alif_secret_key: str = os.getenv("ALIF_SECRET_KEY", "")
     alif_api_base_url: str = os.getenv("ALIF_API_BASE_URL", "")

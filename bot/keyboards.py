@@ -111,6 +111,12 @@ def reuse_recipient_keyboard(recipient: str, label_suffix: str = "") -> InlineKe
     )
 
 
+def payment_link_keyboard(pay_url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="💳 Пардохт", url=pay_url)]]
+    )
+
+
 def review_prompt_keyboard(order_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

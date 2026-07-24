@@ -43,20 +43,50 @@ class PaymentProvider(ABC):
         """
 
 
+def _build_expresspay_link(order_id: int, amount_somoni: float) -> str | None:
+    """Pay-by-link with the recipient card and exact amount pre-filled, so
+    the customer just taps "Пардохт" and confirms — reverse-engineered from
+    a real link a similar shop's bot sends (?A=<card>&s=<amount>&c=<label>).
+    Only A (card) and s (amount) are things we're confident about; there
+    was a third parameter (f1=...) in that example we couldn't identify
+    (likely specific to their own ExpressPay merchant setup) and it's
+    deliberately left out here — test this link for real before relying
+    on it, and tell me if ExpressPay's page needs anything else to work."""
+    if not config.receiving_card_number:
+        return None
+    return (
+        f"{config.expresspay_base_url}?A={config.receiving_card_number}"
+        f"&s={amount_somoni:.2f}&c=order_{order_id}"
+    )
+
+
 class ManualBankTransferProvider(PaymentProvider):
     """Works today with zero external accounts: customer transfers by card
     and sends proof; admin taps Confirm in the bot."""
 
     async def create_invoice(self, order_id: int, amount_somoni: float) -> InvoiceResult:
-        return InvoiceResult(
-            provider_reference=f"manual-{order_id}",
-            pay_url=None,
-            instructions=(
-                f"Лутфан {amount_somoni:.0f} сомонӣ ба корти дар боло зикршуда гузаронед "
-                f"ва расиди пардохтро (скриншот) ба ин ҷо фиристед. Пас аз тасдиқи админ "
-                f"фармоишатон иҷро мешавад."
-            ),
-        )
+        pay_url = _build_expresspay_link(order_id, amount_somoni)
+
+        if not config.receiving_card_number:
+            card_line = "⚠️ Рақами корти қабулкунанда танзим нашудааст — бо админ тамос гиред.\n"
+        else:
+            card_line = f"💳 Корт: {config.receiving_card_number}\n"
+
+        if pay_url:
+            instructions = (
+                f"{card_line}"
+                f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ (на кам, на зиёд)\n\n"
+                f"Тугмаи «💳 Пардохт»-ро пахш кунед, маблағро тасдиқ кунед, "
+                f"баъд расиди пардохтро (скриншот) ба ин ҷо фиристед."
+            )
+        else:
+            instructions = (
+                f"{card_line}"
+                f"Лутфан {amount_somoni:.0f} сомонӣ гузаронед ва расиди пардохтро "
+                f"(скриншот) ба ин ҷо фиристед. Пас аз тасдиқи админ фармоишатон иҷро мешавад."
+            )
+
+        return InvoiceResult(provider_reference=f"manual-{order_id}", pay_url=pay_url, instructions=instructions)
 
     def verify_callback(self, payload: dict, headers: dict) -> tuple[bool, str | None]:
         # Manual provider has no webhook; confirmation happens via admin button.
