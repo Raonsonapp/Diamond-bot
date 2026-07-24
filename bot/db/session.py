@@ -1,11 +1,19 @@
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from bot.config import config
 from bot.db.models import Base
 
-engine = create_async_engine(f"sqlite+aiosqlite:///{config.database_path}")
+if config.database_url:
+    # Supabase's connection pooler (and pgbouncer poolers generally) don't
+    # support asyncpg's server-side prepared statement cache across
+    # pooled connections — disable it rather than have queries randomly
+    # fail with "prepared statement already exists" under load.
+    engine = create_async_engine(config.database_url, connect_args={"statement_cache_size": 0})
+else:
+    engine = create_async_engine(f"sqlite+aiosqlite:///{config.database_path}")
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 # create_all only creates tables that don't exist yet — it never adds new
@@ -37,13 +45,34 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
 }
 
 
+# The column defs above are written in SQLite's loose syntax; Postgres
+# rejects a couple of them outright (no DATETIME type, no bare `0`/`1` as
+# a BOOLEAN default), so translate just those on non-SQLite dialects.
+_POSTGRES_COLDEF_OVERRIDES = {
+    "DATETIME": "TIMESTAMPTZ",
+    "BOOLEAN DEFAULT 0": "BOOLEAN DEFAULT FALSE",
+}
+
+
 async def _apply_column_migrations(conn) -> None:
+    is_sqlite = conn.engine.dialect.name == "sqlite"
     for table, columns in _COLUMN_MIGRATIONS.items():
-        result = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
-        existing = {row[1] for row in result.fetchall()}
+        if is_sqlite:
+            result = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
+            existing = {row[1] for row in result.fetchall()}
+        else:
+            result = await conn.execute(
+                text("SELECT column_name FROM information_schema.columns WHERE table_name = :t"),
+                {"t": table},
+            )
+            existing = {row[0] for row in result.fetchall()}
+
         for name, column_def in columns:
-            if name not in existing:
-                await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {column_def}")
+            if name in existing:
+                continue
+            if not is_sqlite:
+                column_def = _POSTGRES_COLDEF_OVERRIDES.get(column_def, column_def)
+            await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {column_def}")
 
 
 async def init_db() -> None:

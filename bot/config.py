@@ -19,6 +19,12 @@ class Config:
     )
 
     database_path: str = os.getenv("DATABASE_PATH", "./diamond_bot.db")
+    # A real Postgres URL (e.g. from Supabase) takes over from the local
+    # SQLite file when set — SQLite alone is fine for local development,
+    # but on Render's free tier the disk is wiped on every deploy, taking
+    # every user/order/product edit with it. Use the "postgresql+asyncpg://"
+    # form. See README for the Supabase setup steps.
+    database_url: str = os.getenv("DATABASE_URL", "")
 
     # Public URL Render (or any other host) gives your service, e.g.
     # https://diamond-bot-qakk.onrender.com — leave empty to run in local
