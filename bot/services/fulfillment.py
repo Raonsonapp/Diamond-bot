@@ -127,6 +127,12 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
 
     all_success = bool(results) and all(r and r.success for _, r in results)
     if not all_success:
+        if config.admin_chat_id:
+            lines = [f"⚠️ Таҳвили худкор барои фармоиши #{order.id} нашуд — лутфан санҷед ва дастӣ иҷро карда, 'Delivered'-ро занед:"]
+            for o, r in results:
+                reason = r.message if r is not None else "delivery provider raised NotImplementedError"
+                lines.append(f"#{o.id} ({o.ff_player_id}): {reason}")
+            await bot.send_message(config.admin_chat_id, "\n".join(lines)[:4000])
         return FulfillmentResult(order=order, auto_delivered=False)
 
     async with get_session() as session:

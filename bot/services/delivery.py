@@ -20,6 +20,11 @@ from dataclasses import dataclass
 from bot.config import config
 
 _ID_FIELD_HINTS = ("player", "user", "uid", "account", "id")
+# Status values that plausibly mean "the diamonds actually reached the
+# player" — kept conservative on purpose (see FazerCardsDeliveryProvider
+# .deliver()); extend this once a real completed-order response has been
+# seen and its exact status string confirmed.
+_CONFIRMED_STATUSES = {"completed", "success", "delivered", "done", "fulfilled", "successful"}
 
 
 @dataclass
@@ -126,8 +131,29 @@ class FazerCardsDeliveryProvider(DeliveryProvider):
                 success=False, reference=None, message=f"FazerCards order error [{exc.code}]: {exc}"
             )
 
-        reference = _extract_reference(result.get("order", {})) or f"fzr-order-{order_id}"
-        return DeliveryResult(success=True, reference=reference, message="Delivered via FazerCards API.")
+        order_info = result.get("order", {}) if isinstance(result, dict) else {}
+        reference = _extract_reference(order_info) or f"fzr-order-{order_id}"
+        status = str(order_info.get("status", "")).lower()
+
+        if status in _CONFIRMED_STATUSES:
+            return DeliveryResult(success=True, reference=reference, message="Delivered via FazerCards API.")
+
+        # {"ok": true} on /topups/order only means FazerCards *accepted*
+        # the order into their queue — not that the diamonds actually
+        # reached the player. Treating that alone as "delivered" caused
+        # the bot to tell customers diamonds arrived when they hadn't.
+        # Anything short of a recognised completed-style status (including
+        # an unfamiliar or missing status field — this was built without
+        # ever seeing a real completed-order response) falls back to the
+        # admin's manual "Delivered" confirmation instead of guessing.
+        return DeliveryResult(
+            success=False,
+            reference=reference,
+            message=(
+                f"FazerCards accepted the order but hasn't confirmed delivery "
+                f"(status={status or '(none)'}). Raw order info: {json.dumps(order_info)[:300]}"
+            ),
+        )
 
 
 class AutoDeliveryProvider(DeliveryProvider):
