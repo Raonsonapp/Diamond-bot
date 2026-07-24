@@ -1,3 +1,4 @@
+import html
 import uuid
 
 from aiogram import F, Router
@@ -604,21 +605,25 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     offer_balance = user is not None and user.referral_balance >= total_price > 0
     category = products[0].category
 
-    recipient_label = "ID-и бозингар" if category == ProductCategory.DIAMONDS else "Username"
-    confirm_lines = ["Тасдиқ кунед:\n"]
-    for p in products:
-        bonus = f" (+{p.bonus_diamonds} бонус)" if p.bonus_diamonds else ""
-        confirm_lines.append(f"📦 {p.diamonds}{bonus} {p.unit_label} — {p.price_somoni:.2f} сомонӣ")
-    if len(products) > 1:
-        confirm_lines.append(f"💰 Ҳамагӣ: {total_price:.2f} сомонӣ")
-    confirm_lines.append(f"🎮 {recipient_label}: {recipient}")
-
+    player_name = None
     if category == ProductCategory.DIAMONDS:
         mapped = next((p for p in products if p.fzr_category_id), None)
         if mapped:
             player_name = await _try_validate_player_id(mapped.fzr_category_id, recipient)
-            if player_name:
-                confirm_lines.append(f"✅ Ном дар бозӣ: {player_name}")
+
+    recipient_label = "🆔 ID" if category == ProductCategory.DIAMONDS else "📱 Username"
+    confirm_lines = ["🛒 <b>Тасдиқи фармоиш</b>\n", f"{recipient_label}: {recipient}"]
+    if player_name:
+        confirm_lines.append(f"👤 Ном: <b>{html.escape(player_name)}</b>")
+    confirm_lines.append("")
+
+    for p in products:
+        bonus = f" (+{p.bonus_diamonds})" if p.bonus_diamonds else ""
+        confirm_lines.append(f"🎁 Маҳсулот: {p.diamonds}{bonus}{p.unit_label}")
+    if len(products) > 1:
+        confirm_lines.append(f"💰 Ҳамагӣ: <b>{total_price:.2f} сомонӣ</b>")
+    else:
+        confirm_lines.append(f"💰 Нарх: <b>{products[0].price_somoni:.2f} сомонӣ</b>")
 
     confirm_lines.append("\nҲама дуруст аст?")
     await answer_target.answer(
