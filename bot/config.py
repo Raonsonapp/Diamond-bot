@@ -38,6 +38,12 @@ class Config:
     # this hostname (ERR_CERT_COMMON_NAME_INVALID over https); the reference
     # bot's real working link used http:// too.
     expresspay_base_url: str = os.getenv("EXPRESSPAY_BASE_URL", "http://pay.expresspay.tj/")
+    # Required — the page errors with "one of the parameters is empty"
+    # without it. "133" is the value copied from a real working link;
+    # its actual meaning (service/tariff code?) is unconfirmed. If
+    # ExpressPay ever tells you the correct value for your own account,
+    # override it here.
+    expresspay_f1: str = os.getenv("EXPRESSPAY_F1", "133")
     alif_shop_id: str = os.getenv("ALIF_SHOP_ID", "")
     alif_secret_key: str = os.getenv("ALIF_SECRET_KEY", "")
     alif_api_base_url: str = os.getenv("ALIF_API_BASE_URL", "")

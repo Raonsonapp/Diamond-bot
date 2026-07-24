@@ -46,17 +46,15 @@ class PaymentProvider(ABC):
 def _build_expresspay_link(order_id: int, amount_somoni: float) -> str | None:
     """Pay-by-link with the recipient card and exact amount pre-filled, so
     the customer just taps "Пардохт" and confirms — reverse-engineered from
-    a real link a similar shop's bot sends (?A=<card>&s=<amount>&c=<label>).
-    Only A (card) and s (amount) are things we're confident about; there
-    was a third parameter (f1=...) in that example we couldn't identify
-    (likely specific to their own ExpressPay merchant setup) and it's
-    deliberately left out here — test this link for real before relying
-    on it, and tell me if ExpressPay's page needs anything else to work."""
+    a real link a similar shop's bot sends
+    (?A=<card>&s=<amount>&c=<label>&f1=<code>). f1 turned out to be
+    required (the page errors "one of the parameters is empty" without
+    it) — see config.expresspay_f1."""
     if not config.receiving_card_number:
         return None
     return (
         f"{config.expresspay_base_url}?A={config.receiving_card_number}"
-        f"&s={amount_somoni:.2f}&c=order_{order_id}"
+        f"&s={amount_somoni:.2f}&c=order_{order_id}&f1={config.expresspay_f1}"
     )
 
 
