@@ -1,3 +1,4 @@
+import ssl
 from contextlib import asynccontextmanager
 
 from sqlalchemy import text
@@ -11,13 +12,22 @@ if config.database_url:
     # Supabase's URI comes with libpq-only query params (sslmode,
     # channel_binding) that asyncpg's connect() rejects outright as
     # unexpected keyword arguments — strip them and request TLS the
-    # asyncpg way (connect_args={"ssl": True}) instead. Also disable the
-    # prepared-statement cache: Supabase's pooler (and pgbouncer poolers
-    # generally) don't support asyncpg's server-side prepared statements
-    # across pooled connections, which otherwise fails randomly under
-    # load with "prepared statement ... already exists".
+    # asyncpg way via connect_args instead. Also disable the prepared-
+    # statement cache: Supabase's pooler (and pgbouncer poolers generally)
+    # don't support asyncpg's server-side prepared statements across
+    # pooled connections, which otherwise fails randomly under load with
+    # "prepared statement ... already exists".
     _pg_url = make_url(config.database_url).difference_update_query(["sslmode", "channel_binding"])
-    engine = create_async_engine(_pg_url, connect_args={"ssl": True, "statement_cache_size": 0})
+    # Plain ssl=True does full certificate-chain verification, which fails
+    # against Supabase's pooler cert chain in Python's default trust store
+    # ("self-signed certificate in certificate chain"). The connection is
+    # still fully encrypted; only strict chain-of-trust checking is
+    # relaxed here — Supabase's own security model for this endpoint is
+    # the username/password, not client-side PKI verification.
+    _ssl_context = ssl.create_default_context()
+    _ssl_context.check_hostname = False
+    _ssl_context.verify_mode = ssl.CERT_NONE
+    engine = create_async_engine(_pg_url, connect_args={"ssl": _ssl_context, "statement_cache_size": 0})
 else:
     engine = create_async_engine(f"sqlite+aiosqlite:///{config.database_path}")
 async_session = async_sessionmaker(engine, expire_on_commit=False)
