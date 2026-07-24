@@ -535,7 +535,17 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str |
     """Best-effort player-ID check via FazerCards. Returns the confirmed
     in-game name, or None if unsupported/unavailable/couldn't confirm —
     callers must treat None as "couldn't verify", never as "definitely
-    wrong", since this must not block a purchase on its own."""
+    wrong", since this must not block a purchase on its own.
+
+    /api/v2/topups/validate-id uses its own category namespace, separate
+    from the /api/v2/topups (offers/order) one — it lists one entry per
+    *game* ("free_fire"), not per regional top-up SKU ("free_fire_cis",
+    "free_fire_bd", ...). Player-ID validation is the same Garena lookup
+    regardless of which regional SKU is used to actually deliver the
+    diamonds, so match by game family (prefix) and call validate-id with
+    *its own* category_id — never the product's fzr_category_id, which
+    that endpoint doesn't recognise (confirmed: it 404s as "unknown
+    category_id" there)."""
     from bot.services.delivery import guess_id_field_key
     from bot.services.fazercards import FazerCardsError, list_validate_id_categories, validate_player_id
 
@@ -545,7 +555,16 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str |
         return None
 
     item = next(
-        (i for i in supported.get("items", []) if i.get("category_id") == fzr_category_id), None
+        (
+            i
+            for i in supported.get("items", [])
+            if i.get("category_id")
+            and (
+                fzr_category_id == i["category_id"]
+                or fzr_category_id.startswith(i["category_id"] + "_")
+            )
+        ),
+        None,
     )
     if item is None:
         return None
@@ -555,7 +574,7 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str |
         return None
 
     try:
-        result = await validate_player_id(fzr_category_id, {field_key: player_id})
+        result = await validate_player_id(item["category_id"], {field_key: player_id})
     except FazerCardsError:
         return None
 
