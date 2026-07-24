@@ -104,6 +104,17 @@ async def set_product_bonus(session: AsyncSession, product: Product, bonus_diamo
     return product
 
 
+async def set_product_price(
+    session: AsyncSession, product: Product, price_somoni: float, cost_somoni: float | None = None
+) -> Product:
+    product.price_somoni = price_somoni
+    if cost_somoni is not None:
+        product.cost_somoni = cost_somoni
+    await session.commit()
+    await session.refresh(product)
+    return product
+
+
 async def create_order(
     session: AsyncSession,
     user_id: int,

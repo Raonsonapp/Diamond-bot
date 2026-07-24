@@ -105,7 +105,7 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
         summary = "\n".join(_item_line(o, products[o.id]) for o in group)
         await bot.send_message(
             order.user_id,
-            f"✅ Пардохти фармоиши гурӯҳии #{order.id} тасдиқ шуд ({total:.0f} сомонӣ):\n{summary}\n\n"
+            f"✅ Пардохти фармоиши гурӯҳии #{order.id} тасдиқ шуд ({total:.2f} сомонӣ):\n{summary}\n\n"
             f"Ба зудӣ ба ҳисоби шумо ирсол мешавад.",
         )
     else:

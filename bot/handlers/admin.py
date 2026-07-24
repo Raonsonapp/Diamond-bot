@@ -15,6 +15,7 @@ from bot.db.repo import (
     set_order_status,
     set_product_bonus,
     set_product_fzr_mapping,
+    set_product_price,
 )
 from bot.db.session import get_session
 from bot.keyboards import admin_order_keyboard
@@ -40,15 +41,20 @@ async def _add_product(message: Message, category: ProductCategory, usage_exampl
         await _reject_non_admin(message)
         return
 
-    parts = message.text.split(maxsplit=4)
-    if len(parts) != 5:
+    # The name can contain spaces ("Ваучери лайт"), so take the last three
+    # tokens as amount/price/cost and everything between the command and
+    # those as the name, rather than a fixed maxsplit that breaks multi-word
+    # names.
+    parts = message.text.split()
+    if len(parts) < 5:
         await message.answer(
             f"Истифода: {usage_example} <ном> <миқдор> <нарх_фурӯш> <нарх_харид>\n"
             f"Мисол: {usage_example} Starter 100 10 8"
         )
         return
 
-    _, name, amount, price, cost = parts
+    name = " ".join(parts[1:-3])
+    amount, price, cost = parts[-3:]
     try:
         product = Product(
             name=name,
@@ -68,7 +74,7 @@ async def _add_product(message: Message, category: ProductCategory, usage_exampl
 
     await message.answer(
         f"Маҳсулот сохта шуд: #{product.id} {product.name} — {product.diamonds}{product.unit_label} "
-        f"ба {product.price_somoni:.0f} сомонӣ (фоида {product.margin_somoni:.2f} сомонӣ)"
+        f"ба {product.price_somoni:.2f} сомонӣ (фоида {product.margin_somoni:.2f} сомонӣ)"
     )
 
 
@@ -98,7 +104,7 @@ async def list_products(message: Message) -> None:
     lines = [
         f"#{p.id} [{p.category.value}] {p.name}: {p.diamonds}"
         + (f"(+{p.bonus_diamonds})" if p.bonus_diamonds else "")
-        + f"{p.unit_label} = {p.price_somoni:.0f}с (харид {p.cost_somoni:.0f}с, фоида {p.margin_somoni:.2f}с)"
+        + f"{p.unit_label} = {p.price_somoni:.2f}с (харид {p.cost_somoni:.2f}с, фоида {p.margin_somoni:.2f}с)"
         for p in products
     ]
     await message.answer("\n".join(lines))
@@ -141,9 +147,9 @@ async def pending_orders(message: Message) -> None:
         return
 
     lines = ["⏳ Дар интизори пардохт:"]
-    lines += [f"#{o.id} — {o.amount_somoni:.0f}с — recipient {o.ff_player_id}" for o in awaiting] or ["(нест)"]
+    lines += [f"#{o.id} — {o.amount_somoni:.2f}с — recipient {o.ff_player_id}" for o in awaiting] or ["(нест)"]
     lines.append("\n💰 Пардохт шуда, дар интизори ирсол:")
-    lines += [f"#{o.id} — {o.amount_somoni:.0f}с — recipient {o.ff_player_id}" for o in paid] or ["(нест)"]
+    lines += [f"#{o.id} — {o.amount_somoni:.2f}с — recipient {o.ff_player_id}" for o in paid] or ["(нест)"]
     await message.answer("\n".join(lines))
 
 
@@ -386,4 +392,43 @@ async def set_bonus(message: Message) -> None:
     await message.answer(
         f"✅ Маҳсулот #{product.id} ({product.name}): бонус = +{product.bonus_diamonds} "
         f"(ҳамагӣ {product.total_diamonds}{product.unit_label})."
+    )
+
+
+@router.message(Command("setprice"))
+async def set_price(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = message.text.split(maxsplit=3)
+    if len(parts) not in (3, 4):
+        await message.answer(
+            "Истифода: /setprice <product_id> <нархи_фурӯш> [нархи_харид]\n"
+            "Мисол: /setprice 1 8.90\nМисол бо нархи харид: /setprice 1 8.90 7.21"
+        )
+        return
+
+    if not parts[1].isdigit():
+        await message.answer("product_id бояд рақам бошад.")
+        return
+
+    try:
+        price = float(parts[2])
+        cost = float(parts[3]) if len(parts) == 4 else None
+    except ValueError:
+        await message.answer("Нарх бояд рақам бошад, масалан 8.90.")
+        return
+
+    async with get_session() as session:
+        product = await get_product(session, int(parts[1]))
+        if product is None:
+            await message.answer("Маҳсулот ёфт нашуд.")
+            return
+        product = await set_product_price(session, product, price, cost)
+
+    await message.answer(
+        f"✅ Маҳсулот #{product.id} ({product.name}): нархи фурӯш = {product.price_somoni:.2f} сомонӣ"
+        + (f", нархи харид = {product.cost_somoni:.2f} сомонӣ" if cost is not None else "")
+        + f" (фоида {product.margin_somoni:.2f} сомонӣ)."
     )

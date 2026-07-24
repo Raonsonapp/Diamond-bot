@@ -72,7 +72,7 @@ async def _format_orders_text(user_id: int) -> str:
     if not orders:
         return "Шумо то ҳол фармоише надоред."
 
-    lines = [f"#{o.id} — {o.amount_somoni:.0f} сомонӣ — {o.status.value}" for o in orders]
+    lines = [f"#{o.id} — {o.amount_somoni:.2f} сомонӣ — {o.status.value}" for o in orders]
     return "📦 Фармоишҳои охирини шумо:\n" + "\n".join(lines)
 
 
@@ -223,7 +223,7 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
     total = sum(p.price_somoni for p in products)
     summary = "\n".join(f"• {p.diamonds}{p.unit_label}" for p in products)
     prompt = await _recipient_prompt(category)
-    text = f"Шумо интихоб кардед:\n{summary}\n\n💰 Ҳамагӣ: {total:.0f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
+    text = f"Шумо интихоб кардед:\n{summary}\n\n💰 Ҳамагӣ: {total:.2f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
 
     if last_recipient:
         text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
@@ -321,7 +321,7 @@ async def menu_top_buyers(callback: CallbackQuery) -> None:
     for i, (user, count, total) in enumerate(rows):
         icon = medals[i] if i < 3 else f"{i + 1}."
         name = f"@{user.username}" if user.username else (user.full_name or f"ID{user.id}")
-        lines.append(f"{icon} {name} — {count} харид · {total:.0f} сомонӣ")
+        lines.append(f"{icon} {name} — {count} харид · {total:.2f} сомонӣ")
 
     if rank:
         lines.append(f"\n👤 Шумо: {rank}-ҷой")
@@ -410,7 +410,7 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
     await state.set_state(OrderFlow.entering_player_id)
     unit = custom_product.unit_label
     prompt = await _recipient_prompt(category)
-    text = f"{amount} {unit} — {price:.0f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
+    text = f"{amount} {unit} — {price:.2f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
 
     async with get_session() as session:
         last_recipient = await get_last_recipient(session, message.from_user.id, category)
@@ -446,7 +446,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(OrderFlow.entering_player_id)
     prompt = await _recipient_prompt(product.category)
     text = (
-        f"Шумо интихоб кардед: {product.diamonds} {product.unit_label} — {product.price_somoni:.0f} сомонӣ.\n\n"
+        f"Шумо интихоб кардед: {product.diamonds} {product.unit_label} — {product.price_somoni:.2f} сомонӣ.\n\n"
         f"Лутфан {prompt} ирсол кунед:"
     )
     if last_recipient:
@@ -483,9 +483,9 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     confirm_lines = ["Тасдиқ кунед:\n"]
     for p in products:
         bonus = f" (+{p.bonus_diamonds} бонус)" if p.bonus_diamonds else ""
-        confirm_lines.append(f"📦 {p.diamonds}{bonus} {p.unit_label} — {p.price_somoni:.0f} сомонӣ")
+        confirm_lines.append(f"📦 {p.diamonds}{bonus} {p.unit_label} — {p.price_somoni:.2f} сомонӣ")
     if len(products) > 1:
-        confirm_lines.append(f"💰 Ҳамагӣ: {total_price:.0f} сомонӣ")
+        confirm_lines.append(f"💰 Ҳамагӣ: {total_price:.2f} сомонӣ")
     confirm_lines.append(f"🎮 {recipient_label}: {recipient}")
 
     if category == ProductCategory.DIAMONDS:
@@ -624,7 +624,7 @@ async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
         ]
 
     primary = orders[0]
-    summary = "\n".join(f"📦 {p.diamonds}{p.unit_label} — {p.price_somoni:.0f} сомонӣ" for p in products)
+    summary = "\n".join(f"📦 {p.diamonds}{p.unit_label} — {p.price_somoni:.2f} сомонӣ" for p in products)
     if config.admin_chat_id:
         await callback.bot.send_message(
             config.admin_chat_id,
@@ -705,7 +705,7 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
         if len(group) > 1:
             products = [await get_product(session, o.product_id) for o in group]
             items_summary = "\n" + "\n".join(
-                f"📦 {p.diamonds}{p.unit_label} — {o.amount_somoni:.0f} сомонӣ" if o.amount_somoni else f"📦 {p.diamonds}{p.unit_label}"
+                f"📦 {p.diamonds}{p.unit_label} — {o.amount_somoni:.2f} сомонӣ" if o.amount_somoni else f"📦 {p.diamonds}{p.unit_label}"
                 for o, p in zip(group, products)
             )
 

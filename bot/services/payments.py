@@ -80,7 +80,7 @@ class ManualBankTransferProvider(PaymentProvider):
         else:
             instructions = (
                 f"{card_line}"
-                f"Лутфан {amount_somoni:.0f} сомонӣ гузаронед ва расиди пардохтро "
+                f"Лутфан {amount_somoni:.2f} сомонӣ гузаронед ва расиди пардохтро "
                 f"(скриншот) ба ин ҷо фиристед. Пас аз тасдиқи админ фармоишатон иҷро мешавад."
             )
 

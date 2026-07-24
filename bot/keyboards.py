@@ -86,8 +86,8 @@ def _product_label(p: Product) -> str:
     # diamond-equivalent number would hide — show whichever is meaningful.
     if p.name[:1].isdigit():
         bonus = f" (+{p.bonus_diamonds} бонус)" if p.bonus_diamonds else ""
-        return f"{p.diamonds}{bonus} {p.unit_label} — {p.price_somoni:.0f} сомонӣ"
-    return f"🎟 {p.name} — {p.price_somoni:.0f} сомонӣ"
+        return f"{p.diamonds}{bonus} {p.unit_label} — {p.price_somoni:.2f} сомонӣ"
+    return f"🎟 {p.name} — {p.price_somoni:.2f} сомонӣ"
 
 
 def products_keyboard(products: list[Product], category: ProductCategory) -> InlineKeyboardMarkup:
@@ -120,7 +120,7 @@ def cart_select_keyboard(
     if selected_ids:
         total = sum(p.price_somoni for p in products if p.id in selected_ids)
         rows.append(
-            [InlineKeyboardButton(text=f"🛍 Идома ({len(selected_ids)} — {total:.0f} сомонӣ)", callback_data="cart:checkout")]
+            [InlineKeyboardButton(text=f"🛍 Идома ({len(selected_ids)} — {total:.2f} сомонӣ)", callback_data="cart:checkout")]
         )
     rows.append(
         [InlineKeyboardButton(text="🔙 Якто-якто харидан", callback_data=f"cartmode:exit:{category.value}")]
