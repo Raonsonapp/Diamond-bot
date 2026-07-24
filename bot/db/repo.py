@@ -78,9 +78,14 @@ async def list_active_products(
     stmt = select(Product).where(Product.is_active.is_(True))
     if category is not None:
         stmt = stmt.where(Product.category == category)
-    stmt = stmt.order_by(Product.diamonds)
     result = await session.execute(stmt)
-    return list(result.scalars().all())
+    products = list(result.scalars().all())
+    # Plain packs sort by size; vouchers (name doesn't start with a digit —
+    # same test bot/keyboards.py uses to tell them apart) always sort after
+    # every pack, instead of landing wherever their diamond-equivalent
+    # number happens to fall among the packs.
+    products.sort(key=lambda p: (0 if p.name[:1].isdigit() else 1, p.diamonds))
+    return products
 
 
 async def get_product(session: AsyncSession, product_id: int) -> Product | None:
