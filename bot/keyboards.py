@@ -98,6 +98,19 @@ def products_keyboard(products: list[Product], category: ProductCategory) -> Inl
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def reuse_recipient_keyboard(recipient: str, label_suffix: str = "") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"✅ Истифодаи: {recipient}{label_suffix}",
+                    callback_data=f"reuseid:{recipient}",
+                )
+            ]
+        ]
+    )
+
+
 def review_prompt_keyboard(order_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

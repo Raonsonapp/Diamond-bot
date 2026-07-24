@@ -13,6 +13,7 @@ from bot.db.repo import (
     create_order,
     deduct_referral_balance,
     get_buyer_rank,
+    get_last_recipient,
     get_product,
     get_user,
     get_user_purchase_stats,
@@ -32,6 +33,7 @@ from bot.keyboards import (
     products_keyboard,
     profile_menu_keyboard,
     referral_menu_keyboard,
+    reuse_recipient_keyboard,
     terms_keyboard,
 )
 from bot.services.payments import get_payment_provider
@@ -328,12 +330,25 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
     await state.update_data(product_id=custom_product.id)
     await state.set_state(OrderFlow.entering_player_id)
     unit = custom_product.unit_label
-    prompt = (
-        "ID-и бозингари Free Fire-и худро"
+    prompt = await _recipient_prompt(category)
+    text = f"{amount} {unit} — {price:.0f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
+
+    async with get_session() as session:
+        last_recipient = await get_last_recipient(session, message.from_user.id, category)
+
+    if last_recipient:
+        text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
+        await message.answer(text, reply_markup=reuse_recipient_keyboard(last_recipient))
+    else:
+        await message.answer(text)
+
+
+async def _recipient_prompt(category: ProductCategory) -> str:
+    return (
+        "ID-и бозингари Free Fire-и худро (рақаме, ки дар профили худ мебинед)"
         if category == ProductCategory.DIAMONDS
         else "Username-и Telegram-и худро (бе @)"
     )
-    await message.answer(f"{amount} {unit} — {price:.0f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:")
 
 
 @router.callback_query(OrderFlow.choosing_product, F.data.regexp(r"^product:\d+$"))
@@ -341,6 +356,8 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
     product_id = int(callback.data.split(":", 1)[1])
     async with get_session() as session:
         product = await get_product(session, product_id)
+        if product is not None:
+            last_recipient = await get_last_recipient(session, callback.from_user.id, product.category)
 
     if product is None or not product.is_active:
         await callback.answer("Ин маҳсулот дастрас нест.", show_alert=True)
@@ -348,16 +365,50 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.update_data(product_id=product.id)
     await state.set_state(OrderFlow.entering_player_id)
-    prompt = (
-        "ID-и бозингари Free Fire-и худро (рақаме, ки дар профили худ мебинед)"
-        if product.category == ProductCategory.DIAMONDS
-        else "Username-и Telegram-и худро (бе @)"
-    )
-    await callback.message.edit_text(
+    prompt = await _recipient_prompt(product.category)
+    text = (
         f"Шумо интихоб кардед: {product.diamonds} {product.unit_label} — {product.price_somoni:.0f} сомонӣ.\n\n"
         f"Лутфан {prompt} ирсол кунед:"
     )
+    if last_recipient:
+        text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
+        await callback.message.edit_text(text, reply_markup=reuse_recipient_keyboard(last_recipient))
+    else:
+        await callback.message.edit_text(text)
     await callback.answer()
+
+
+async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, answer_target) -> None:
+    """Shared by both the free-text ID/username entry and the "use my
+    previous one" quick button — builds the confirmation screen."""
+    data = await state.get_data()
+    async with get_session() as session:
+        product = await get_product(session, data["product_id"])
+        user = await get_user(session, user_id)
+
+    await state.update_data(ff_player_id=recipient)
+    await state.set_state(OrderFlow.confirming)
+
+    offer_balance = user is not None and user.referral_balance >= product.price_somoni > 0
+
+    recipient_label = "ID-и бозингар" if product.category == ProductCategory.DIAMONDS else "Username"
+    confirm_lines = [
+        "Тасдиқ кунед:\n",
+        f"📦 Маҳсулот: {product.diamonds} {product.unit_label}",
+        f"💰 Нарх: {product.price_somoni:.0f} сомонӣ",
+        f"🎮 {recipient_label}: {recipient}",
+    ]
+
+    if product.category == ProductCategory.DIAMONDS and product.fzr_category_id:
+        player_name = await _try_validate_player_id(product.fzr_category_id, recipient)
+        if player_name:
+            confirm_lines.append(f"✅ Ном дар бозӣ: {player_name}")
+
+    confirm_lines.append("\nҲама дуруст аст?")
+    await answer_target.answer(
+        "\n".join(confirm_lines),
+        reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance),
+    )
 
 
 @router.message(OrderFlow.entering_player_id, F.text)
@@ -378,31 +429,14 @@ async def enter_player_id(message: Message, state: FSMContext) -> None:
             await message.answer("Username-и нодуруст. Лутфан username-и дурусти Telegram-ро (бе @) нависед.")
             return
 
-    await state.update_data(ff_player_id=recipient)
-    await state.set_state(OrderFlow.confirming)
+    await _finalize_recipient(state, message.from_user.id, recipient, message)
 
-    async with get_session() as session:
-        user = await get_user(session, message.from_user.id)
-    offer_balance = user is not None and user.referral_balance >= product.price_somoni > 0
 
-    recipient_label = "ID-и бозингар" if product.category == ProductCategory.DIAMONDS else "Username"
-    confirm_lines = [
-        "Тасдиқ кунед:\n",
-        f"📦 Маҳсулот: {product.diamonds} {product.unit_label}",
-        f"💰 Нарх: {product.price_somoni:.0f} сомонӣ",
-        f"🎮 {recipient_label}: {recipient}",
-    ]
-
-    if product.category == ProductCategory.DIAMONDS and product.fzr_category_id:
-        player_name = await _try_validate_player_id(product.fzr_category_id, recipient)
-        if player_name:
-            confirm_lines.append(f"✅ Ном дар бозӣ: {player_name}")
-
-    confirm_lines.append("\nҲама дуруст аст?")
-    await message.answer(
-        "\n".join(confirm_lines),
-        reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance),
-    )
+@router.callback_query(OrderFlow.entering_player_id, F.data.startswith("reuseid:"))
+async def reuse_saved_id(callback: CallbackQuery, state: FSMContext) -> None:
+    recipient = callback.data.split(":", 1)[1]
+    await _finalize_recipient(state, callback.from_user.id, recipient, callback.message)
+    await callback.answer()
 
 
 async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str | None:

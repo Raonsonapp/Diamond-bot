@@ -127,6 +127,22 @@ async def get_order(session: AsyncSession, order_id: int) -> Order | None:
     return result.scalar_one_or_none()
 
 
+async def get_last_recipient(
+    session: AsyncSession, user_id: int, category: ProductCategory
+) -> str | None:
+    """Most recent recipient (Free Fire player ID or Telegram @username)
+    this user ordered something for, in this category — lets the bot offer
+    a "use the same one again" shortcut instead of retyping every time."""
+    result = await session.execute(
+        select(Order.ff_player_id)
+        .join(Product, Product.id == Order.product_id)
+        .where(Order.user_id == user_id, Product.category == category)
+        .order_by(Order.created_at.desc())
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
 async def list_orders_by_status(session: AsyncSession, status: OrderStatus) -> list[Order]:
     result = await session.execute(
         select(Order).where(Order.status == status).order_by(Order.created_at)
