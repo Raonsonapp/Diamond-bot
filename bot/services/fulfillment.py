@@ -78,7 +78,7 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
 
     delivery = get_delivery_provider()
     try:
-        result = await delivery.deliver(order.id, order.ff_player_id, product.diamonds)
+        result = await delivery.deliver(order.id, order.ff_player_id, product)
     except NotImplementedError:
         result = None
 

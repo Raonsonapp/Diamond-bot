@@ -386,14 +386,54 @@ async def enter_player_id(message: Message, state: FSMContext) -> None:
     offer_balance = user is not None and user.referral_balance >= product.price_somoni > 0
 
     recipient_label = "ID-и бозингар" if product.category == ProductCategory.DIAMONDS else "Username"
+    confirm_lines = [
+        "Тасдиқ кунед:\n",
+        f"📦 Маҳсулот: {product.diamonds} {product.unit_label}",
+        f"💰 Нарх: {product.price_somoni:.0f} сомонӣ",
+        f"🎮 {recipient_label}: {recipient}",
+    ]
+
+    if product.category == ProductCategory.DIAMONDS and product.fzr_category_id:
+        player_name = await _try_validate_player_id(product.fzr_category_id, recipient)
+        if player_name:
+            confirm_lines.append(f"✅ Ном дар бозӣ: {player_name}")
+
+    confirm_lines.append("\nҲама дуруст аст?")
     await message.answer(
-        f"Тасдиқ кунед:\n\n"
-        f"📦 Маҳсулот: {product.diamonds} {product.unit_label}\n"
-        f"💰 Нарх: {product.price_somoni:.0f} сомонӣ\n"
-        f"🎮 {recipient_label}: {recipient}\n\n"
-        f"Ҳама дуруст аст?",
+        "\n".join(confirm_lines),
         reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance),
     )
+
+
+async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str | None:
+    """Best-effort player-ID check via FazerCards. Returns the confirmed
+    in-game name, or None if unsupported/unavailable/couldn't confirm —
+    callers must treat None as "couldn't verify", never as "definitely
+    wrong", since this must not block a purchase on its own."""
+    from bot.services.delivery import guess_id_field_key
+    from bot.services.fazercards import FazerCardsError, list_validate_id_categories, validate_player_id
+
+    try:
+        supported = await list_validate_id_categories()
+    except FazerCardsError:
+        return None
+
+    item = next(
+        (i for i in supported.get("items", []) if i.get("category_id") == fzr_category_id), None
+    )
+    if item is None:
+        return None
+
+    field_key = guess_id_field_key(item.get("fields", []))
+    if field_key is None:
+        return None
+
+    try:
+        result = await validate_player_id(fzr_category_id, {field_key: player_id})
+    except FazerCardsError:
+        return None
+
+    return result.get("player_name") if result.get("valid") else None
 
 
 @router.callback_query(OrderFlow.confirming, F.data == "order:cancel")

@@ -29,6 +29,8 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         # "DIAMONDS"), not its .value ("diamonds") — the default here must
         # match that or every pre-existing row fails to deserialize.
         ("category", "VARCHAR(16) DEFAULT 'DIAMONDS'"),
+        ("fzr_category_id", "VARCHAR(64)"),
+        ("fzr_offer_id", "VARCHAR(64)"),
     ],
 }
 

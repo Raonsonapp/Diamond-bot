@@ -29,14 +29,26 @@
    синфи `AlifPayProvider`. Alif ҳуҷҷати оммавии API надорад — Shop ID, Secret
    Key ва имзои webhook-ро баъд аз бастани шартномаи мерчант аз Alif Business
    мегиред. Онҳоро пур карда, дар `.env` `PAYMENT_PROVIDER=alif` гузоред.
-2. **Расонидани худкори алмаз** — `bot/services/delivery.py`, синфи
-   `AutoDeliveryProvider`. Барои ин бояд аккаунти дилоли (reseller) real доред,
-   ки API-и top-up дорад. Ҳамин ки чунин дилол ёфтед, `deliver()`-ро ба
-   endpoint-и воқеии онҳо пайваст кунед ва `DELIVERY_PROVIDER=auto` гузоред.
+2. **Расонидани худкори алмаз/Stars** — ин ҳоло **сохта шудааст** барои
+   [FazerCards](https://reseller.fazercards.com) (`bot/services/fazercards.py`
+   + `bot/services/delivery.py`, синфи `FazerCardsDeliveryProvider`). Барои
+   фаъол кардан:
+   1. Дар Render `FAZERCARDS_API_KEY` ва `DELIVERY_PROVIDER=fazercards`
+      гузоред.
+   2. Дар бот (ҳамчун админ) `/fzr_categories Free Fire` занед — category_id-и
+      дурустро ёбед.
+   3. `/fzr_offers <category_id>` — рӯйхати offer_id-ҳоро бо нарх бинед.
+   4. Барои ҳар маҳсулот: `/mapproduct <product_id> <category_id> <offer_id>`.
+   5. Ҳамин тавр — фармоиши он маҳсулот акнун худкор тавассути FazerCards
+      иҷро мешавад (агар FazerCards field-и ID-и бозингарро худкор муайян
+      карда натавонад, ба таври бехатар ба усули дастӣ бармегардад).
 
-То ҳамон вақт бот дар усули **"manual"** кор мекунад: пардохт бо расиди дастӣ
-тасдиқ мешавад, алмаз бо дасти админ фиристода шуда бо як тугма қайд мешавад.
-Ин бехатар аст ва барои оғози тиҷорат кофӣ — фақат бе шумо (офлайн) кор намекунад.
+   Барои дилоли дигар (на FazerCards) — синфи умумии `AutoDeliveryProvider`-ро
+   бо `deliver()`-и воқеии онҳо пур карда, `DELIVERY_PROVIDER=auto` гузоред.
+
+То FazerCards-ро танзим накунед, бот дар усули **"manual"** кор мекунад:
+пардохт бо расиди дастӣ тасдиқ мешавад, алмаз бо дасти админ фиристода шуда
+бо як тугма қайд мешавад. Ин бехатар аст ва барои оғози тиҷорат кофӣ.
 
 ## Насб (санҷиши маҳаллӣ, дар компютери худ)
 

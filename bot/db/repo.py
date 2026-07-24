@@ -87,6 +87,16 @@ async def get_product(session: AsyncSession, product_id: int) -> Product | None:
     return await session.get(Product, product_id)
 
 
+async def set_product_fzr_mapping(
+    session: AsyncSession, product: Product, category_id: str, offer_id: str
+) -> Product:
+    product.fzr_category_id = category_id
+    product.fzr_offer_id = offer_id
+    await session.commit()
+    await session.refresh(product)
+    return product
+
+
 async def create_order(
     session: AsyncSession,
     user_id: int,

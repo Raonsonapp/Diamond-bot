@@ -45,6 +45,12 @@ class Config:
     supplier_api_base_url: str = os.getenv("SUPPLIER_API_BASE_URL", "")
     supplier_api_key: str = os.getenv("SUPPLIER_API_KEY", "")
 
+    # FazerCards reseller API (https://api.fzr.cards) — set DELIVERY_PROVIDER=fazercards
+    # once products are mapped to real category/offer IDs (see /fzr_categories,
+    # /fzr_offers, /mapproduct admin commands).
+    fazercards_api_key: str = os.getenv("FAZERCARDS_API_KEY", "")
+    fazercards_api_base_url: str = os.getenv("FAZERCARDS_API_BASE_URL", "https://api.fzr.cards")
+
     # SMS-based auto payment confirmation: an app on the admin's phone
     # forwards incoming "Zachislenie" (deposit) SMS from the bank to this
     # webhook. Empty secret disables the endpoint entirely.

@@ -4,7 +4,14 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.config import config
 from bot.db.models import OrderStatus, Product, ProductCategory
-from bot.db.repo import get_order, get_product, list_active_products, list_orders_by_status, set_order_status
+from bot.db.repo import (
+    get_order,
+    get_product,
+    list_active_products,
+    list_orders_by_status,
+    set_order_status,
+    set_product_fzr_mapping,
+)
 from bot.db.session import get_session
 from bot.keyboards import admin_order_keyboard
 from bot.services.fulfillment import confirm_and_deliver, mark_delivered_and_notify
@@ -190,3 +197,119 @@ async def mark_delivered(callback: CallbackQuery, bot: Bot) -> None:
 
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.answer("Қайд шуд ҳамчун ирсолшуда.")
+
+
+@router.message(Command("fzr_categories"))
+async def fzr_categories(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    from bot.services.fazercards import FazerCardsError, list_topup_categories
+
+    query = message.text.split(maxsplit=1)
+    search = query[1].strip().lower() if len(query) > 1 else None
+
+    try:
+        data = await list_topup_categories(limit=500)
+    except FazerCardsError as exc:
+        await message.answer(f"⚠️ Хатои FazerCards: {exc}")
+        return
+
+    items = data.get("items", [])
+    if search:
+        items = [i for i in items if search in (i.get("name") or "").lower()]
+
+    if not items:
+        await message.answer("Ягон категория ёфт нашуд. Истифода: /fzr_categories free fire")
+        return
+
+    lines = [f"{i['category_id']} — {i.get('name', '?')}" for i in items[:40]]
+    suffix = f"\n\n(... ва {len(items) - 40} дигар, ҷустуҷӯро дақиқтар кунед)" if len(items) > 40 else ""
+    await message.answer(
+        f"Категорияҳо (Total: {data.get('meta', {}).get('total', len(items))}):\n" + "\n".join(lines) + suffix
+    )
+
+
+@router.message(Command("fzr_offers"))
+async def fzr_offers(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) != 2:
+        await message.answer("Истифода: /fzr_offers <category_id>\ncategory_id-ро аз /fzr_categories гиред.")
+        return
+
+    from bot.services.fazercards import FazerCardsError, get_topup_offers
+
+    try:
+        data = await get_topup_offers(parts[1].strip())
+    except FazerCardsError as exc:
+        await message.answer(f"⚠️ Хатои FazerCards: {exc}")
+        return
+
+    offers = data.get("offers", [])
+    offer_lines = [f"{o['offer_id']} — {o.get('name', '?')} — ${o.get('price_usd', '?')}" for o in offers]
+    fields = data.get("fields", [])
+    field_lines = [f"  key={f.get('key')} label={f.get('label')} type={f.get('type')}" for f in fields]
+
+    text = (
+        f"📦 {data.get('name', '?')} ({parts[1].strip()})\n\n"
+        f"Offers:\n" + "\n".join(offer_lines[:40]) + "\n\n"
+        f"Fields (барои /mapproduct лозим нест, худкор муайян мешавад):\n" + "\n".join(field_lines)
+    )
+    await message.answer(text[:4000])
+
+
+@router.message(Command("fzr_validate_id"))
+async def fzr_validate_id(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    from bot.services.fazercards import FazerCardsError, list_validate_id_categories
+
+    try:
+        data = await list_validate_id_categories()
+    except FazerCardsError as exc:
+        await message.answer(f"⚠️ Хатои FazerCards: {exc}")
+        return
+
+    items = data.get("items", [])
+    lines = [f"{i['category_id']} — {i.get('name', '?')}" for i in items[:60]]
+    await message.answer("Бозиҳое, ки санҷиши ID доранд:\n" + "\n".join(lines) if lines else "Рӯйхат холист.")
+
+
+@router.message(Command("mapproduct"))
+async def map_product(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = message.text.split(maxsplit=3)
+    if len(parts) != 4:
+        await message.answer(
+            "Истифода: /mapproduct <product_id> <fzr_category_id> <fzr_offer_id>\n"
+            "category_id ва offer_id-ро аз /fzr_categories ва /fzr_offers гиред."
+        )
+        return
+
+    _, product_id_str, category_id, offer_id = parts
+    if not product_id_str.isdigit():
+        await message.answer("product_id бояд рақам бошад.")
+        return
+
+    async with get_session() as session:
+        product = await get_product(session, int(product_id_str))
+        if product is None:
+            await message.answer("Маҳсулот ёфт нашуд.")
+            return
+        product = await set_product_fzr_mapping(session, product, category_id, offer_id)
+
+    await message.answer(
+        f"✅ Маҳсулот #{product.id} ({product.name}) ба FazerCards пайваст шуд:\n"
+        f"category_id={category_id}\noffer_id={offer_id}\n\n"
+        f"Барои фаъол кардани ирсоли худкор, дар Render DELIVERY_PROVIDER=fazercards гузоред."
+    )

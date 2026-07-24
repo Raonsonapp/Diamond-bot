@@ -57,6 +57,11 @@ class Product(Base):
     price_somoni: Mapped[float] = mapped_column(Float)
     cost_somoni: Mapped[float] = mapped_column(Float, default=0.0)
     is_active: Mapped[bool] = mapped_column(default=True)
+    # FazerCards (api.fzr.cards) mapping — set via /mapproduct once known
+    # from /fzr_categories + /fzr_offers. Empty means: no auto-delivery for
+    # this product, falls back to manual fulfillment.
+    fzr_category_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fzr_offer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     @property
     def margin_somoni(self) -> float:
