@@ -28,7 +28,14 @@ class ProductCategory(str, enum.Enum):
 
 
 class User(Base):
-    __tablename__ = "users"
+    # Prefixed (not just "users") to never collide with a table Supabase's
+    # own project templates create — a fresh Supabase project created from
+    # the "User Management Starter" quickstart ships a public.users table
+    # with a UUID primary key linked to auth.users; create_all() sees a
+    # table already named "users" and skips creating ours, leaving every
+    # query here trying to compare our bigint Telegram IDs against that
+    # table's UUID id ("operator does not exist: uuid = bigint").
+    __tablename__ = "bot_users"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)  # Telegram user id
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -36,7 +43,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     accepted_terms_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     referred_by: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id"), nullable=True
+        BigInteger, ForeignKey("bot_users.id"), nullable=True
     )
     referral_balance: Mapped[float] = mapped_column(Float, default=0.0)
 
@@ -46,7 +53,7 @@ class User(Base):
 class Product(Base):
     """A diamond package or Telegram Stars/Premium package the bot sells."""
 
-    __tablename__ = "products"
+    __tablename__ = "bot_products"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(64))
@@ -82,11 +89,11 @@ class Product(Base):
 
 
 class Order(Base):
-    __tablename__ = "orders"
+    __tablename__ = "bot_orders"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
-    product_id: Mapped[int] = mapped_column(Integer, ForeignKey("products.id"))
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"))
+    product_id: Mapped[int] = mapped_column(Integer, ForeignKey("bot_products.id"))
     # Free Fire player ID (diamonds) or @username (Telegram Stars/Premium),
     # depending on the product's category.
     ff_player_id: Mapped[str] = mapped_column(String(32))

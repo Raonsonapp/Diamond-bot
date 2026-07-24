@@ -41,7 +41,7 @@ async_session = async_sessionmaker(engine, expire_on_commit=False)
 # column on every model is listed here, not just the ones added later, and
 # this doubles as living documentation of the full schema.
 _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
-    "users": [
+    "bot_users": [
         ("username", "VARCHAR(64)"),
         ("full_name", "VARCHAR(128)"),
         ("created_at", "DATETIME"),
@@ -49,7 +49,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("referred_by", "BIGINT"),
         ("referral_balance", "FLOAT DEFAULT 0.0"),
     ],
-    "products": [
+    "bot_products": [
         ("name", "VARCHAR(64)"),
         # SQLAlchemy's Enum type stores the member NAME by default (e.g.
         # "DIAMONDS"), not its .value ("diamonds") — the default here must
@@ -63,7 +63,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("fzr_category_id", "VARCHAR(64)"),
         ("fzr_offer_id", "VARCHAR(64)"),
     ],
-    "orders": [
+    "bot_orders": [
         ("user_id", "BIGINT"),
         ("product_id", "INTEGER"),
         ("ff_player_id", "VARCHAR(32)"),
