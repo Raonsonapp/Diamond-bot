@@ -314,34 +314,51 @@ async def map_product(message: Message) -> None:
         await _reject_non_admin(message)
         return
 
-    reports = []
-    for line in _batch_lines(message.text, "/mapproduct"):
+    lines = _batch_lines(message.text, "/mapproduct")
+    processed = 0
+    for line in lines:
         parts = line.split(maxsplit=3)
         if len(parts) != 4:
-            reports.append(f"⚠️ Формат нодуруст: {line}")
+            await message.answer(f"⚠️ Формат нодуруст: {line}")
+            processed += 1
             continue
 
         _, product_id_str, category_id, offer_id = parts
         if not product_id_str.isdigit():
-            reports.append(f"⚠️ product_id бояд рақам бошад: {line}")
+            await message.answer(f"⚠️ product_id бояд рақам бошад: {line}")
+            processed += 1
             continue
 
-        async with get_session() as session:
-            product = await get_product(session, int(product_id_str))
-            if product is None:
-                reports.append(f"⚠️ Маҳсулот #{product_id_str} ёфт нашуд.")
-                continue
-            product = await set_product_fzr_mapping(session, product, category_id, offer_id)
+        # Each line makes a live call to FazerCards for the bonus lookup —
+        # with several lines in one message that's several sequential HTTP
+        # calls in one handler run. Report on each line as soon as it's
+        # done (not all at the end) and never let one bad/slow line take
+        # down the rest of the batch silently.
+        try:
+            async with get_session() as session:
+                product = await get_product(session, int(product_id_str))
+                if product is None:
+                    await message.answer(f"⚠️ Маҳсулот #{product_id_str} ёфт нашуд.")
+                    processed += 1
+                    continue
+                product = await set_product_fzr_mapping(session, product, category_id, offer_id)
 
-            bonus_note = ""
-            bonus = await _guess_bonus_from_offer(category_id, offer_id, product.diamonds)
-            if bonus is not None:
-                product = await set_product_bonus(session, product, bonus)
-                bonus_note = f", бонус +{bonus} (ҳамагӣ {product.total_diamonds}{product.unit_label})" if bonus > 0 else ""
+                bonus_note = ""
+                bonus = await _guess_bonus_from_offer(category_id, offer_id, product.diamonds)
+                if bonus is not None:
+                    product = await set_product_bonus(session, product, bonus)
+                    bonus_note = (
+                        f", бонус +{bonus} (ҳамагӣ {product.total_diamonds}{product.unit_label})"
+                        if bonus > 0
+                        else ""
+                    )
 
-        reports.append(f"✅ #{product.id} ({product.name}) → {category_id}/{offer_id}{bonus_note}")
+            await message.answer(f"✅ #{product.id} ({product.name}) → {category_id}/{offer_id}{bonus_note}")
+        except Exception as exc:  # noqa: BLE001 — one bad line must not sink the batch
+            await message.answer(f"⚠️ Хатои ногаҳонӣ дар «{line}»: {exc}")
+        processed += 1
 
-    if not reports:
+    if processed == 0:
         await message.answer(
             "Истифода: /mapproduct <product_id> <fzr_category_id> <fzr_offer_id>\n"
             "category_id ва offer_id-ро аз /fzr_categories ва /fzr_offers гиред.\n"
@@ -350,8 +367,7 @@ async def map_product(message: Message) -> None:
         return
 
     await message.answer(
-        "\n".join(reports)
-        + "\n\nБарои фаъол кардани ирсоли худкор, дар Render DELIVERY_PROVIDER=fazercards гузоред.\n"
+        "Барои фаъол кардани ирсоли худкор, дар Render DELIVERY_PROVIDER=fazercards гузоред.\n"
         "Агар бонус нодуруст бошад: /setbonus <product_id> <бонус>"
     )
 
