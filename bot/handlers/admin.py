@@ -295,48 +295,64 @@ async def fzr_validate_id(message: Message) -> None:
     await message.answer("Бозиҳое, ки санҷиши ID доранд:\n" + "\n".join(lines) if lines else "Рӯйхат холист.")
 
 
+def _batch_lines(message_text: str, command: str) -> list[str]:
+    """A pasted block of several "/command ..." lines arrives from Telegram
+    as ONE message (there's no client-side way to split it into separate
+    updates), so a handler that only looks at the first line silently
+    drops the rest with no error — the exact "nothing happened" confusion
+    that kept coming up. Instead, treat every non-empty line that starts
+    with this command as its own instance to process, and fall back to
+    the whole text as a single line for a normal one-line invocation."""
+    lines = [ln.strip() for ln in message_text.splitlines() if ln.strip()]
+    matching = [ln for ln in lines if ln.split(maxsplit=1)[0].split("@")[0].lower() == command]
+    return matching or lines[:1]
+
+
 @router.message(Command("mapproduct"))
 async def map_product(message: Message) -> None:
     if not is_admin(message.from_user.id):
         await _reject_non_admin(message)
         return
 
-    parts = message.text.split(maxsplit=3)
-    if len(parts) != 4:
+    reports = []
+    for line in _batch_lines(message.text, "/mapproduct"):
+        parts = line.split(maxsplit=3)
+        if len(parts) != 4:
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        _, product_id_str, category_id, offer_id = parts
+        if not product_id_str.isdigit():
+            reports.append(f"⚠️ product_id бояд рақам бошад: {line}")
+            continue
+
+        async with get_session() as session:
+            product = await get_product(session, int(product_id_str))
+            if product is None:
+                reports.append(f"⚠️ Маҳсулот #{product_id_str} ёфт нашуд.")
+                continue
+            product = await set_product_fzr_mapping(session, product, category_id, offer_id)
+
+            bonus_note = ""
+            bonus = await _guess_bonus_from_offer(category_id, offer_id, product.diamonds)
+            if bonus is not None:
+                product = await set_product_bonus(session, product, bonus)
+                bonus_note = f", бонус +{bonus} (ҳамагӣ {product.total_diamonds}{product.unit_label})" if bonus > 0 else ""
+
+        reports.append(f"✅ #{product.id} ({product.name}) → {category_id}/{offer_id}{bonus_note}")
+
+    if not reports:
         await message.answer(
             "Истифода: /mapproduct <product_id> <fzr_category_id> <fzr_offer_id>\n"
-            "category_id ва offer_id-ро аз /fzr_categories ва /fzr_offers гиред."
+            "category_id ва offer_id-ро аз /fzr_categories ва /fzr_offers гиред.\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
         )
         return
 
-    _, product_id_str, category_id, offer_id = parts
-    if not product_id_str.isdigit():
-        await message.answer("product_id бояд рақам бошад.")
-        return
-
-    async with get_session() as session:
-        product = await get_product(session, int(product_id_str))
-        if product is None:
-            await message.answer("Маҳсулот ёфт нашуд.")
-            return
-        product = await set_product_fzr_mapping(session, product, category_id, offer_id)
-
-        bonus_note = ""
-        bonus = await _guess_bonus_from_offer(category_id, offer_id, product.diamonds)
-        if bonus is not None:
-            product = await set_product_bonus(session, product, bonus)
-            bonus_note = (
-                f"\n🎁 Бонус аз рӯи офери FazerCards худкор муайян шуд: +{bonus} "
-                f"(ҳамагӣ {product.total_diamonds}{product.unit_label})."
-                if bonus > 0
-                else ""
-            )
-
     await message.answer(
-        f"✅ Маҳсулот #{product.id} ({product.name}) ба FazerCards пайваст шуд:\n"
-        f"category_id={category_id}\noffer_id={offer_id}{bonus_note}\n\n"
-        f"Барои фаъол кардани ирсоли худкор, дар Render DELIVERY_PROVIDER=fazercards гузоред.\n"
-        f"Агар бонус нодуруст бошад, бо дасти худ ислоҳ кунед: /setbonus {product.id} <бонус>"
+        "\n".join(reports)
+        + "\n\nБарои фаъол кардани ирсоли худкор, дар Render DELIVERY_PROVIDER=fazercards гузоред.\n"
+        "Агар бонус нодуруст бошад: /setbonus <product_id> <бонус>"
     )
 
 
@@ -401,34 +417,43 @@ async def set_price(message: Message) -> None:
         await _reject_non_admin(message)
         return
 
-    parts = message.text.split(maxsplit=3)
-    if len(parts) not in (3, 4):
+    reports = []
+    for line in _batch_lines(message.text, "/setprice"):
+        parts = line.split(maxsplit=3)
+        if len(parts) not in (3, 4):
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        if not parts[1].isdigit():
+            reports.append(f"⚠️ product_id бояд рақам бошад: {line}")
+            continue
+
+        try:
+            price = float(parts[2])
+            cost = float(parts[3]) if len(parts) == 4 else None
+        except ValueError:
+            reports.append(f"⚠️ Нарх бояд рақам бошад: {line}")
+            continue
+
+        async with get_session() as session:
+            product = await get_product(session, int(parts[1]))
+            if product is None:
+                reports.append(f"⚠️ Маҳсулот #{parts[1]} ёфт нашуд.")
+                continue
+            product = await set_product_price(session, product, price, cost)
+
+        reports.append(
+            f"✅ #{product.id} ({product.name}): нарх={product.price_somoni:.2f}с"
+            + (f", харид={product.cost_somoni:.2f}с" if cost is not None else "")
+            + f", фоида={product.margin_somoni:.2f}с"
+        )
+
+    if not reports:
         await message.answer(
             "Истифода: /setprice <product_id> <нархи_фурӯш> [нархи_харид]\n"
-            "Мисол: /setprice 1 8.90\nМисол бо нархи харид: /setprice 1 8.90 7.21"
+            "Мисол: /setprice 1 8.90\nМисол бо нархи харид: /setprice 1 8.90 7.21\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
         )
         return
 
-    if not parts[1].isdigit():
-        await message.answer("product_id бояд рақам бошад.")
-        return
-
-    try:
-        price = float(parts[2])
-        cost = float(parts[3]) if len(parts) == 4 else None
-    except ValueError:
-        await message.answer("Нарх бояд рақам бошад, масалан 8.90.")
-        return
-
-    async with get_session() as session:
-        product = await get_product(session, int(parts[1]))
-        if product is None:
-            await message.answer("Маҳсулот ёфт нашуд.")
-            return
-        product = await set_product_price(session, product, price, cost)
-
-    await message.answer(
-        f"✅ Маҳсулот #{product.id} ({product.name}): нархи фурӯш = {product.price_somoni:.2f} сомонӣ"
-        + (f", нархи харид = {product.cost_somoni:.2f} сомонӣ" if cost is not None else "")
-        + f" (фоида {product.margin_somoni:.2f} сомонӣ)."
-    )
+    await message.answer("\n".join(reports))
