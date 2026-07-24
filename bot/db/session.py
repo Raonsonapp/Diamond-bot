@@ -33,30 +33,51 @@ else:
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 # create_all only creates tables that don't exist yet — it never adds new
-# columns to a table that's already there. Since this bot has been running
-# in production and picking up model changes across deploys, every column
-# added after the very first deploy needs an explicit ALTER TABLE here, or
-# the live SQLite file falls behind the models and every query touching it
-# fails with "no such column".
+# columns to a table that's already there. That's normally just a concern
+# for columns added after the very first deploy, but a table can also end
+# up with a subset of even its ORIGINAL columns — e.g. several overlapping
+# deploy attempts racing create_all() against the same fresh Postgres
+# database left a `users` table missing `username` outright. So every
+# column on every model is listed here, not just the ones added later, and
+# this doubles as living documentation of the full schema.
 _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
-    "orders": [
-        ("payment_proof_hash", "VARCHAR(64)"),
-        ("paid_with_referral_balance", "BOOLEAN DEFAULT 0"),
-        ("cart_group_id", "VARCHAR(32)"),
-    ],
     "users": [
+        ("username", "VARCHAR(64)"),
+        ("full_name", "VARCHAR(128)"),
+        ("created_at", "DATETIME"),
         ("accepted_terms_at", "DATETIME"),
         ("referred_by", "BIGINT"),
         ("referral_balance", "FLOAT DEFAULT 0.0"),
     ],
     "products": [
+        ("name", "VARCHAR(64)"),
         # SQLAlchemy's Enum type stores the member NAME by default (e.g.
         # "DIAMONDS"), not its .value ("diamonds") — the default here must
         # match that or every pre-existing row fails to deserialize.
         ("category", "VARCHAR(16) DEFAULT 'DIAMONDS'"),
+        ("diamonds", "INTEGER"),
+        ("bonus_diamonds", "INTEGER DEFAULT 0"),
+        ("price_somoni", "FLOAT"),
+        ("cost_somoni", "FLOAT DEFAULT 0.0"),
+        ("is_active", "BOOLEAN DEFAULT 1"),
         ("fzr_category_id", "VARCHAR(64)"),
         ("fzr_offer_id", "VARCHAR(64)"),
-        ("bonus_diamonds", "INTEGER DEFAULT 0"),
+    ],
+    "orders": [
+        ("user_id", "BIGINT"),
+        ("product_id", "INTEGER"),
+        ("ff_player_id", "VARCHAR(32)"),
+        ("amount_somoni", "FLOAT"),
+        ("paid_with_referral_balance", "BOOLEAN DEFAULT 0"),
+        # Same Enum-stores-.name-not-.value gotcha as products.category.
+        ("status", "VARCHAR(16) DEFAULT 'AWAITING_PAYMENT'"),
+        ("payment_provider", "VARCHAR(32) DEFAULT 'manual'"),
+        ("payment_reference", "VARCHAR(128)"),
+        ("admin_note", "VARCHAR(256)"),
+        ("payment_proof_hash", "VARCHAR(64)"),
+        ("cart_group_id", "VARCHAR(32)"),
+        ("created_at", "DATETIME"),
+        ("updated_at", "DATETIME"),
     ],
 }
 
@@ -67,6 +88,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
 _POSTGRES_COLDEF_OVERRIDES = {
     "DATETIME": "TIMESTAMPTZ",
     "BOOLEAN DEFAULT 0": "BOOLEAN DEFAULT FALSE",
+    "BOOLEAN DEFAULT 1": "BOOLEAN DEFAULT TRUE",
 }
 
 
