@@ -33,7 +33,6 @@ from bot.keyboards import (
     confirm_order_keyboard,
     contact_keyboard,
     games_menu_keyboard,
-    main_menu_keyboard,
     main_reply_keyboard,
     payment_link_keyboard,
     products_keyboard,
@@ -59,7 +58,7 @@ WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фур
 async def _show_main_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("Менюи зерин ҳамеша дар поён дастрас аст 👇", reply_markup=main_reply_keyboard())
-    await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+    await message.answer(WELCOME_TEXT)
 
 
 async def _format_orders_text(user_id: int) -> str:
@@ -125,7 +124,7 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "menu:main")
 async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+    await callback.message.edit_text(WELCOME_TEXT)
     await callback.answer()
 
 
@@ -933,4 +932,4 @@ async def stale_callback_fallback(callback: CallbackQuery, state: FSMContext) ->
     fresh main menu instead of leaving the user stuck."""
     await callback.answer("Ин тугма кӯҳна шудааст, лутфан аз нав кушоед 👇", show_alert=True)
     await state.clear()
-    await callback.message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+    await callback.message.answer(WELCOME_TEXT)
