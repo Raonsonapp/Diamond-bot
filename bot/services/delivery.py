@@ -13,6 +13,7 @@ offer) fall back to manual delivery automatically.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -20,11 +21,17 @@ from dataclasses import dataclass
 from bot.config import config
 
 _ID_FIELD_HINTS = ("player", "user", "uid", "account", "id")
-# Status values that plausibly mean "the diamonds actually reached the
-# player" — kept conservative on purpose (see FazerCardsDeliveryProvider
-# .deliver()); extend this once a real completed-order response has been
-# seen and its exact status string confirmed.
+# Confirmed live: a real order goes created -> processing -> completed,
+# all within the same few seconds. "completed" is the real terminal
+# success status FazerCards uses; kept as a set in case other categories
+# report an equivalent synonym.
 _CONFIRMED_STATUSES = {"completed", "success", "delivered", "done", "fulfilled", "successful"}
+_FAILED_STATUSES = {"failed", "cancelled", "canceled", "error", "rejected", "declined"}
+# How long to wait for "created" to become "completed" before giving up
+# and falling back to manual — observed to happen within ~1 second on a
+# real order, so this is a generous margin, not a tight timing bet.
+_POLL_ATTEMPTS = 5
+_POLL_DELAY_SECONDS = 2.5
 
 
 @dataclass
@@ -119,12 +126,13 @@ class FazerCardsDeliveryProvider(DeliveryProvider):
                 message=f"Could not determine the player-ID field from schema: {offers_data.get('fields')}",
             )
 
+        idempotency_key = f"diamondbot-order-{order_id}"
         try:
             result = await place_topup_order(
                 product.fzr_category_id,
                 product.fzr_offer_id,
                 {field_key: ff_player_id},
-                idempotency_key=f"diamondbot-order-{order_id}",
+                idempotency_key=idempotency_key,
             )
         except FazerCardsError as exc:
             return DeliveryResult(
@@ -135,6 +143,36 @@ class FazerCardsDeliveryProvider(DeliveryProvider):
         reference = _extract_reference(order_info) or f"fzr-order-{order_id}"
         status = str(order_info.get("status", "")).lower()
 
+        # A fresh order starts at "created" and FazerCards processes it
+        # asynchronously (created -> processing -> completed, observed to
+        # take only a few seconds) — check once immediately, then poll a
+        # few times before giving up. Re-sending the *same* Idempotency-Key*
+        # is assumed to return the current state of that same order rather
+        # than creating a duplicate; if that assumption is wrong for some
+        # category, the retry just raises FazerCardsError like any other
+        # failed call and polling stops there, falling through to the safe
+        # "not confirmed" report below — never a false "delivered".
+        attempts = 0
+        while (
+            status not in _CONFIRMED_STATUSES
+            and status not in _FAILED_STATUSES
+            and attempts < _POLL_ATTEMPTS
+        ):
+            await asyncio.sleep(_POLL_DELAY_SECONDS)
+            try:
+                result = await place_topup_order(
+                    product.fzr_category_id,
+                    product.fzr_offer_id,
+                    {field_key: ff_player_id},
+                    idempotency_key=idempotency_key,
+                )
+            except FazerCardsError:
+                break
+            order_info = result.get("order", {}) if isinstance(result, dict) else {}
+            reference = _extract_reference(order_info) or reference
+            status = str(order_info.get("status", "")).lower()
+            attempts += 1
+
         if status in _CONFIRMED_STATUSES:
             return DeliveryResult(success=True, reference=reference, message="Delivered via FazerCards API.")
 
@@ -143,9 +181,8 @@ class FazerCardsDeliveryProvider(DeliveryProvider):
         # reached the player. Treating that alone as "delivered" caused
         # the bot to tell customers diamonds arrived when they hadn't.
         # Anything short of a recognised completed-style status (including
-        # an unfamiliar or missing status field — this was built without
-        # ever seeing a real completed-order response) falls back to the
-        # admin's manual "Delivered" confirmation instead of guessing.
+        # an unfamiliar status field) falls back to the admin's manual
+        # "Delivered" confirmation instead of guessing.
         return DeliveryResult(
             success=False,
             reference=reference,
