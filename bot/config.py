@@ -80,6 +80,12 @@ class Config:
     webhook_server_host: str = os.getenv("WEBHOOK_SERVER_HOST", "0.0.0.0")
     webhook_server_port: int = int(os.getenv("WEBHOOK_SERVER_PORT", "8080"))
 
+    # Render's free tier spins the service down after ~15 minutes with no
+    # incoming HTTP traffic. Every KEEPALIVE_PING_SECONDS, the bot pings its
+    # own PUBLIC_URL to look "active" and avoid that — set to "0" to disable
+    # (e.g. on a paid plan that doesn't sleep).
+    keepalive_ping_seconds: int = int(os.getenv("KEEPALIVE_PING_SECONDS", "600"))
+
     delivery_provider: str = os.getenv("DELIVERY_PROVIDER", "manual")
     supplier_api_base_url: str = os.getenv("SUPPLIER_API_BASE_URL", "")
     supplier_api_key: str = os.getenv("SUPPLIER_API_KEY", "")

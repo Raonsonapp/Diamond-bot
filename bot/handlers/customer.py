@@ -921,3 +921,16 @@ async def skip_review(callback: CallbackQuery, state: FSMContext) -> None:
 async def my_orders(message: Message) -> None:
     text = await _format_orders_text(message.from_user.id)
     await message.answer(text)
+
+
+@router.callback_query()
+async def stale_callback_fallback(callback: CallbackQuery, state: FSMContext) -> None:
+    """Registered last on purpose: only reached when no handler above
+    matched. That happens when a button belongs to a screen the user has
+    since navigated away from (its FSM-state filter no longer matches) —
+    without this, Telegram leaves that tap's loading spinner stuck forever
+    since nothing ever calls callback.answer() on it. Answer it and send a
+    fresh main menu instead of leaving the user stuck."""
+    await callback.answer("Ин тугма кӯҳна шудааст, лутфан аз нав кушоед 👇", show_alert=True)
+    await state.clear()
+    await callback.message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())

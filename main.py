@@ -1,9 +1,12 @@
 import asyncio
 import logging
 
+import aiohttp
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import ErrorEvent
 from aiohttp import web
 
 from bot.config import config
@@ -19,6 +22,23 @@ def build_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=storage)
     dp.include_router(admin.router)
     dp.include_router(customer.router)
+
+    @dp.errors()
+    async def handle_stale_edit(event: ErrorEvent) -> bool:
+        """Tapping a button whose screen has since been re-edited to the
+        exact same text/markup (e.g. "Ба меню" while already on the main
+        menu) makes Telegram's editMessageText call fail with "message is
+        not modified". Left uncaught, that exception stops the handler
+        before it reaches callback.answer() — so the button's loading
+        spinner never clears and just spins forever. Swallow only this
+        specific error and clear the spinner instead."""
+        if isinstance(event.exception, TelegramBadRequest) and "message is not modified" in str(event.exception):
+            callback = event.update.callback_query
+            if callback is not None:
+                await callback.answer()
+            return True
+        return False
+
     return dp
 
 
@@ -26,6 +46,21 @@ async def run_polling(bot: Bot, dp: Dispatcher) -> None:
     """Local development mode: the bot itself keeps asking Telegram for updates."""
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
+
+
+async def _self_ping_loop(url: str, interval_seconds: int) -> None:
+    """Render's free tier sleeps the service after ~15 min without incoming
+    HTTP traffic, which then makes the *next* real user wait ~30-60s for a
+    cold start. Pinging our own health endpoint on a shorter interval keeps
+    it looking active so it never gets the chance to sleep."""
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+        while True:
+            await asyncio.sleep(interval_seconds)
+            try:
+                async with session.get(url) as resp:
+                    logging.info("Self-ping %s -> HTTP %s", url, resp.status)
+            except Exception as exc:
+                logging.warning("Self-ping to %s failed: %s", url, exc)
 
 
 async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
@@ -67,6 +102,10 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
     site = web.TCPSite(runner, host="0.0.0.0", port=config.port)
     await site.start()
     logging.info("Webhook server listening on port %s, webhook url %s", config.port, webhook_url)
+
+    if config.keepalive_ping_seconds > 0:
+        asyncio.create_task(_self_ping_loop(config.public_url, config.keepalive_ping_seconds))
+        logging.info("Self-ping keepalive enabled: every %ss", config.keepalive_ping_seconds)
 
     # Keep the process alive; aiohttp runs the handlers in the background.
     await asyncio.Event().wait()
