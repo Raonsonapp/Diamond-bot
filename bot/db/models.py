@@ -114,6 +114,11 @@ class Order(Base):
     # be reused across orders without the admin being warned. Not a
     # substitute for actually checking the bank app — just catches replay.
     payment_proof_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # When the customer actually submitted a receipt (photo/document) for
+    # this order — separate from payment_proof_hash (fraud-replay check,
+    # photos only) so the admin can see who has sent *something* even for
+    # document-type receipts, before deciding to confirm.
+    proof_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

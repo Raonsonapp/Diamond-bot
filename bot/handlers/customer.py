@@ -820,7 +820,13 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
 async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     import hashlib
 
-    from bot.db.repo import find_duplicate_proof, get_order, get_orders_by_group, set_payment_proof_hash
+    from bot.db.repo import (
+        find_duplicate_proof,
+        get_order,
+        get_orders_by_group,
+        set_payment_proof_hash,
+        set_proof_submitted,
+    )
 
     data = await state.get_data()
     order_id = data.get("order_id")
@@ -868,6 +874,7 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
                     f"⚠️⚠️ ДИҚҚАТ: ҳамин расм қаблан барои фармоиши #{duplicate.id} "
                     f"истифода шуда буд! Эҳтимоли фиреб — бодиққат санҷед.\n\n{caption}"
                 )
+        order = await set_proof_submitted(session, order)
 
     if config.admin_chat_id:
         if message.photo:

@@ -7,11 +7,13 @@ from aiogram.types import CallbackQuery, Message
 from bot.config import config
 from bot.db.models import OrderStatus, Product, ProductCategory
 from bot.db.repo import (
+    count_proofs_submitted,
     get_order,
     get_orders_by_group,
     get_product,
     list_active_products,
     list_orders_by_status,
+    list_proofs_submitted,
     set_order_status,
     set_product_bonus,
     set_product_fzr_mapping,
@@ -151,6 +153,30 @@ async def pending_orders(message: Message) -> None:
     lines.append("\n💰 Пардохт шуда, дар интизори ирсол:")
     lines += [f"#{o.id} — {o.amount_somoni:.2f}с — recipient {o.ff_player_id}" for o in paid] or ["(нест)"]
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("proofs"))
+async def proofs_submitted(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    async with get_session() as session:
+        total = await count_proofs_submitted(session)
+        rows = await list_proofs_submitted(session, limit=30)
+
+    if not rows:
+        await message.answer("То ҳол ягон мизоҷ чек (расиди пардохт) нафиристодааст.")
+        return
+
+    lines = [f"🧾 Ҳамагӣ {total} чек фиристода шудааст. Охирин {len(rows)}-то:\n"]
+    for order, user in rows:
+        name = f"@{user.username}" if user.username else (user.full_name or f"ID{user.id}")
+        when = order.proof_submitted_at.strftime("%d.%m.%Y %H:%M") if order.proof_submitted_at else "—"
+        lines.append(
+            f"#{order.id} — {name} (id={user.id}) — {order.amount_somoni:.2f}с — {order.status.value} — {when}"
+        )
+    await message.answer("\n".join(lines)[:4000])
 
 
 @router.callback_query(F.data.startswith("admin:paid:"))

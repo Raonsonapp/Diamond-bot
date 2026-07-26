@@ -220,6 +220,31 @@ async def find_duplicate_proof(
     return result.scalars().first()
 
 
+async def set_proof_submitted(session: AsyncSession, order: Order) -> Order:
+    order.proof_submitted_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(order)
+    return order
+
+
+async def list_proofs_submitted(session: AsyncSession, limit: int = 30) -> list[tuple[Order, User]]:
+    result = await session.execute(
+        select(Order, User)
+        .join(User, User.id == Order.user_id)
+        .where(Order.proof_submitted_at.is_not(None))
+        .order_by(Order.proof_submitted_at.desc())
+        .limit(limit)
+    )
+    return [(o, u) for o, u in result.all()]
+
+
+async def count_proofs_submitted(session: AsyncSession) -> int:
+    result = await session.execute(
+        select(func.count()).select_from(Order).where(Order.proof_submitted_at.is_not(None))
+    )
+    return result.scalar_one()
+
+
 async def set_order_status(
     session: AsyncSession,
     order: Order,

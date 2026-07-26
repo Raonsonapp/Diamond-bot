@@ -75,6 +75,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("payment_reference", "VARCHAR(128)"),
         ("admin_note", "VARCHAR(256)"),
         ("payment_proof_hash", "VARCHAR(64)"),
+        ("proof_submitted_at", "DATETIME"),
         ("cart_group_id", "VARCHAR(32)"),
         ("created_at", "DATETIME"),
         ("updated_at", "DATETIME"),
