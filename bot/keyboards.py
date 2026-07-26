@@ -33,6 +33,8 @@ def main_reply_keyboard() -> ReplyKeyboardMarkup:
 
 
 def review_channel_keyboard() -> InlineKeyboardMarkup:
+    if not config.shop_channel_url:
+        return back_to_menu_keyboard()
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="📢 Кушодани канал", url=config.shop_channel_url)]]
     )
@@ -74,14 +76,19 @@ def back_to_menu_keyboard() -> InlineKeyboardMarkup:
 
 
 def contact_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="💬 WhatsApp", url=config.contact_whatsapp_url)],
-            [InlineKeyboardButton(text="📷 Instagram", url=config.contact_instagram_url)],
-            [InlineKeyboardButton(text="📢 Канал", url=config.shop_channel_url)],
-            [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
-        ]
-    )
+    # A blank URL (e.g. WhatsApp/Instagram not filled in yet) makes Telegram
+    # reject the whole send_message call with BUTTON_URL_INVALID — skip that
+    # row entirely instead of shipping a broken button, so the rest of the
+    # contact screen still works while those values are still pending.
+    rows = []
+    if config.contact_whatsapp_url:
+        rows.append([InlineKeyboardButton(text="💬 WhatsApp", url=config.contact_whatsapp_url)])
+    if config.contact_instagram_url:
+        rows.append([InlineKeyboardButton(text="📷 Instagram", url=config.contact_instagram_url)])
+    if config.shop_channel_url:
+        rows.append([InlineKeyboardButton(text="📢 Канал", url=config.shop_channel_url)])
+    rows.append([InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _product_label(p: Product) -> str:
