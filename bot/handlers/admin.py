@@ -172,7 +172,12 @@ async def proofs_submitted(message: Message) -> None:
     lines = [f"🧾 Ҳамагӣ {total} чек фиристода шудааст. Охирин {len(rows)}-то:\n"]
     for order, user in rows:
         name = f"@{user.username}" if user.username else (user.full_name or f"ID{user.id}")
-        when = order.proof_submitted_at.strftime("%d.%m.%Y %H:%M") if order.proof_submitted_at else "—"
+        if order.proof_submitted_at:
+            when = order.proof_submitted_at.strftime("%d.%m.%Y %H:%M")
+        else:
+            # Sent before /proofs tracking existed — created_at is the
+            # closest thing we have, not the exact submit time.
+            when = order.created_at.strftime("%d.%m.%Y %H:%M") + " (тахминӣ)"
         lines.append(
             f"#{order.id} — {name} (id={user.id}) — {order.amount_somoni:.2f}с — {order.status.value} — {when}"
         )

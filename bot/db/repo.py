@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -227,12 +227,23 @@ async def set_proof_submitted(session: AsyncSession, order: Order) -> Order:
     return order
 
 
+def _proof_submitted_filter():
+    # proof_submitted_at only exists going forward from when this tracking
+    # was added — but payment_proof_hash has been recorded (for photo
+    # receipts specifically) since well before that, so OR-ing it in
+    # recovers every historical photo receipt too, not just new ones.
+    # Receipts sent as plain text/document before this tracking existed
+    # have no surviving marker and can't be recovered.
+    return or_(Order.proof_submitted_at.is_not(None), Order.payment_proof_hash.is_not(None))
+
+
 async def list_proofs_submitted(session: AsyncSession, limit: int = 30) -> list[tuple[Order, User]]:
+    order_time = func.coalesce(Order.proof_submitted_at, Order.created_at)
     result = await session.execute(
         select(Order, User)
         .join(User, User.id == Order.user_id)
-        .where(Order.proof_submitted_at.is_not(None))
-        .order_by(Order.proof_submitted_at.desc())
+        .where(_proof_submitted_filter())
+        .order_by(order_time.desc())
         .limit(limit)
     )
     return [(o, u) for o, u in result.all()]
@@ -240,7 +251,7 @@ async def list_proofs_submitted(session: AsyncSession, limit: int = 30) -> list[
 
 async def count_proofs_submitted(session: AsyncSession) -> int:
     result = await session.execute(
-        select(func.count()).select_from(Order).where(Order.proof_submitted_at.is_not(None))
+        select(func.count()).select_from(Order).where(_proof_submitted_filter())
     )
     return result.scalar_one()
 
