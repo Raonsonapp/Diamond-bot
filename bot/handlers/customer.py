@@ -511,12 +511,20 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
 
     async with get_session() as session:
         products = await list_active_products(session, category=category)
-        if not products:
+        # Vouchers/bundles (Ваучери лайт, Level Up Package, Evo Access, ...)
+        # aren't priced per-diamond at all — their `diamonds` field is a
+        # placeholder, not a real quantity. Mixing one into this list would
+        # corrupt the interpolation curve for every custom-amount quote
+        # (e.g. a "Level Up Package 30" entry would get treated as a real
+        # 30-diamond breakpoint). Only genuine diamond packs (digit-led
+        # name, same heuristic as their button label) belong here.
+        diamond_packs = [p for p in products if p.name[:1].isdigit()]
+        if not diamond_packs:
             await message.answer("Ҳозир нархгузорӣ дастрас нест. Бо админ тамос гиред.")
             await state.clear()
             return
 
-        breakpoints = [(p.diamonds, p.price_somoni, p.cost_somoni) for p in products]
+        breakpoints = [(p.diamonds, p.price_somoni, p.cost_somoni) for p in diamond_packs]
         price, cost = quote_custom_price(amount, breakpoints)
 
         custom_product = Product(
