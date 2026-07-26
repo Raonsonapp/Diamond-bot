@@ -827,6 +827,16 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     if not order_id:
         return
 
+    if not message.photo and not message.document:
+        # A stray text message here (a question, "Номер?", etc.) is not a
+        # receipt. Forwarding it to the admin as if it were one used to
+        # silently consume this order's awaiting-proof state and clear it —
+        # so the customer's *real* screenshot, sent right after, no longer
+        # matched this handler and never reached the admin at all. Keep the
+        # state open and ask again instead of eating it on a non-photo reply.
+        await message.answer("Лутфан расми (скриншот)-и расиди пардохтро равон кунед — на матн.")
+        return
+
     async with get_session() as session:
         order = await get_order(session, order_id)
         group = await get_orders_by_group(session, order.cart_group_id) if order.cart_group_id else [order]
@@ -868,9 +878,10 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
                 reply_markup=admin_order_keyboard(order),
             )
         else:
-            await message.bot.send_message(
+            await message.bot.send_document(
                 config.admin_chat_id,
-                f"{caption}\n\nМатн: {message.text or '(бе матн)'}",
+                document=message.document.file_id,
+                caption=caption,
                 reply_markup=admin_order_keyboard(order),
             )
 
