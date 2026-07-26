@@ -28,6 +28,7 @@ class InvoiceResult:
     provider_reference: str
     pay_url: str | None  # link to send the customer to, if any
     instructions: str  # what to show the customer in the bot
+    card_photo_file_id: str | None = None  # photo of the receiving card, if admin set one
 
 
 class PaymentProvider(ABC):
@@ -63,6 +64,9 @@ class ManualBankTransferProvider(PaymentProvider):
     and sends proof; admin taps Confirm in the bot."""
 
     async def create_invoice(self, order_id: int, amount_somoni: float) -> InvoiceResult:
+        from bot.db.repo import get_card_photo_file_id
+        from bot.db.session import get_session
+
         pay_url = _build_expresspay_link(order_id, amount_somoni)
 
         if not config.receiving_card_number:
@@ -84,7 +88,15 @@ class ManualBankTransferProvider(PaymentProvider):
                 f"(скриншот) ба ин ҷо фиристед. Пас аз тасдиқи админ фармоишатон иҷро мешавад."
             )
 
-        return InvoiceResult(provider_reference=f"manual-{order_id}", pay_url=pay_url, instructions=instructions)
+        async with get_session() as session:
+            card_photo_file_id = await get_card_photo_file_id(session)
+
+        return InvoiceResult(
+            provider_reference=f"manual-{order_id}",
+            pay_url=pay_url,
+            instructions=instructions,
+            card_photo_file_id=card_photo_file_id,
+        )
 
     def verify_callback(self, payload: dict, headers: dict) -> tuple[bool, str | None]:
         # Manual provider has no webhook; confirmation happens via admin button.

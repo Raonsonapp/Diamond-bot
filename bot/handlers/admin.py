@@ -14,6 +14,7 @@ from bot.db.repo import (
     list_active_products,
     list_orders_by_status,
     list_proofs_submitted,
+    set_card_photo_file_id,
     set_order_status,
     set_product_bonus,
     set_product_fzr_mapping,
@@ -43,41 +44,50 @@ async def _add_product(message: Message, category: ProductCategory, usage_exampl
         await _reject_non_admin(message)
         return
 
-    # The name can contain spaces ("Ваучери лайт"), so take the last three
-    # tokens as amount/price/cost and everything between the command and
-    # those as the name, rather than a fixed maxsplit that breaks multi-word
-    # names.
-    parts = message.text.split()
-    if len(parts) < 5:
+    reports = []
+    for line in _batch_lines(message.text, usage_example):
+        # The name can contain spaces ("Ваучери лайт"), so take the last
+        # three tokens as amount/price/cost and everything between the
+        # command and those as the name, rather than a fixed maxsplit that
+        # breaks multi-word names.
+        parts = line.split()
+        if len(parts) < 5:
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        name = " ".join(parts[1:-3])
+        amount, price, cost = parts[-3:]
+        try:
+            product = Product(
+                name=name,
+                category=category,
+                diamonds=int(amount),
+                price_somoni=float(price),
+                cost_somoni=float(cost),
+            )
+        except ValueError:
+            reports.append(f"⚠️ Миқдор ва нарх бояд рақам бошанд: {line}")
+            continue
+
+        async with get_session() as session:
+            session.add(product)
+            await session.commit()
+            await session.refresh(product)
+
+        reports.append(
+            f"✅ #{product.id} {product.name} — {product.diamonds}{product.unit_label} "
+            f"ба {product.price_somoni:.2f} сомонӣ (фоида {product.margin_somoni:.2f} сомонӣ)"
+        )
+
+    if not reports:
         await message.answer(
             f"Истифода: {usage_example} <ном> <миқдор> <нарх_фурӯш> <нарх_харид>\n"
-            f"Мисол: {usage_example} Starter 100 10 8"
+            f"Мисол: {usage_example} Starter 100 10 8\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
         )
         return
 
-    name = " ".join(parts[1:-3])
-    amount, price, cost = parts[-3:]
-    try:
-        product = Product(
-            name=name,
-            category=category,
-            diamonds=int(amount),
-            price_somoni=float(price),
-            cost_somoni=float(cost),
-        )
-    except ValueError:
-        await message.answer("Миқдор ва нарх бояд рақам бошанд.")
-        return
-
-    async with get_session() as session:
-        session.add(product)
-        await session.commit()
-        await session.refresh(product)
-
-    await message.answer(
-        f"Маҳсулот сохта шуд: #{product.id} {product.name} — {product.diamonds}{product.unit_label} "
-        f"ба {product.price_somoni:.2f} сомонӣ (фоида {product.margin_somoni:.2f} сомонӣ)"
-    )
+    await message.answer("\n".join(reports)[:4000])
 
 
 @router.message(Command("addproduct"))
@@ -118,20 +128,55 @@ async def delete_product(message: Message) -> None:
         await _reject_non_admin(message)
         return
 
-    parts = message.text.split(maxsplit=1)
-    if len(parts) != 2 or not parts[1].strip().isdigit():
-        await message.answer("Истифода: /delproduct <ID>\nID-ро аз /products гиред.")
+    reports = []
+    for line in _batch_lines(message.text, "/delproduct"):
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2 or not parts[1].strip().isdigit():
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        async with get_session() as session:
+            product = await get_product(session, int(parts[1].strip()))
+            if product is None:
+                reports.append(f"⚠️ Маҳсулот #{parts[1].strip()} ёфт нашуд.")
+                continue
+            product.is_active = False
+            await session.commit()
+
+        reports.append(f"✅ Маҳсулот #{product.id} ({product.name}) хомӯш карда шуд.")
+
+    if not reports:
+        await message.answer(
+            "Истифода: /delproduct <ID>\nID-ро аз /products гиред.\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
         return
 
-    async with get_session() as session:
-        product = await get_product(session, int(parts[1].strip()))
-        if product is None:
-            await message.answer("Маҳсулот ёфт нашуд.")
-            return
-        product.is_active = False
-        await session.commit()
+    await message.answer("\n".join(reports)[:4000])
 
-    await message.answer(f"Маҳсулот #{product.id} ({product.name}) хомӯш карда шуд.")
+
+@router.message(Command("setcardphoto"))
+async def set_card_photo(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    # Accept either a photo sent with "/setcardphoto" as its caption, or the
+    # command sent as a reply to an earlier photo message — whichever the
+    # admin finds easier in their Telegram client.
+    photo_message = message if message.photo else message.reply_to_message
+    if photo_message is None or not photo_message.photo:
+        await message.answer(
+            "Расми кортро ҳамчун акс фиристед, бо матни «/setcardphoto» дар зери он, "
+            "ё ин фармонро ба ҷавоби (reply) як расми қаблан фиристодашуда занед."
+        )
+        return
+
+    file_id = photo_message.photo[-1].file_id
+    async with get_session() as session:
+        await set_card_photo_file_id(session, file_id)
+
+    await message.answer("✅ Расми корт сабт шуд — акнун дар экрани пардохт нишон дода мешавад.")
 
 
 @router.message(Command("pending"))
@@ -436,26 +481,33 @@ async def set_bonus(message: Message) -> None:
         await _reject_non_admin(message)
         return
 
-    parts = message.text.split(maxsplit=2)
-    if len(parts) != 3 or not parts[2].lstrip("-").isdigit():
-        await message.answer("Истифода: /setbonus <product_id> <бонус_диамонд>\nМисол: /setbonus 1 10")
+    reports = []
+    for line in _batch_lines(message.text, "/setbonus"):
+        parts = line.split(maxsplit=2)
+        if len(parts) != 3 or not parts[1].isdigit() or not parts[2].lstrip("-").isdigit():
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        async with get_session() as session:
+            product = await get_product(session, int(parts[1]))
+            if product is None:
+                reports.append(f"⚠️ Маҳсулот #{parts[1]} ёфт нашуд.")
+                continue
+            product = await set_product_bonus(session, product, int(parts[2]))
+
+        reports.append(
+            f"✅ Маҳсулот #{product.id} ({product.name}): бонус = +{product.bonus_diamonds} "
+            f"(ҳамагӣ {product.total_diamonds}{product.unit_label})."
+        )
+
+    if not reports:
+        await message.answer(
+            "Истифода: /setbonus <product_id> <бонус_диамонд>\nМисол: /setbonus 1 10\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
         return
 
-    if not parts[1].isdigit():
-        await message.answer("product_id бояд рақам бошад.")
-        return
-
-    async with get_session() as session:
-        product = await get_product(session, int(parts[1]))
-        if product is None:
-            await message.answer("Маҳсулот ёфт нашуд.")
-            return
-        product = await set_product_bonus(session, product, int(parts[2]))
-
-    await message.answer(
-        f"✅ Маҳсулот #{product.id} ({product.name}): бонус = +{product.bonus_diamonds} "
-        f"(ҳамагӣ {product.total_diamonds}{product.unit_label})."
-    )
+    await message.answer("\n".join(reports)[:4000])
 
 
 @router.message(Command("setprice"))

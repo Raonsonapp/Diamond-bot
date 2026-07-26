@@ -2,6 +2,7 @@ import html
 import uuid
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -809,10 +810,20 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(order_id=primary.id)
     await state.set_state(OrderFlow.awaiting_payment_proof)
     text = f"Фармоиши #{primary.id} сабт шуд.\n\n{invoice.instructions}"
-    if invoice.pay_url:
-        await callback.message.edit_text(text, reply_markup=payment_link_keyboard(invoice.pay_url))
+    keyboard = payment_link_keyboard(invoice.pay_url) if invoice.pay_url else None
+
+    if invoice.card_photo_file_id:
+        # A photo can't be attached by editing an existing text-only
+        # message — clear its old confirm/cancel keyboard (so it doesn't
+        # linger as a dead button) and send the card photo as a new
+        # message instead.
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except TelegramBadRequest:
+            pass
+        await callback.message.answer_photo(invoice.card_photo_file_id, caption=text, reply_markup=keyboard)
     else:
-        await callback.message.edit_text(text)
+        await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
 
 

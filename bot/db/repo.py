@@ -4,7 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from bot.db.models import Order, OrderStatus, Product, ProductCategory, User
+from bot.db.models import BotSettings, Order, OrderStatus, Product, ProductCategory, User
 
 
 async def upsert_user(
@@ -324,3 +324,24 @@ async def count_total_delivered_orders(session: AsyncSession) -> int:
         select(func.count()).select_from(Order).where(Order.status == OrderStatus.DELIVERED)
     )
     return result.scalar_one()
+
+
+async def _get_settings(session: AsyncSession) -> BotSettings:
+    settings = await session.get(BotSettings, 1)
+    if settings is None:
+        settings = BotSettings(id=1)
+        session.add(settings)
+        await session.commit()
+        await session.refresh(settings)
+    return settings
+
+
+async def get_card_photo_file_id(session: AsyncSession) -> str | None:
+    settings = await _get_settings(session)
+    return settings.card_photo_file_id
+
+
+async def set_card_photo_file_id(session: AsyncSession, file_id: str) -> None:
+    settings = await _get_settings(session)
+    settings.card_photo_file_id = file_id
+    await session.commit()

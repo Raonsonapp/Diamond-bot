@@ -126,3 +126,15 @@ class Order(Base):
 
     user: Mapped["User"] = relationship(back_populates="orders")
     product: Mapped["Product"] = relationship()
+
+
+class BotSettings(Base):
+    """Single-row table (id=1) for admin-configurable settings that aren't
+    tied to any one product/order — e.g. the personal-card photo shown to
+    customers on the manual payment screen, set live via /setcardphoto
+    instead of a redeploy-only env var."""
+
+    __tablename__ = "bot_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    card_photo_file_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
