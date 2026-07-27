@@ -10,17 +10,20 @@ from bot.config import config
 from bot.db.models import Product, ProductCategory
 from bot.db.repo import (
     accept_terms,
+    count_new_referrals,
     count_referrals,
     count_total_delivered_orders,
     count_total_users,
     create_order,
     deduct_referral_balance,
+    get_active_contest,
     get_buyer_rank,
     get_last_recipient,
     get_product,
     get_user,
     get_user_purchase_stats,
     list_active_products,
+    set_contest_winner,
     top_buyers,
     top_referrers,
     upsert_user,
@@ -90,6 +93,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             referred_by = None
 
     async with get_session() as session:
+        is_new_user = await get_user(session, message.from_user.id) is None
         user = await upsert_user(
             session,
             message.from_user.id,
@@ -98,12 +102,42 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             referred_by=referred_by,
         )
 
+    if is_new_user and referred_by is not None:
+        await _maybe_declare_contest_winner(message, referred_by)
+
     await state.clear()
     if user.accepted_terms_at is None:
         await message.answer(TERMS_TEXT, reply_markup=terms_keyboard())
         return
 
     await _show_main_menu(message, state)
+
+
+async def _maybe_declare_contest_winner(message: Message, referrer_id: int) -> None:
+    """Called right after a brand-new user signs up via someone's referral
+    link — checks whether that referrer just crossed an active contest's
+    target and, if so, declares them the winner. First to cross it wins;
+    contest.winner_user_id already set means it's taken."""
+    async with get_session() as session:
+        contest = await get_active_contest(session)
+        if contest is None or contest.winner_user_id is not None:
+            return
+        new_count = await count_new_referrals(session, referrer_id, contest.started_at)
+        if new_count < contest.target_referrals:
+            return
+        contest = await set_contest_winner(session, contest, referrer_id)
+
+    await message.bot.send_message(
+        referrer_id,
+        f"🏆 Табрик! Шумо ғолиби мусобиқа шудед — {contest.target_referrals} дӯст даъват кардед аввалин шуда!\n"
+        f"🎁 Ҷоизаи шумо: {contest.prize_name} — ба зудӣ аз ҷониби админ фиристода мешавад.",
+    )
+    if config.admin_chat_id:
+        await message.bot.send_message(
+            config.admin_chat_id,
+            f"🏆 Мусобиқа анҷом ёфт! Ғолиб: id={referrer_id} — {contest.target_referrals} реферал.\n"
+            f"Лутфан ҷоизаро ({contest.prize_name}) ба ӯ дастӣ фиристед.",
+        )
 
 
 @router.callback_query(F.data == "terms:accept")

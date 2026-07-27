@@ -126,3 +126,20 @@ class Order(Base):
 
     user: Mapped["User"] = relationship(back_populates="orders")
     product: Mapped["Product"] = relationship()
+
+
+class Contest(Base):
+    """A time-boxed referral race ("first to invite N people wins a
+    prize"). Only one is meant to be active at a time — see
+    get_active_contest() in repo.py."""
+
+    __tablename__ = "bot_contests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    prize_name: Mapped[str] = mapped_column(String(128))
+    target_referrals: Mapped[int] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    winner_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("bot_users.id"), nullable=True)
+    winner_announced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True)

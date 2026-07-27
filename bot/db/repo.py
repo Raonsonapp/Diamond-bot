@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from bot.db.models import Order, OrderStatus, Product, ProductCategory, User
+from bot.db.models import Contest, Order, OrderStatus, Product, ProductCategory, User
 
 
 async def upsert_user(
@@ -64,6 +64,70 @@ async def top_referrers(session: AsyncSession, limit: int = 10) -> list[tuple[Us
     stmt = (
         select(User, func.count(referred.id).label("referral_count"))
         .join(referred, referred.referred_by == User.id)
+        .group_by(User.id)
+        .order_by(func.count(referred.id).desc())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    return [(row[0], row[1]) for row in result.all()]
+
+
+async def count_new_referrals(session: AsyncSession, user_id: int, since: datetime) -> int:
+    """Referrals that joined at/after `since` — used to score a time-boxed
+    contest without counting referrals someone already had before it
+    started."""
+    result = await session.execute(
+        select(func.count()).select_from(User).where(
+            User.referred_by == user_id, User.created_at >= since
+        )
+    )
+    return result.scalar_one()
+
+
+async def create_contest(
+    session: AsyncSession, prize_name: str, target_referrals: int, duration_days: float
+) -> Contest:
+    now = datetime.now(timezone.utc)
+    contest = Contest(
+        prize_name=prize_name,
+        target_referrals=target_referrals,
+        started_at=now,
+        ends_at=now + timedelta(days=duration_days),
+    )
+    session.add(contest)
+    await session.commit()
+    await session.refresh(contest)
+    return contest
+
+
+async def get_active_contest(session: AsyncSession) -> Contest | None:
+    now = datetime.now(timezone.utc)
+    result = await session.execute(
+        select(Contest)
+        .where(Contest.is_active.is_(True), Contest.ends_at > now)
+        .order_by(Contest.started_at.desc())
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
+async def set_contest_winner(session: AsyncSession, contest: Contest, user_id: int) -> Contest:
+    contest.winner_user_id = user_id
+    contest.winner_announced_at = datetime.now(timezone.utc)
+    contest.is_active = False
+    await session.commit()
+    await session.refresh(contest)
+    return contest
+
+
+async def contest_leaderboard(
+    session: AsyncSession, contest: Contest, limit: int = 10
+) -> list[tuple[User, int]]:
+    """Referral counts within the contest window only (not all-time)."""
+    referred = aliased(User)
+    stmt = (
+        select(User, func.count(referred.id).label("referral_count"))
+        .join(referred, (referred.referred_by == User.id) & (referred.created_at >= contest.started_at))
         .group_by(User.id)
         .order_by(func.count(referred.id).desc())
         .limit(limit)

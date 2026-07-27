@@ -7,7 +7,10 @@ from aiogram.types import CallbackQuery, Message
 from bot.config import config
 from bot.db.models import OrderStatus, Product, ProductCategory
 from bot.db.repo import (
+    contest_leaderboard,
     count_proofs_submitted,
+    create_contest,
+    get_active_contest,
     get_order,
     get_orders_by_group,
     get_product,
@@ -182,6 +185,74 @@ async def proofs_submitted(message: Message) -> None:
             f"#{order.id} — {name} (id={user.id}) — {order.amount_somoni:.2f}с — {order.status.value} — {when}"
         )
     await message.answer("\n".join(lines)[:4000])
+
+
+@router.message(Command("contest_start"))
+async def contest_start(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    # Name can have spaces ("Ваучери лайт"), same trailing-args trick as
+    # /addproduct: last two tokens are target_referrals/duration_days,
+    # everything between the command and those is the prize name.
+    parts = message.text.split()
+    if len(parts) < 4:
+        await message.answer(
+            "Истифода: /contest_start <номи ҷоиза> <шумораи реферал> <рӯз>\n"
+            "Мисол: /contest_start Ваучери лайт 5 2"
+        )
+        return
+
+    prize_name = " ".join(parts[1:-2])
+    target_str, days_str = parts[-2:]
+    try:
+        target_referrals = int(target_str)
+        duration_days = float(days_str)
+    except ValueError:
+        await message.answer("Шумораи реферал бояд рақами бутун бошад, рӯз бояд рақам бошад.")
+        return
+
+    async with get_session() as session:
+        contest = await create_contest(session, prize_name, target_referrals, duration_days)
+
+    await message.answer(
+        f"🏁 Мусобиқа сар шуд!\n\n"
+        f"🎁 Ҷоиза: {contest.prize_name}\n"
+        f"🎯 Ҳадаф: аввалин каси {contest.target_referrals} дӯсти НАВ даъват кунад\n"
+        f"⏰ Анҷом: {contest.ends_at.strftime('%d.%m.%Y %H:%M')} (то {duration_days:g} рӯз)\n\n"
+        f"Танҳо касоне ҳисоб мешаванд, ки БАЪД аз ҳозир тавассути линки реферал ба бот ворид шаванд. "
+        f"Ғолиб худкор муайян ва огоҳ карда мешавад."
+    )
+
+
+@router.message(Command("contest_status"))
+async def contest_status(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    async with get_session() as session:
+        contest = await get_active_contest(session)
+        if contest is None:
+            await message.answer("Ҳозир ягон мусобиқаи фаъол нест. /contest_start истифода баред.")
+            return
+        rows = await contest_leaderboard(session, contest)
+
+    lines = [
+        f"🏁 Мусобиқаи фаъол: {contest.prize_name}",
+        f"🎯 Ҳадаф: {contest.target_referrals} реферал | ⏰ Анҷом: {contest.ends_at.strftime('%d.%m.%Y %H:%M')}\n",
+    ]
+    if not rows:
+        lines.append("Ҳанӯз ҳеҷ кас дӯст даъват накардааст.")
+    else:
+        medals = ["🥇", "🥈", "🥉"]
+        for i, (user, count) in enumerate(rows):
+            icon = medals[i] if i < 3 else f"{i + 1}."
+            name = f"@{user.username}" if user.username else (user.full_name or f"ID{user.id}")
+            left = max(contest.target_referrals - count, 0)
+            lines.append(f"{icon} {name} — {count}/{contest.target_referrals} (боқӣ {left})")
+    await message.answer("\n".join(lines))
 
 
 @router.callback_query(F.data.startswith("admin:paid:"))
