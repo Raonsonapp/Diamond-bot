@@ -21,7 +21,7 @@ from bot.db.repo import (
 )
 from bot.db.session import get_session
 from bot.keyboards import admin_order_keyboard
-from bot.services.fulfillment import confirm_and_deliver, mark_delivered_and_notify
+from bot.services.fulfillment import clear_awaiting_review, confirm_and_deliver, mark_delivered_and_notify
 
 router = Router(name="admin")
 
@@ -224,6 +224,7 @@ async def reject_payment(callback: CallbackQuery, bot: Bot) -> None:
         order.user_id,
         f"❌ Фармоиши #{order.id} рад карда шуд. Агар ин хато бошад, бо админ тамос гиред.",
     )
+    await clear_awaiting_review(bot, order)
     await callback.answer("Рад карда шуд.")
 
 

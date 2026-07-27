@@ -74,6 +74,23 @@ def _item_line(order: Order, product) -> str:
     return f"📦 {product.diamonds}{bonus}{product.unit_label}"
 
 
+async def clear_awaiting_review(bot: Bot, order: Order) -> None:
+    """Once the admin has actually confirmed/rejected an order, drop the
+    customer out of "awaiting_admin_review" (set in customer.py's
+    receive_payment_proof) so they stop getting the canned "still under
+    review" reply. Only clears it if they're still on *this* order and
+    haven't since moved on to a newer one — an SMS auto-confirm or an
+    order that never went through the photo-proof flow at all just finds
+    a non-matching state here and is a no-op."""
+    key = StorageKey(bot_id=bot.id, chat_id=order.user_id, user_id=order.user_id)
+    customer_state = FSMContext(storage=storage, key=key)
+    if await customer_state.get_state() != OrderFlow.awaiting_admin_review.state:
+        return
+    data = await customer_state.get_data()
+    if data.get("order_id") == order.id:
+        await customer_state.clear()
+
+
 async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | None = None) -> FulfillmentResult | None:
     """Mark an order (and, for a multi-pack cart, every sibling order that
     shares its cart_group_id) PAID, then try to deliver automatically.
@@ -115,6 +132,7 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
             f"✅ Пардохти фармоиши #{order.id} тасдиқ шуд. "
             f"{product.diamonds}{product.unit_label} ба зудӣ ба ҳисоби шумо ирсол мешавад.",
         )
+    await clear_awaiting_review(bot, order)
 
     delivery = get_delivery_provider()
     results = []

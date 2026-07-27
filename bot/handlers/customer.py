@@ -903,7 +903,22 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     await message.answer(
         "Ташаккур! Расиди шумо ба админ фиристода шуд. Пас аз тасдиқ маҳсулоти шумо ирсол мешавад."
     )
-    await state.clear()
+    # Don't clear the state yet — stay in "awaiting admin review" so that if
+    # the customer writes back in the meantime (e.g. "паём наомад?"), the
+    # handler below can reassure them instead of the message going
+    # unanswered. fulfillment.py clears this once the admin actually
+    # confirms/rejects the order.
+    await state.set_state(OrderFlow.awaiting_admin_review)
+    await state.update_data(order_id=order_id)
+
+
+@router.message(OrderFlow.awaiting_admin_review)
+async def awaiting_admin_review_reply(message: Message, state: FSMContext) -> None:
+    await message.answer(
+        "⏳ Чеки шумо аллакай ба админ фиристода шудааст ва дар навбати баррасӣ қарор дорад. "
+        "Лутфан то тасдиқ интизор шавед — ин одатан 1-5 дақиқа тӯл мекашад. "
+        "Агар хеле дер шуд, аз 🆘 Дастгирӣ истифода баред."
+    )
 
 
 @router.message(OrderFlow.awaiting_review, F.text)
