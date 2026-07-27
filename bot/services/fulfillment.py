@@ -25,6 +25,7 @@ from bot.db.repo import (
 from bot.db.session import get_session
 from bot.fsm_storage import storage
 from bot.keyboards import review_prompt_keyboard
+from bot.services.contest import maybe_declare_contest_winner
 from bot.services.delivery import get_delivery_provider
 from bot.states import OrderFlow
 
@@ -133,6 +134,14 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
             f"{product.diamonds}{product.unit_label} ба зудӣ ба ҳисоби шумо ирсол мешавад.",
         )
     await clear_awaiting_review(bot, order)
+
+    async with get_session() as session:
+        buyer = await get_user(session, order.user_id)
+    if buyer is not None and buyer.referred_by is not None:
+        # This buyer just paid — if they were referred into a still-open
+        # contest, this purchase may be the exact thing that satisfies its
+        # "at least one referral must buy something" requirement.
+        await maybe_declare_contest_winner(bot, buyer.referred_by)
 
     delivery = get_delivery_provider()
     results = []

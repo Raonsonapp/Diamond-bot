@@ -84,6 +84,22 @@ async def count_new_referrals(session: AsyncSession, user_id: int, since: dateti
     return result.scalar_one()
 
 
+async def has_referral_with_purchase(session: AsyncSession, user_id: int, since: datetime) -> bool:
+    """True if at least one of `user_id`'s referrals (joined at/after
+    `since`) has actually paid for an order — not just signed up."""
+    result = await session.execute(
+        select(func.count())
+        .select_from(Order)
+        .join(User, User.id == Order.user_id)
+        .where(
+            User.referred_by == user_id,
+            User.created_at >= since,
+            Order.status.in_([OrderStatus.PAID, OrderStatus.DELIVERING, OrderStatus.DELIVERED]),
+        )
+    )
+    return result.scalar_one() > 0
+
+
 async def create_contest(
     session: AsyncSession, prize_name: str, target_referrals: int, duration_days: float
 ) -> Contest:

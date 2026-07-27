@@ -14,6 +14,7 @@ from bot.db.repo import (
     get_order,
     get_orders_by_group,
     get_product,
+    has_referral_with_purchase,
     list_active_products,
     list_orders_by_status,
     list_proofs_submitted,
@@ -219,7 +220,7 @@ async def contest_start(message: Message) -> None:
     await message.answer(
         f"🏁 Мусобиқа сар шуд!\n\n"
         f"🎁 Ҷоиза: {contest.prize_name}\n"
-        f"🎯 Ҳадаф: аввалин каси {contest.target_referrals} дӯсти НАВ даъват кунад\n"
+        f"🎯 Ҳадаф: аввалин каси {contest.target_referrals} дӯсти НАВ даъват кунад ва ҳадди ақал 1-тои онҳо харид кунад\n"
         f"⏰ Анҷом: {contest.ends_at.strftime('%d.%m.%Y %H:%M')} (то {duration_days:g} рӯз)\n\n"
         f"Танҳо касоне ҳисоб мешаванд, ки БАЪД аз ҳозир тавассути линки реферал ба бот ворид шаванд. "
         f"Ғолиб худкор муайян ва огоҳ карда мешавад."
@@ -238,10 +239,14 @@ async def contest_status(message: Message) -> None:
             await message.answer("Ҳозир ягон мусобиқаи фаъол нест. /contest_start истифода баред.")
             return
         rows = await contest_leaderboard(session, contest)
+        purchase_flags = {
+            user.id: await has_referral_with_purchase(session, user.id, contest.started_at)
+            for user, _ in rows
+        }
 
     lines = [
         f"🏁 Мусобиқаи фаъол: {contest.prize_name}",
-        f"🎯 Ҳадаф: {contest.target_referrals} реферал | ⏰ Анҷом: {contest.ends_at.strftime('%d.%m.%Y %H:%M')}\n",
+        f"🎯 Ҳадаф: {contest.target_referrals} реферал (ҳадди ақал 1 харид) | ⏰ Анҷом: {contest.ends_at.strftime('%d.%m.%Y %H:%M')}\n",
     ]
     if not rows:
         lines.append("Ҳанӯз ҳеҷ кас дӯст даъват накардааст.")
@@ -251,7 +256,8 @@ async def contest_status(message: Message) -> None:
             icon = medals[i] if i < 3 else f"{i + 1}."
             name = f"@{user.username}" if user.username else (user.full_name or f"ID{user.id}")
             left = max(contest.target_referrals - count, 0)
-            lines.append(f"{icon} {name} — {count}/{contest.target_referrals} (боқӣ {left})")
+            bought = "✅ харид кард" if purchase_flags.get(user.id) else "❌ ҳанӯз харид накард"
+            lines.append(f"{icon} {name} — {count}/{contest.target_referrals} (боқӣ {left}) — {bought}")
     await message.answer("\n".join(lines))
 
 
