@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 from aiogram import Bot, F, Router
@@ -16,6 +17,7 @@ from bot.db.repo import (
     get_product,
     has_referral_with_purchase,
     list_active_products,
+    list_all_user_ids,
     list_orders_by_status,
     list_proofs_submitted,
     set_order_status,
@@ -259,6 +261,39 @@ async def contest_status(message: Message) -> None:
             bought = "✅ харид кард" if purchase_flags.get(user.id) else "❌ ҳанӯз харид накард"
             lines.append(f"{icon} {name} — {count}/{contest.target_referrals} (боқӣ {left}) — {bought}")
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("broadcast"))
+async def broadcast(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) != 2:
+        await message.answer("Истифода: /broadcast <матн>\n(Матн метавонад якчанд сатр дошта бошад.)")
+        return
+
+    text = parts[1]
+    async with get_session() as session:
+        user_ids = await list_all_user_ids(session)
+
+    sent = 0
+    failed = 0
+    for user_id in user_ids:
+        try:
+            await message.bot.send_message(user_id, text)
+            sent += 1
+        except Exception:
+            # Blocked the bot, deactivated account, etc. — one bad
+            # recipient must never stop the rest of the broadcast.
+            failed += 1
+        await asyncio.sleep(0.05)  # stay well under Telegram's rate limit
+
+    await message.answer(
+        f"📢 Эълон фиристода шуд: ба {sent} корбар расид"
+        + (f", ба {failed} нафар нарасид (эҳтимол боти моро баста бошанд)." if failed else ".")
+    )
 
 
 @router.callback_query(F.data.startswith("admin:paid:"))

@@ -399,6 +399,11 @@ async def count_total_users(session: AsyncSession) -> int:
     return result.scalar_one()
 
 
+async def list_all_user_ids(session: AsyncSession) -> list[int]:
+    result = await session.execute(select(User.id))
+    return [row[0] for row in result.all()]
+
+
 async def count_total_delivered_orders(session: AsyncSession) -> int:
     result = await session.execute(
         select(func.count()).select_from(Order).where(Order.status == OrderStatus.DELIVERED)
