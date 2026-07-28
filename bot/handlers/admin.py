@@ -80,8 +80,9 @@ async def _add_product(message: Message, category: ProductCategory, usage_exampl
         await session.commit()
         await session.refresh(product)
 
+    extra = f" ({product.display_name})" if product.name[:1].isdigit() else ""
     await message.answer(
-        f"Маҳсулот сохта шуд: #{product.id} {product.name} — {product.diamonds}{product.unit_label} "
+        f"Маҳсулот сохта шуд: #{product.id} {product.name}{extra} "
         f"ба {product.price_somoni:.2f} сомонӣ (фоида {product.margin_somoni:.2f} сомонӣ)"
     )
 
@@ -114,12 +115,13 @@ async def list_products(message: Message) -> None:
         await message.answer("Ягон маҳсулот нест. Бо /addproduct ё /addstars илова кунед.")
         return
 
-    lines = [
-        f"#{p.id} [{p.category.value}] {p.name}: {p.diamonds}"
-        + (f"(+{p.bonus_diamonds})" if p.bonus_diamonds else "")
-        + f"{p.unit_label} = {p.price_somoni:.2f}с (харид {p.cost_somoni:.2f}с, фоида {p.margin_somoni:.2f}с)"
-        for p in products
-    ]
+    lines = []
+    for p in products:
+        qty = f": {p.display_name}" if p.name[:1].isdigit() else ""
+        lines.append(
+            f"#{p.id} [{p.category.value}] {p.name}{qty} = {p.price_somoni:.2f}с "
+            f"(харид {p.cost_somoni:.2f}с, фоида {p.margin_somoni:.2f}с)"
+        )
     await message.answer("\n".join(lines))
 
 

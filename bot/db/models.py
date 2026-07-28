@@ -92,6 +92,19 @@ class Product(Base):
     def total_diamonds(self) -> int:
         return self.diamonds + self.bonus_diamonds
 
+    @property
+    def display_name(self) -> str:
+        """Human-readable label for order confirmations, cart/delivery
+        summaries, and admin notifications — a real quantity pack ("100
+        диамонд") shows its diamond count, while a voucher/bundle
+        ("Newbie Bundle") whose `diamonds` field is just an internal
+        placeholder shows its actual name instead, so it's never
+        misread as literally "1 diamond"."""
+        if self.name[:1].isdigit():
+            bonus = f" (+{self.bonus_diamonds} бонус)" if self.bonus_diamonds else ""
+            return f"{self.diamonds}{bonus}{self.unit_label}"
+        return self.name
+
 
 class Order(Base):
     __tablename__ = "bot_orders"

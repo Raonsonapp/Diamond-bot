@@ -356,7 +356,7 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(OrderFlow.entering_player_id)
 
     total = sum(p.price_somoni for p in products)
-    summary = "\n".join(f"• {p.diamonds}{p.unit_label}" for p in products)
+    summary = "\n".join(f"• {p.display_name}" for p in products)
     prompt = await _recipient_prompt(category)
     text = f"Шумо интихоб кардед:\n{summary}\n\n💰 Ҳамагӣ: {total:.2f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
 
@@ -591,7 +591,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(OrderFlow.entering_player_id)
     prompt = await _recipient_prompt(product.category)
     text = (
-        f"Шумо интихоб кардед: {product.diamonds} {product.unit_label} — {product.price_somoni:.2f} сомонӣ.\n\n"
+        f"Шумо интихоб кардед: {product.display_name} — {product.price_somoni:.2f} сомонӣ.\n\n"
         f"Лутфан {prompt} ирсол кунед:"
     )
     if last_recipient:
@@ -639,8 +639,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     confirm_lines.append("")
 
     for p in products:
-        bonus = f" (+{p.bonus_diamonds})" if p.bonus_diamonds else ""
-        confirm_lines.append(f"🎁 Маҳсулот: {p.diamonds}{bonus}{p.unit_label}")
+        confirm_lines.append(f"🎁 Маҳсулот: {p.display_name}")
     if len(products) > 1:
         confirm_lines.append(f"💰 Ҳамагӣ: <b>{total_price:.2f} сомонӣ</b>")
     else:
@@ -775,7 +774,7 @@ async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
         ]
 
     primary = orders[0]
-    summary = "\n".join(f"📦 {p.diamonds}{p.unit_label} — {p.price_somoni:.2f} сомонӣ" for p in products)
+    summary = "\n".join(f"📦 {p.display_name} — {p.price_somoni:.2f} сомонӣ" for p in products)
     if config.admin_chat_id:
         await callback.bot.send_message(
             config.admin_chat_id,
@@ -872,7 +871,7 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
         if len(group) > 1:
             products = [await get_product(session, o.product_id) for o in group]
             items_summary = "\n" + "\n".join(
-                f"📦 {p.diamonds}{p.unit_label} — {o.amount_somoni:.2f} сомонӣ" if o.amount_somoni else f"📦 {p.diamonds}{p.unit_label}"
+                f"📦 {p.display_name} — {o.amount_somoni:.2f} сомонӣ" if o.amount_somoni else f"📦 {p.display_name}"
                 for o, p in zip(group, products)
             )
 

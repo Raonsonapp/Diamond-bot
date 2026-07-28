@@ -71,8 +71,7 @@ async def _resolve_group(session, order: Order) -> list[Order]:
 
 
 def _item_line(order: Order, product) -> str:
-    bonus = f" (+{product.bonus_diamonds} бонус)" if product.bonus_diamonds else ""
-    return f"📦 {product.diamonds}{bonus}{product.unit_label}"
+    return f"📦 {product.display_name}"
 
 
 async def clear_awaiting_review(bot: Bot, order: Order) -> None:
@@ -131,7 +130,7 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
         await bot.send_message(
             order.user_id,
             f"✅ Пардохти фармоиши #{order.id} тасдиқ шуд. "
-            f"{product.diamonds}{product.unit_label} ба зудӣ ба ҳисоби шумо ирсол мешавад.",
+            f"{product.display_name} ба зудӣ ба ҳисоби шумо ирсол мешавад.",
         )
     await clear_awaiting_review(bot, order)
 
@@ -178,7 +177,7 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
         product = products[delivered[0].id]
         await bot.send_message(
             order.user_id,
-            f"🎉 {product.diamonds}{product.unit_label} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
+            f"🎉 {product.display_name} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
         )
     await prompt_for_review(bot, delivered[0])
     return FulfillmentResult(order=delivered[0], auto_delivered=True)
@@ -207,7 +206,7 @@ async def mark_delivered_and_notify(bot: Bot, order_id: int) -> Order | None:
         product = products[delivered[0].id]
         await bot.send_message(
             order.user_id,
-            f"🎉 {product.diamonds}{product.unit_label} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
+            f"🎉 {product.display_name} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
         )
     await prompt_for_review(bot, delivered[0])
     return delivered[0]
