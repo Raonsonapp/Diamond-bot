@@ -132,20 +132,28 @@ async def delete_product(message: Message) -> None:
         await _reject_non_admin(message)
         return
 
-    parts = message.text.split(maxsplit=1)
-    if len(parts) != 2 or not parts[1].strip().isdigit():
-        await message.answer("Истифода: /delproduct <ID>\nID-ро аз /products гиред.")
+    reports = []
+    for line in _batch_lines(message.text, "/delproduct"):
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2 or not parts[1].strip().isdigit():
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        async with get_session() as session:
+            product = await get_product(session, int(parts[1].strip()))
+            if product is None:
+                reports.append(f"⚠️ Маҳсулот #{parts[1].strip()} ёфт нашуд.")
+                continue
+            product.is_active = False
+            await session.commit()
+
+        reports.append(f"✅ Маҳсулот #{product.id} ({product.name}) хомӯш карда шуд.")
+
+    if not reports:
+        await message.answer("Истифода: /delproduct <ID>\nID-ро аз /products гиред.\n(метавонед якчанд сатрро дар як паём фиристед)")
         return
 
-    async with get_session() as session:
-        product = await get_product(session, int(parts[1].strip()))
-        if product is None:
-            await message.answer("Маҳсулот ёфт нашуд.")
-            return
-        product.is_active = False
-        await session.commit()
-
-    await message.answer(f"Маҳсулот #{product.id} ({product.name}) хомӯш карда шуд.")
+    await message.answer("\n".join(reports))
 
 
 @router.message(Command("pending"))
