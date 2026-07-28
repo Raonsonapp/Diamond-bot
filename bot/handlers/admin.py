@@ -23,6 +23,7 @@ from bot.db.repo import (
     set_order_status,
     set_product_bonus,
     set_product_fzr_mapping,
+    set_product_name,
     set_product_price,
 )
 from bot.db.session import get_session
@@ -619,6 +620,44 @@ async def set_price(message: Message) -> None:
         await message.answer(
             "Истифода: /setprice <product_id> <нархи_фурӯш> [нархи_харид]\n"
             "Мисол: /setprice 1 8.90\nМисол бо нархи харид: /setprice 1 8.90 7.21\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
+        return
+
+    await message.answer("\n".join(reports))
+
+
+@router.message(Command("setname"))
+async def set_name(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    reports = []
+    for line in _batch_lines(message.text, "/setname"):
+        parts = line.split(maxsplit=2)
+        if len(parts) != 3:
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        if not parts[1].isdigit():
+            reports.append(f"⚠️ product_id бояд рақам бошад: {line}")
+            continue
+
+        async with get_session() as session:
+            product = await get_product(session, int(parts[1]))
+            if product is None:
+                reports.append(f"⚠️ Маҳсулот #{parts[1]} ёфт нашуд.")
+                continue
+            old_name = product.name
+            product = await set_product_name(session, product, parts[2])
+
+        reports.append(f'✅ #{product.id}: "{old_name}" → "{product.name}"')
+
+    if not reports:
+        await message.answer(
+            "Истифода: /setname <product_id> <номи нав>\n"
+            "Мисол: /setname 16 Бастаи навкорон\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
         return

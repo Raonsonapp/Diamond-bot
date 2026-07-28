@@ -200,6 +200,13 @@ async def set_product_price(
     return product
 
 
+async def set_product_name(session: AsyncSession, product: Product, name: str) -> Product:
+    product.name = name
+    await session.commit()
+    await session.refresh(product)
+    return product
+
+
 async def create_order(
     session: AsyncSession,
     user_id: int,
