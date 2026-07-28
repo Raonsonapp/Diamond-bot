@@ -101,10 +101,10 @@ def products_keyboard(products: list[Product], category: ProductCategory) -> Inl
         [InlineKeyboardButton(text=_product_label(p), callback_data=f"product:{p.id}")]
         for p in products
     ]
-    # Bigo Live only sells fixed FazerCards package sizes — there's no
-    # sensible "any amount" quote to interpolate for it, so skip the button
-    # entirely rather than offering something that can't actually be filled.
-    if category != ProductCategory.BIGO_LIVE:
+    # Free Fire (fixed official denominations only, per the admin) and
+    # Bigo Live (FazerCards only sells fixed package sizes for it — no
+    # sensible "any amount" quote to interpolate) both skip this button.
+    if category == ProductCategory.TELEGRAM:
         rows.append(
             [InlineKeyboardButton(text="✏️ Миқдори дигар", callback_data=f"product:custom:{category.value}")]
         )
