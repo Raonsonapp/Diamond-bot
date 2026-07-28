@@ -25,6 +25,7 @@ class OrderStatus(str, enum.Enum):
 class ProductCategory(str, enum.Enum):
     DIAMONDS = "diamonds"  # Free Fire diamonds — recipient is a player ID
     TELEGRAM = "telegram"  # Telegram Stars/Premium — recipient is a @username
+    BIGO_LIVE = "bigo_live"  # Bigo Live diamonds (gifting currency) — recipient is a Bigo ID
 
 
 class User(Base):
@@ -81,7 +82,11 @@ class Product(Base):
 
     @property
     def unit_label(self) -> str:
-        return "💎" if self.category == ProductCategory.DIAMONDS else "⭐"
+        if self.category == ProductCategory.DIAMONDS:
+            return "💎"
+        if self.category == ProductCategory.BIGO_LIVE:
+            return "💠"
+        return "⭐"
 
     @property
     def total_diamonds(self) -> int:

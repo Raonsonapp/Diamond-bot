@@ -42,6 +42,7 @@ def games_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🔥 Free Fire", callback_data="menu:buy_diamonds")],
+            [InlineKeyboardButton(text="📡 Bigo Live", callback_data="menu:buy_bigo")],
             [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
         ]
     )
@@ -100,9 +101,13 @@ def products_keyboard(products: list[Product], category: ProductCategory) -> Inl
         [InlineKeyboardButton(text=_product_label(p), callback_data=f"product:{p.id}")]
         for p in products
     ]
-    rows.append(
-        [InlineKeyboardButton(text="✏️ Миқдори дигар", callback_data=f"product:custom:{category.value}")]
-    )
+    # Bigo Live only sells fixed FazerCards package sizes — there's no
+    # sensible "any amount" quote to interpolate for it, so skip the button
+    # entirely rather than offering something that can't actually be filled.
+    if category != ProductCategory.BIGO_LIVE:
+        rows.append(
+            [InlineKeyboardButton(text="✏️ Миқдори дигар", callback_data=f"product:custom:{category.value}")]
+        )
     if category == ProductCategory.DIAMONDS:
         rows.append(
             [InlineKeyboardButton(text="🛒 Якчанд бастаро якҷоя харидан", callback_data=f"cartmode:{category.value}")]

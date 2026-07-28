@@ -96,6 +96,11 @@ async def add_stars(message: Message) -> None:
     await _add_product(message, ProductCategory.TELEGRAM, "/addstars")
 
 
+@router.message(Command("addbigo"))
+async def add_bigo(message: Message) -> None:
+    await _add_product(message, ProductCategory.BIGO_LIVE, "/addbigo")
+
+
 @router.message(Command("products"))
 async def list_products(message: Message) -> None:
     if not is_admin(message.from_user.id):

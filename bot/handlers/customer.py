@@ -288,6 +288,11 @@ async def menu_telegram(callback: CallbackQuery, state: FSMContext) -> None:
     await _open_catalog(callback, state, ProductCategory.TELEGRAM, "✈️ Бастаи Telegram Stars-ро интихоб кунед:")
 
 
+@router.callback_query(F.data == "menu:buy_bigo")
+async def menu_buy_bigo(callback: CallbackQuery, state: FSMContext) -> None:
+    await _open_catalog(callback, state, ProductCategory.BIGO_LIVE, "📡 Бастаи Bigo Live-ро интихоб кунед:")
+
+
 @router.callback_query(F.data.regexp(r"^cartmode:(?!exit:).+$"))
 async def enter_cart_mode(callback: CallbackQuery, state: FSMContext) -> None:
     category = ProductCategory(callback.data.split(":", 1)[1])
@@ -561,10 +566,12 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
 
 
 async def _recipient_prompt(category: ProductCategory) -> str:
+    if category == ProductCategory.DIAMONDS:
+        return "ID-и бозингари Free Fire-и худро (рақаме, ки дар профили худ мебинед)"
+    if category == ProductCategory.BIGO_LIVE:
+        return "ID-и Bigo Live-и худро (рақаме, ки дар профили худ мебинед)"
     return (
-        "ID-и бозингари Free Fire-и худро (рақаме, ки дар профили худ мебинед)"
-        if category == ProductCategory.DIAMONDS
-        else "Username-и Telegram-и худро (бе @)"
+        "Username-и Telegram-и худро (бе @)"
     )
 
 
@@ -623,7 +630,9 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
         if mapped:
             player_name = await _try_validate_player_id(mapped.fzr_category_id, recipient)
 
-    recipient_label = "🆔 ID" if category == ProductCategory.DIAMONDS else "📱 Username"
+    recipient_label = (
+        "📱 Username" if category == ProductCategory.TELEGRAM else "🆔 ID"
+    )
     confirm_lines = ["🛒 <b>Тасдиқи фармоиш</b>\n", f"{recipient_label}: {recipient}"]
     if player_name:
         confirm_lines.append(f"👤 Ном: <b>{html.escape(player_name)}</b>")
@@ -653,9 +662,9 @@ async def enter_player_id(message: Message, state: FSMContext) -> None:
 
     recipient = message.text.strip()
 
-    if product.category == ProductCategory.DIAMONDS:
+    if product.category in (ProductCategory.DIAMONDS, ProductCategory.BIGO_LIVE):
         if not recipient.isdigit() or not (5 <= len(recipient) <= 15):
-            await message.answer("ID-и нодуруст. Лутфан танҳо рақамҳои ID-и бозингари Free Fire-ро ворид кунед.")
+            await message.answer("ID-и нодуруст. Лутфан танҳо рақамҳои ID-и худро ворид кунед.")
             return
     else:
         recipient = recipient.removeprefix("@")
