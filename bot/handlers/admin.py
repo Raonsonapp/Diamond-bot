@@ -372,6 +372,50 @@ async def mark_delivered(callback: CallbackQuery, bot: Bot) -> None:
     await callback.answer("Қайд шуд ҳамчун ирсолшуда.")
 
 
+@router.message(Command("delivered"))
+async def delivered_command(message: Message) -> None:
+    """For orders delivered by hand outside the normal flow (e.g. FazerCards
+    auto-delivery failed, admin fulfilled it manually on the site/app
+    directly) — marks the order DELIVERED and triggers the review prompt,
+    exactly like tapping the "Delivered" button, without having to scroll
+    back to find that original message."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    reports = []
+    for line in _batch_lines(message.text, "/delivered"):
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2 or not parts[1].strip().isdigit():
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        order_id = int(parts[1].strip())
+        async with get_session() as session:
+            order = await get_order(session, order_id)
+            if order is None:
+                reports.append(f"⚠️ Фармоиши #{order_id} ёфт нашуд.")
+                continue
+            if order.status == OrderStatus.DELIVERED:
+                reports.append(
+                    f"⚠️ Фармоиши #{order_id} аллакай 'ирсолшуда' қайд шудааст — "
+                    f"такрор намекунам (то дучандкунии бонуси реферал набошад)."
+                )
+                continue
+
+        await mark_delivered_and_notify(message.bot, order_id)
+        reports.append(f"✅ Фармоиши #{order_id} ирсолшуда қайд шуд, дархости шарҳ ба мизоҷ фиристода шуд.")
+
+    if not reports:
+        await message.answer(
+            "Истифода: /delivered <рақами фармоиш>\nМисол: /delivered 21\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
+        return
+
+    await message.answer("\n".join(reports))
+
+
 @router.message(Command("fzr_categories"))
 async def fzr_categories(message: Message) -> None:
     if not is_admin(message.from_user.id):
