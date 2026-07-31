@@ -372,6 +372,56 @@ async def mark_delivered(callback: CallbackQuery, bot: Bot) -> None:
     await callback.answer("Қайд шуд ҳамчун ирсолшуда.")
 
 
+@router.message(Command("paid"))
+async def paid_command(message: Message) -> None:
+    """For when the admin has verified payment themselves (checked their
+    own bank app/balance) and neither the photo-review flow nor the SMS
+    auto-confirm caught it — same effect as tapping "✅ Пардохт тасдиқ
+    шуд" on the order's original message, just callable directly by order
+    number without scrolling back to find it."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    reports = []
+    for line in _batch_lines(message.text, "/paid"):
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2 or not parts[1].strip().isdigit():
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        order_id = int(parts[1].strip())
+        async with get_session() as session:
+            order = await get_order(session, order_id)
+            if order is None:
+                reports.append(f"⚠️ Фармоиши #{order_id} ёфт нашуд.")
+                continue
+            if order.status != OrderStatus.AWAITING_PAYMENT:
+                reports.append(
+                    f"⚠️ Фармоиши #{order_id} аллакай '{order.status.value}' аст — такрор намекунам."
+                )
+                continue
+
+        result = await confirm_and_deliver(message.bot, order_id)
+        if result is None:
+            reports.append(f"⚠️ Фармоиши #{order_id} ёфт нашуд.")
+            continue
+        status_note = (
+            "автоматӣ ирсол шуд" if result.auto_delivered
+            else "лутфан дастӣ иҷро карда, 'Delivered' ё /delivered занед"
+        )
+        reports.append(f"✅ Фармоиши #{order_id} ҳамчун пардохтшуда тасдиқ шуд — {status_note}.")
+
+    if not reports:
+        await message.answer(
+            "Истифода: /paid <рақами фармоиш>\nМисол: /paid 21\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
+        return
+
+    await message.answer("\n".join(reports))
+
+
 @router.message(Command("delivered"))
 async def delivered_command(message: Message) -> None:
     """For orders delivered by hand outside the normal flow (e.g. FazerCards
