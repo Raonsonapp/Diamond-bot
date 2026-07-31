@@ -6,6 +6,7 @@ messages) instead of drifting apart.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 from aiogram import Bot
@@ -21,6 +22,7 @@ from bot.db.repo import (
     get_product,
     get_user,
     set_order_status,
+    set_progress_message_id,
 )
 from bot.db.session import get_session
 from bot.fsm_storage import storage
@@ -72,6 +74,86 @@ async def _resolve_group(session, order: Order) -> list[Order]:
 
 def _item_line(order: Order, product) -> str:
     return f"📦 {product.display_name}"
+
+
+_PROGRESS_TEXT = "⏳ Фармоиши шумо коркард шуда истодааст..."
+_PROGRESS_STEP_SECONDS = 1.3
+_PROGRESS_AUTO_CAP = 90  # never claims 100% on its own — only a confirmed delivery does that
+
+
+def _progress_bar(pct: int) -> str:
+    filled = pct // 10
+    bar = "▓" * filled + "░" * (10 - filled)
+    return f"{_PROGRESS_TEXT}\n{bar} {pct}%"
+
+
+async def _animate_progress(bot: Bot, chat_id: int, message_id: int, stop_event: asyncio.Event) -> None:
+    """Ticks a progress bar up to _PROGRESS_AUTO_CAP while the real
+    auto-delivery attempt runs, so the customer sees something moving
+    instead of silence. Deliberately never reaches 100% by itself — only
+    _finish_progress_bar (called once delivery is *actually* confirmed,
+    whether immediately or later by hand) does that, so this can never
+    claim diamonds arrived before they really did."""
+    pct = 0
+    while pct < _PROGRESS_AUTO_CAP and not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=_PROGRESS_STEP_SECONDS)
+        except asyncio.TimeoutError:
+            pass
+        if stop_event.is_set():
+            return
+        pct = min(pct + 10, _PROGRESS_AUTO_CAP)
+        try:
+            await bot.edit_message_text(_progress_bar(pct), chat_id=chat_id, message_id=message_id)
+        except Exception:
+            return  # message deleted, chat blocked the bot, etc. — not worth retrying
+
+
+async def _start_progress_bar(bot: Bot, order: Order) -> tuple[int | None, asyncio.Event]:
+    stop_event = asyncio.Event()
+    try:
+        sent = await bot.send_message(order.user_id, _progress_bar(0))
+        message_id = sent.message_id
+        if not isinstance(message_id, int):
+            raise TypeError("send_message did not return a real message_id")
+    except Exception:
+        return None, stop_event
+    asyncio.create_task(_animate_progress(bot, order.user_id, message_id, stop_event))
+    return message_id, stop_event
+
+
+async def _pause_progress_bar(bot: Bot, order: Order, message_id: int) -> None:
+    """Auto-delivery fell through to manual — freeze the bar at 90% (never
+    100%, that would be a lie) and persist message_id so whichever admin
+    action finishes the order later (Delivered button / /delivered) can
+    find and complete this same message instead of leaving it stuck."""
+    text = f"{_PROGRESS_TEXT}\n▓▓▓▓▓▓▓▓▓░ 90% — дар навбати коркарди дастӣ, дар наздиктарин вақт мерасад."
+    try:
+        await bot.edit_message_text(text, chat_id=order.user_id, message_id=message_id)
+    except Exception:
+        pass
+    async with get_session() as session:
+        fresh = await get_order(session, order.id)
+        if fresh is not None:
+            await set_progress_message_id(session, fresh, message_id)
+
+
+async def _finish_progress_bar(bot: Bot, order: Order, message_id: int | None) -> None:
+    """Delivery is now genuinely confirmed — jump the bar to 100% (whether
+    it was still animating from this same confirm_and_deliver call, or
+    paused at 90% from an earlier failed auto-attempt) and clear the
+    stored message_id since there's nothing left to finish later."""
+    if not message_id:
+        return
+    text = f"{_PROGRESS_TEXT}\n▓▓▓▓▓▓▓▓▓▓ 100% ✅"
+    try:
+        await bot.edit_message_text(text, chat_id=order.user_id, message_id=message_id)
+    except Exception:
+        pass
+    async with get_session() as session:
+        fresh = await get_order(session, order.id)
+        if fresh is not None and fresh.progress_message_id:
+            await set_progress_message_id(session, fresh, None)
 
 
 async def clear_awaiting_review(bot: Bot, order: Order) -> None:
@@ -142,6 +224,8 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
         # "at least one referral must buy something" requirement.
         await maybe_declare_contest_winner(bot, buyer.referred_by)
 
+    progress_message_id, progress_stop = await _start_progress_bar(bot, order)
+
     delivery = get_delivery_provider()
     results = []
     for o in group:
@@ -151,8 +235,12 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
             r = None
         results.append((o, r))
 
+    progress_stop.set()
+
     all_success = bool(results) and all(r and r.success for _, r in results)
     if not all_success:
+        if progress_message_id:
+            await _pause_progress_bar(bot, order, progress_message_id)
         if config.admin_chat_id:
             lines = [f"⚠️ Таҳвили худкор барои фармоиши #{order.id} нашуд — лутфан санҷед ва дастӣ иҷро карда, 'Delivered'-ро занед:"]
             for o, r in results:
@@ -160,6 +248,8 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
                 lines.append(f"#{o.id} ({o.ff_player_id}): {reason}")
             await bot.send_message(config.admin_chat_id, "\n".join(lines)[:4000])
         return FulfillmentResult(order=order, auto_delivered=False)
+
+    await _finish_progress_bar(bot, order, progress_message_id)
 
     async with get_session() as session:
         delivered = []
@@ -198,6 +288,8 @@ async def mark_delivered_and_notify(bot: Bot, order_id: int) -> Order | None:
             products[fresh.id] = await get_product(session, fresh.product_id)
             await _credit_referral(session, fresh)
             delivered.append(fresh)
+
+    await _finish_progress_bar(bot, order, order.progress_message_id)
 
     if len(delivered) > 1:
         summary = "\n".join(f"{_item_line(o, products[o.id])} → {o.ff_player_id}" for o in delivered)

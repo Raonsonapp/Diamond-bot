@@ -360,6 +360,13 @@ async def set_order_status(
     return order
 
 
+async def set_progress_message_id(session: AsyncSession, order: Order, message_id: int | None) -> Order:
+    order.progress_message_id = message_id
+    await session.commit()
+    await session.refresh(order)
+    return order
+
+
 async def get_user_purchase_stats(session: AsyncSession, user_id: int) -> tuple[int, float]:
     result = await session.execute(
         select(func.count(Order.id), func.coalesce(func.sum(Order.amount_somoni), 0.0)).where(

@@ -137,6 +137,13 @@ class Order(Base):
     # photos only) so the admin can see who has sent *something* even for
     # document-type receipts, before deciding to confirm.
     proof_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Telegram message_id of the "⏳ processing..." progress-bar message
+    # sent to the customer right after payment is confirmed (see
+    # bot/services/fulfillment.py) — kept so whichever event finishes the
+    # order (immediate auto-delivery success, or the admin's later manual
+    # /delivered) can edit that same message to its final state instead of
+    # leaving it stuck mid-animation.
+    progress_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
