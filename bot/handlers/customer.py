@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import config
-from bot.db.models import Product, ProductCategory
+from bot.db.models import OrderStatus, Product, ProductCategory
 from bot.db.repo import (
     accept_terms,
     count_referrals,
@@ -866,6 +866,22 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
 
     async with get_session() as session:
         order = await get_order(session, order_id)
+        if order.status != OrderStatus.AWAITING_PAYMENT:
+            # The SMS auto-confirm webhook (bank SMS forwarded from the
+            # admin's phone) already matched and confirmed this order —
+            # independently of this photo, which just arrived a little
+            # late. Forwarding it to the admin now would be a confusing,
+            # redundant "still reviewing" message for something already
+            # done. Tell the customer it's already handled and stop.
+            await state.clear()
+            if order.status == OrderStatus.DELIVERED:
+                await message.answer("✅ Ин фармоиш аллакай тасдиқ ва ирсол шудааст — расми чек лозим нест.")
+            else:
+                await message.answer(
+                    "✅ Пардохти шумо аллакай худкор тасдиқ шудааст (аз рӯи SMS-и бонк). "
+                    "Расми чек лозим нест — фармоиш дар ҳоли коркард аст."
+                )
+            return
         group = await get_orders_by_group(session, order.cart_group_id) if order.cart_group_id else [order]
         items_summary = ""
         if len(group) > 1:
