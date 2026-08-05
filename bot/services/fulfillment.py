@@ -173,6 +173,91 @@ async def clear_awaiting_review(bot: Bot, order: Order) -> None:
         await customer_state.clear()
 
 
+async def _attempt_delivery(
+    bot: Bot, group: list[Order], products: dict, progress_message_id: int | None
+) -> tuple[bool, list[tuple[Order, object]]]:
+    """One delivery pass across every order in the group. On full success,
+    marks them DELIVERED, credits referrals, messages the customer,
+    finishes the progress bar, and prompts for a review — the same
+    completion path whether this is the very first attempt (inside
+    confirm_and_deliver) or a later background recheck. Returns
+    (success, per-order results) so the caller can still build a
+    diagnostic message on failure."""
+    delivery = get_delivery_provider()
+    results = []
+    for o in group:
+        try:
+            r = await delivery.deliver(o.id, o.ff_player_id, products[o.id])
+        except NotImplementedError:
+            r = None
+        results.append((o, r))
+
+    all_success = bool(results) and all(r and r.success for _, r in results)
+    if not all_success:
+        return False, results
+
+    primary = group[0]
+    await _finish_progress_bar(bot, primary, progress_message_id)
+
+    async with get_session() as session:
+        delivered = []
+        for o, r in results:
+            fresh = await get_order(session, o.id)
+            note = f"delivery_ref={r.reference}" if r.reference else None
+            fresh = await set_order_status(session, fresh, OrderStatus.DELIVERED, admin_note=note)
+            await _credit_referral(session, fresh)
+            delivered.append(fresh)
+
+    if len(delivered) > 1:
+        summary = "\n".join(f"{_item_line(o, products[o.id])} → {o.ff_player_id}" for o in delivered)
+        await bot.send_message(primary.user_id, f"🎉 Ҳама маҳсулоти фармоиши шумо ирсол шуд:\n{summary}")
+    else:
+        product = products[delivered[0].id]
+        await bot.send_message(
+            primary.user_id,
+            f"🎉 {product.display_name} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
+        )
+    await prompt_for_review(bot, delivered[0])
+    return True, results
+
+
+_DELAYED_RECHECK_ATTEMPTS = 4
+_DELAYED_RECHECK_INTERVAL_SECONDS = 30
+
+
+async def _delayed_recheck(bot: Bot, order_id: int) -> None:
+    """FazerCards can occasionally take longer than _attempt_delivery's
+    own ~30s polling window to finish an order — a real order (a Weekly
+    Membership) was still "processing" when we gave up, yet later showed
+    completed on FazerCards' own dashboard. Rather than leaving that
+    entirely to the admin, keep quietly rechecking every 30s for a couple
+    of minutes in the background; if it turns out done, finish the order
+    exactly like an immediate success would have."""
+    for _ in range(_DELAYED_RECHECK_ATTEMPTS):
+        await asyncio.sleep(_DELAYED_RECHECK_INTERVAL_SECONDS)
+
+        async with get_session() as session:
+            order = await get_order(session, order_id)
+            if order is None or order.status != OrderStatus.PAID:
+                return  # already resolved by hand (or something else changed) — nothing left to do
+            group = await _resolve_group(session, order)
+            if any(o.status != OrderStatus.PAID for o in group):
+                return
+            products = {o.id: await get_product(session, o.product_id) for o in group}
+
+        success, results = await _attempt_delivery(bot, group, products, order.progress_message_id)
+        if success:
+            if config.admin_chat_id:
+                await bot.send_message(
+                    config.admin_chat_id,
+                    f"✅ Фармоиши #{order.id} дертар худкор тасдиқ шуд (FazerCards дертар ҷавоб дод).",
+                )
+            return
+    # Ran out of delayed attempts too — leave it exactly where the
+    # original failure notice already put it: waiting for the admin's
+    # manual "Delivered" / /delivered.
+
+
 async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | None = None) -> FulfillmentResult | None:
     """Mark an order (and, for a multi-pack cart, every sibling order that
     shares its cart_group_id) PAID, then try to deliver automatically.
@@ -225,20 +310,10 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
         await maybe_declare_contest_winner(bot, buyer.referred_by)
 
     progress_message_id, progress_stop = await _start_progress_bar(bot, order)
-
-    delivery = get_delivery_provider()
-    results = []
-    for o in group:
-        try:
-            r = await delivery.deliver(o.id, o.ff_player_id, products[o.id])
-        except NotImplementedError:
-            r = None
-        results.append((o, r))
-
+    success, results = await _attempt_delivery(bot, group, products, progress_message_id)
     progress_stop.set()
 
-    all_success = bool(results) and all(r and r.success for _, r in results)
-    if not all_success:
+    if not success:
         if progress_message_id:
             await _pause_progress_bar(bot, order, progress_message_id)
         if config.admin_chat_id:
@@ -247,30 +322,12 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
                 reason = r.message if r is not None else "delivery provider raised NotImplementedError"
                 lines.append(f"#{o.id} ({o.ff_player_id}): {reason}")
             await bot.send_message(config.admin_chat_id, "\n".join(lines)[:4000])
+        asyncio.create_task(_delayed_recheck(bot, order.id))
         return FulfillmentResult(order=order, auto_delivered=False)
 
-    await _finish_progress_bar(bot, order, progress_message_id)
-
     async with get_session() as session:
-        delivered = []
-        for o, r in results:
-            fresh = await get_order(session, o.id)
-            note = f"delivery_ref={r.reference}" if r.reference else None
-            fresh = await set_order_status(session, fresh, OrderStatus.DELIVERED, admin_note=note)
-            await _credit_referral(session, fresh)
-            delivered.append(fresh)
-
-    if len(delivered) > 1:
-        summary = "\n".join(f"{_item_line(o, products[o.id])} → {o.ff_player_id}" for o in delivered)
-        await bot.send_message(order.user_id, f"🎉 Ҳама маҳсулоти фармоиши шумо ирсол шуд:\n{summary}")
-    else:
-        product = products[delivered[0].id]
-        await bot.send_message(
-            order.user_id,
-            f"🎉 {product.display_name} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
-        )
-    await prompt_for_review(bot, delivered[0])
-    return FulfillmentResult(order=delivered[0], auto_delivered=True)
+        fresh_order = await get_order(session, order_id)
+    return FulfillmentResult(order=fresh_order, auto_delivered=True)
 
 
 async def mark_delivered_and_notify(bot: Bot, order_id: int) -> Order | None:

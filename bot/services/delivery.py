@@ -28,10 +28,15 @@ _ID_FIELD_HINTS = ("player", "user", "uid", "account", "id")
 _CONFIRMED_STATUSES = {"completed", "success", "delivered", "done", "fulfilled", "successful"}
 _FAILED_STATUSES = {"failed", "cancelled", "canceled", "error", "rejected", "declined"}
 # How long to wait for "created" to become "completed" before giving up
-# and falling back to manual — observed to happen within ~1 second on a
-# real order, so this is a generous margin, not a tight timing bet.
-_POLL_ATTEMPTS = 5
-_POLL_DELAY_SECONDS = 2.5
+# and falling back to manual. Most orders confirm within ~1 second, but a
+# real order (ord-510807, a Weekly Membership) was observed to still be
+# "processing" after the original ~12s window and only show completed on
+# FazerCards' own dashboard some time later — so this is generous on
+# purpose, not a tight timing bet. bot/services/fulfillment.py also does a
+# few longer-spaced background rechecks after this window closes, for
+# orders that take even longer than this.
+_POLL_ATTEMPTS = 10
+_POLL_DELAY_SECONDS = 3
 
 
 @dataclass
