@@ -55,7 +55,14 @@ from bot.texts import FAQ_TEXT, TERMS_TEXT
 
 MIN_CUSTOM_UNITS = 10
 MAX_CUSTOM_UNITS = 200_000
-DUSHANBE_TZ = ZoneInfo("Asia/Dushanbe")
+# requirements.txt pulls in the "tzdata" package so this resolves on slim
+# Docker images that ship no system IANA database, but a missing timezone
+# database must never be able to crash the whole bot's startup — fall back
+# to plain UTC display rather than an unhandled import-time exception.
+try:
+    DUSHANBE_TZ = ZoneInfo("Asia/Dushanbe")
+except Exception:
+    DUSHANBE_TZ = timezone.utc
 
 
 def _format_local_datetime(dt) -> str:
