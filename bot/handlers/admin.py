@@ -24,6 +24,7 @@ from bot.db.repo import (
     set_product_bonus,
     set_product_fzr_mapping,
     set_product_name,
+    set_product_telegram_kind,
     set_product_price,
 )
 from bot.db.session import get_session
@@ -646,6 +647,51 @@ async def fzr_docs_search(message: Message) -> None:
     await message.answer("\n".join(matches)[:3800])
 
 
+@router.message(Command("fzr_docs_path"))
+async def fzr_docs_path(message: Message) -> None:
+    """Full operation definition (params/requestBody/responses schema) for
+    one exact path — for when /fzr_docs_search's one-line summaries aren't
+    enough to confirm exact request/response field names."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    import json
+    import re
+
+    from bot.services.fazercards import FazerCardsError, fetch_openapi_spec
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) != 2:
+        await message.answer("Истифода: /fzr_docs_path /api/v2/telegram/stars/buy")
+        return
+    path = parts[1].strip()
+
+    try:
+        spec = await fetch_openapi_spec()
+    except FazerCardsError as exc:
+        await message.answer(f"⚠️ Хатои FazerCards: {exc}")
+        return
+
+    op = (spec.get("paths", {}) if isinstance(spec, dict) else {}).get(path)
+    if op is None:
+        await message.answer(f"Роҳи '{path}' дар docs ёфт нашуд.")
+        return
+
+    op_json = json.dumps(op, ensure_ascii=False, indent=2)
+    ref_names = sorted(set(re.findall(r'"\$ref":\s*"#/components/schemas/([^"]+)"', op_json)))
+    components = (spec.get("components") or {}).get("schemas", {})
+    chunks = [f"{path}:\n{op_json}"]
+    for name in ref_names:
+        schema = components.get(name)
+        if schema is not None:
+            chunks.append(f"Schema {name}:\n" + json.dumps(schema, ensure_ascii=False, indent=2))
+
+    full = "\n\n".join(chunks)
+    for i in range(0, len(full), 3800):
+        await message.answer(full[i : i + 3800])
+
+
 def _batch_lines(message_text: str, command: str) -> list[str]:
     """A pasted block of several "/command ..." lines arrives from Telegram
     as ONE message (there's no client-side way to split it into separate
@@ -857,6 +903,50 @@ async def set_name(message: Message) -> None:
         await message.answer(
             "Истифода: /setname <product_id> <номи нав>\n"
             "Мисол: /setname 16 Бастаи навкорон\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
+        return
+
+    await message.answer("\n".join(reports))
+
+
+@router.message(Command("settgkind"))
+async def set_tg_kind(message: Message) -> None:
+    """Wires a TELEGRAM-category product to FazerCards' Telegram
+    Stars/Premium API (see bot/services/fazercards.py) — "diamonds" then
+    means star count for kind=stars, or month count (must be 3/6/12) for
+    kind=premium. Without this, the product falls back to manual delivery
+    like any unmapped product — same safe default as /mapproduct."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    reports = []
+    for line in _batch_lines(message.text, "/settgkind"):
+        parts = line.split()
+        if len(parts) != 3 or parts[2] not in ("stars", "premium"):
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+        if not parts[1].isdigit():
+            reports.append(f"⚠️ product_id бояд рақам бошад: {line}")
+            continue
+
+        async with get_session() as session:
+            product = await get_product(session, int(parts[1]))
+            if product is None:
+                reports.append(f"⚠️ Маҳсулот #{parts[1]} ёфт нашуд.")
+                continue
+            if product.category != ProductCategory.TELEGRAM:
+                reports.append(f"⚠️ #{product.id} категорияи Telegram надорад.")
+                continue
+            product = await set_product_telegram_kind(session, product, parts[2])
+
+        reports.append(f"✅ #{product.id} ({product.name}) → {product.telegram_kind}")
+
+    if not reports:
+        await message.answer(
+            "Истифода: /settgkind <product_id> <stars|premium>\n"
+            "Мисол: /settgkind 20 stars\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
         return

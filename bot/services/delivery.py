@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from bot.config import config
+from bot.db.models import ProductCategory
 
 _ID_FIELD_HINTS = ("player", "user", "uid", "account", "id")
 # Confirmed live: a real order goes created -> processing -> completed,
@@ -109,6 +110,9 @@ class FazerCardsDeliveryProvider(DeliveryProvider):
             )
 
     async def deliver(self, order_id: int, ff_player_id: str, product) -> DeliveryResult:
+        if product.category == ProductCategory.TELEGRAM and product.telegram_kind:
+            return await self._deliver_telegram(order_id, ff_player_id, product)
+
         if not (product.fzr_category_id and product.fzr_offer_id):
             return DeliveryResult(
                 success=False,
@@ -194,6 +198,66 @@ class FazerCardsDeliveryProvider(DeliveryProvider):
             message=(
                 f"FazerCards accepted the order but hasn't confirmed delivery "
                 f"(status={status or '(none)'}). Raw order info: {json.dumps(order_info)[:300]}"
+            ),
+        )
+
+    async def _deliver_telegram(self, order_id: int, recipient: str, product) -> DeliveryResult:
+        """Telegram Stars/Premium via FazerCards' dedicated API — found
+        through /fzr_docs_search since it isn't part of the game topups
+        catalog at all (no category_id/offer_id, no fields schema). The
+        exact response shape for POST .../buy hasn't been confirmed against
+        a real order yet, so this is deliberately conservative: only an
+        explicit recognised "completed"-style status counts as delivered,
+        anything else (including an unfamiliar shape) safely falls back to
+        manual review — same rule as the game topups path above, for the
+        same reason (this debits the FazerCards balance immediately
+        regardless of what we detect, so never guess "delivered")."""
+        from bot.services.fazercards import FazerCardsError, buy_telegram_premium, buy_telegram_stars
+
+        username = recipient.lstrip("@")
+        idempotency_key = f"diamondbot-order-{order_id}"
+
+        async def _place() -> dict:
+            if product.telegram_kind == "stars":
+                return await buy_telegram_stars(username, product.diamonds, idempotency_key=idempotency_key)
+            return await buy_telegram_premium(username, product.diamonds, idempotency_key=idempotency_key)
+
+        try:
+            result = await _place()
+        except FazerCardsError as exc:
+            return DeliveryResult(
+                success=False, reference=None, message=f"FazerCards Telegram order error [{exc.code}]: {exc}"
+            )
+
+        payload = result.get("order", result) if isinstance(result, dict) else {}
+        reference = _extract_reference(payload) or f"fzr-tg-order-{order_id}"
+        status = str(payload.get("status", "")).lower()
+
+        attempts = 0
+        while (
+            status not in _CONFIRMED_STATUSES
+            and status not in _FAILED_STATUSES
+            and attempts < _POLL_ATTEMPTS
+        ):
+            await asyncio.sleep(_POLL_DELAY_SECONDS)
+            try:
+                result = await _place()
+            except FazerCardsError:
+                break
+            payload = result.get("order", result) if isinstance(result, dict) else {}
+            reference = _extract_reference(payload) or reference
+            status = str(payload.get("status", "")).lower()
+            attempts += 1
+
+        if status in _CONFIRMED_STATUSES:
+            return DeliveryResult(success=True, reference=reference, message="Delivered via FazerCards Telegram API.")
+
+        return DeliveryResult(
+            success=False,
+            reference=reference,
+            message=(
+                f"FazerCards accepted the Telegram order but hasn't confirmed delivery "
+                f"(status={status or '(none)'}). Raw response: {json.dumps(payload)[:300]}"
             ),
         )
 

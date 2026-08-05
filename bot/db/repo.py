@@ -207,6 +207,13 @@ async def set_product_name(session: AsyncSession, product: Product, name: str) -
     return product
 
 
+async def set_product_telegram_kind(session: AsyncSession, product: Product, kind: str) -> Product:
+    product.telegram_kind = kind
+    await session.commit()
+    await session.refresh(product)
+    return product
+
+
 async def create_order(
     session: AsyncSession,
     user_id: int,

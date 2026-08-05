@@ -62,6 +62,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("is_active", "BOOLEAN DEFAULT 1"),
         ("fzr_category_id", "VARCHAR(64)"),
         ("fzr_offer_id", "VARCHAR(64)"),
+        ("telegram_kind", "VARCHAR(16)"),
     ],
     "bot_orders": [
         ("user_id", "BIGINT"),

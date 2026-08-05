@@ -79,6 +79,13 @@ class Product(Base):
     # this product, falls back to manual fulfillment.
     fzr_category_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     fzr_offer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Telegram Stars/Premium go through a completely different FazerCards
+    # API (POST .../buy with {username, quantity|months} — no
+    # category_id/offer_id concept at all), so this marks which of the two
+    # a TELEGRAM-category product is; "diamonds" doubles as star count or
+    # month count depending on which. None means: not wired to that API,
+    # falls back to manual fulfillment like any unmapped product.
+    telegram_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     @property
     def margin_somoni(self) -> float:

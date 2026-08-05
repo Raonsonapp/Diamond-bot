@@ -91,3 +91,40 @@ async def place_topup_order(
         json={"category_id": category_id, "offer_id": offer_id, "fields": fields},
         headers=headers,
     )
+
+
+# Telegram Stars/Premium — a separate product line from the game topups
+# above, found via /fzr_docs_search since it never showed up in
+# /fzr_categories. No category_id/offer_id/fields concept here: Stars is a
+# flat USD-per-star rate over a quantity range, Premium is three fixed
+# month-length plans. Field names ("username", "quantity", "months") are
+# taken directly from the OpenAPI operation summaries (see
+# /fzr_docs_path if the exact request schema ever needs re-confirming).
+
+
+async def get_telegram_stars_quote() -> dict:
+    return await _request("GET", "/api/v2/telegram/stars")
+
+
+async def get_telegram_premium_quote() -> dict:
+    return await _request("GET", "/api/v2/telegram/premium")
+
+
+async def buy_telegram_stars(username: str, quantity: int, idempotency_key: str | None = None) -> dict:
+    headers = {"Idempotency-Key": idempotency_key} if idempotency_key else {}
+    return await _request(
+        "POST",
+        "/api/v2/telegram/stars/buy",
+        json={"username": username, "quantity": quantity},
+        headers=headers,
+    )
+
+
+async def buy_telegram_premium(username: str, months: int, idempotency_key: str | None = None) -> dict:
+    headers = {"Idempotency-Key": idempotency_key} if idempotency_key else {}
+    return await _request(
+        "POST",
+        "/api/v2/telegram/premium/buy",
+        json={"username": username, "months": months},
+        headers=headers,
+    )
