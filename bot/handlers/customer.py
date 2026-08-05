@@ -1,5 +1,7 @@
 import html
 import uuid
+from datetime import timezone
+from zoneinfo import ZoneInfo
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
@@ -40,16 +42,30 @@ from bot.keyboards import (
     referral_menu_keyboard,
     review_channel_keyboard,
     reuse_recipient_keyboard,
+    sponsor_gate_keyboard,
     terms_keyboard,
 )
 from bot.services.contest import maybe_declare_contest_winner
 from bot.services.payments import get_payment_provider
 from bot.services.pricing import quote_custom_price
+from bot.services.referral_rewards import maybe_credit_referral_milestone
+from bot.services.sponsor import is_subscribed_to_sponsor_channel
 from bot.states import OrderFlow
 from bot.texts import FAQ_TEXT, TERMS_TEXT
 
 MIN_CUSTOM_UNITS = 10
 MAX_CUSTOM_UNITS = 200_000
+DUSHANBE_TZ = ZoneInfo("Asia/Dushanbe")
+
+
+def _format_local_datetime(dt) -> str:
+    # Postgres (production) returns tz-aware UTC datetimes; sqlite (local
+    # dev/tests) hands back naive ones for the same DateTime(timezone=True)
+    # column — those were still written via utcnow(), so treat a naive
+    # value as UTC rather than misreading it as already-local.
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(DUSHANBE_TZ).strftime("%d.%m.%Y %H:%M:%S")
 
 router = Router(name="customer")
 
@@ -76,8 +92,34 @@ async def _format_orders_text(user_id: int) -> str:
     if not orders:
         return "Шумо то ҳол фармоише надоред."
 
-    lines = [f"#{o.id} — {o.amount_somoni:.2f} сомонӣ — {o.status.value}" for o in orders]
+    lines = []
+    for o in orders:
+        when = _format_local_datetime(o.created_at)
+        lines.append(f"#{o.id} — {o.amount_somoni:.2f} сомонӣ — {o.status.value} — 📅 {when}")
     return "📦 Фармоишҳои охирини шумо:\n" + "\n".join(lines)
+
+
+async def _register_and_continue(message: Message, state: FSMContext, from_user, referred_by: int | None) -> None:
+    async with get_session() as session:
+        is_new_user = await get_user(session, from_user.id) is None
+        user = await upsert_user(
+            session,
+            from_user.id,
+            from_user.username,
+            from_user.full_name,
+            referred_by=referred_by,
+        )
+
+    if is_new_user and referred_by is not None:
+        await maybe_declare_contest_winner(message.bot, referred_by)
+        await maybe_credit_referral_milestone(message.bot, referred_by)
+
+    await state.clear()
+    if user.accepted_terms_at is None:
+        await message.answer(TERMS_TEXT, reply_markup=terms_keyboard())
+        return
+
+    await _show_main_menu(message, state)
 
 
 @router.message(CommandStart())
@@ -90,25 +132,29 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         except ValueError:
             referred_by = None
 
-    async with get_session() as session:
-        is_new_user = await get_user(session, message.from_user.id) is None
-        user = await upsert_user(
-            session,
-            message.from_user.id,
-            message.from_user.username,
-            message.from_user.full_name,
-            referred_by=referred_by,
+    if not await is_subscribed_to_sponsor_channel(message.bot, message.from_user.id):
+        await state.update_data(pending_referred_by=referred_by)
+        await message.answer(
+            "📢 Барои истифодаи бот, лутфан аввал ба канали мо ҳамроҳ шавед, "
+            "баъд тугмаи \"✅ Санҷидан\"-ро зер кунед:",
+            reply_markup=sponsor_gate_keyboard(),
         )
-
-    if is_new_user and referred_by is not None:
-        await maybe_declare_contest_winner(message.bot, referred_by)
-
-    await state.clear()
-    if user.accepted_terms_at is None:
-        await message.answer(TERMS_TEXT, reply_markup=terms_keyboard())
         return
 
-    await _show_main_menu(message, state)
+    await _register_and_continue(message, state, message.from_user, referred_by)
+
+
+@router.callback_query(F.data == "sponsor:check")
+async def sponsor_check(callback: CallbackQuery, state: FSMContext) -> None:
+    if not await is_subscribed_to_sponsor_channel(callback.bot, callback.from_user.id):
+        await callback.answer("Шумо ҳанӯз ба канал ҳамроҳ нашудед!", show_alert=True)
+        return
+
+    data = await state.get_data()
+    referred_by = data.get("pending_referred_by")
+    await callback.message.edit_text("✅ Ташаккур! Шумо ба канал ҳамроҳ шудед.", reply_markup=None)
+    await _register_and_continue(callback.message, state, callback.from_user, referred_by)
+    await callback.answer()
 
 
 @router.callback_query(F.data == "terms:accept")

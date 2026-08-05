@@ -9,6 +9,15 @@ from bot.config import config
 from bot.db.models import Order, Product, ProductCategory
 
 
+def sponsor_gate_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📢 Ба канал ҳамроҳ шудан", url=config.shop_channel_url)],
+            [InlineKeyboardButton(text="✅ Санҷидан", callback_data="sponsor:check")],
+        ]
+    )
+
+
 def terms_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="✅ Қабул мекунам", callback_data="terms:accept")]]
@@ -43,7 +52,6 @@ def games_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="🔥 Free Fire", callback_data="menu:buy_diamonds")],
             [InlineKeyboardButton(text="🇮🇩 Free Fire Indonesia", callback_data="menu:buy_ff_id")],
-            [InlineKeyboardButton(text="📡 Bigo Live", callback_data="menu:buy_bigo")],
             [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
         ]
     )
