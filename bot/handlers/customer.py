@@ -43,6 +43,7 @@ from bot.keyboards import (
     review_channel_keyboard,
     reuse_recipient_keyboard,
     sponsor_gate_keyboard,
+    telegram_menu_keyboard,
     terms_keyboard,
 )
 from bot.services.contest import maybe_declare_contest_winner
@@ -53,8 +54,12 @@ from bot.services.sponsor import is_subscribed_to_sponsor_channel
 from bot.states import OrderFlow
 from bot.texts import FAQ_TEXT, TERMS_TEXT
 
-MIN_CUSTOM_UNITS = 10
-MAX_CUSTOM_UNITS = 200_000
+# Custom-amount ("Миқдори дигар") is only ever shown on the Telegram
+# Stars view now — matches FazerCards' own /api/v2/telegram/stars
+# min/max_amount exactly, so a customer can never order a quantity that
+# would just fail delivery.
+MIN_CUSTOM_UNITS = 50
+MAX_CUSTOM_UNITS = 10_000
 # requirements.txt pulls in the "tzdata" package so this resolves on slim
 # Docker images that ship no system IANA database, but a missing timezone
 # database must never be able to crash the whole bot's startup — fall back
@@ -209,9 +214,7 @@ async def reply_games(message: Message, state: FSMContext) -> None:
 @router.message(F.text == "✈️ Telegram")
 async def reply_telegram(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await _open_catalog_message(
-        message, state, ProductCategory.TELEGRAM, "✈️ Бастаи Telegram Stars-ро интихоб кунед:"
-    )
+    await message.answer("✈️ Хизматро интихоб кунед:", reply_markup=telegram_menu_keyboard())
 
 
 @router.message(F.text == "👤 Профил")
@@ -297,32 +300,17 @@ async def reply_about(message: Message, state: FSMContext) -> None:
     await message.answer(text, reply_markup=back_to_menu_keyboard())
 
 
-async def _open_catalog_message(
-    message: Message, state: FSMContext, category: ProductCategory, title: str
-) -> None:
-    async with get_session() as session:
-        products = await list_active_products(session, category=category)
-
-    if not products:
-        await message.answer(
-            "Ҳозир маҳсулот дастрас нест. Лутфан баъдтар кӯшиш кунед ё бо админ тамос гиред.",
-            reply_markup=back_to_menu_keyboard(),
-        )
-        return
-
-    await message.answer(title, reply_markup=products_keyboard(products, category))
-    await state.set_state(OrderFlow.choosing_product)
-
-
 @router.callback_query(F.data == "menu:games")
 async def menu_games(callback: CallbackQuery) -> None:
     await callback.message.edit_text("🎮 Бозиро интихоб кунед:", reply_markup=games_menu_keyboard())
     await callback.answer()
 
 
-async def _open_catalog(callback: CallbackQuery, state: FSMContext, category: ProductCategory, title: str) -> None:
+async def _open_catalog(
+    callback: CallbackQuery, state: FSMContext, category: ProductCategory, title: str, telegram_kind: str | None = None
+) -> None:
     async with get_session() as session:
-        products = await list_active_products(session, category=category)
+        products = await list_active_products(session, category=category, telegram_kind=telegram_kind)
 
     if not products:
         await callback.message.edit_text(
@@ -332,7 +320,7 @@ async def _open_catalog(callback: CallbackQuery, state: FSMContext, category: Pr
         await callback.answer()
         return
 
-    await callback.message.edit_text(title, reply_markup=products_keyboard(products, category))
+    await callback.message.edit_text(title, reply_markup=products_keyboard(products, category, telegram_kind))
     await state.set_state(OrderFlow.choosing_product)
     await callback.answer()
 
@@ -344,7 +332,23 @@ async def menu_buy_diamonds(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "menu:telegram")
 async def menu_telegram(callback: CallbackQuery, state: FSMContext) -> None:
-    await _open_catalog(callback, state, ProductCategory.TELEGRAM, "✈️ Бастаи Telegram Stars-ро интихоб кунед:")
+    await state.clear()
+    await callback.message.edit_text("✈️ Хизматро интихоб кунед:", reply_markup=telegram_menu_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:telegram_stars")
+async def menu_telegram_stars(callback: CallbackQuery, state: FSMContext) -> None:
+    await _open_catalog(
+        callback, state, ProductCategory.TELEGRAM, "⭐ Миқдори Stars-ро интихоб кунед:", telegram_kind="stars"
+    )
+
+
+@router.callback_query(F.data == "menu:telegram_premium")
+async def menu_telegram_premium(callback: CallbackQuery, state: FSMContext) -> None:
+    await _open_catalog(
+        callback, state, ProductCategory.TELEGRAM, "💎 Муддати Premium-ро интихоб кунед:", telegram_kind="premium"
+    )
 
 
 @router.callback_query(F.data == "menu:buy_bigo")

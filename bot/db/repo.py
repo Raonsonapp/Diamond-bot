@@ -153,11 +153,13 @@ async def contest_leaderboard(
 
 
 async def list_active_products(
-    session: AsyncSession, category: ProductCategory | None = None
+    session: AsyncSession, category: ProductCategory | None = None, telegram_kind: str | None = None
 ) -> list[Product]:
     stmt = select(Product).where(Product.is_active.is_(True))
     if category is not None:
         stmt = stmt.where(Product.category == category)
+    if telegram_kind is not None:
+        stmt = stmt.where(Product.telegram_kind == telegram_kind)
     result = await session.execute(stmt)
     products = list(result.scalars().all())
     # Plain packs sort by size; vouchers (name doesn't start with a digit —

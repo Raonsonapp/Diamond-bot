@@ -61,6 +61,16 @@ def games_menu_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def telegram_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="menu:telegram_stars")],
+            [InlineKeyboardButton(text="💎 Telegram Premium", callback_data="menu:telegram_premium")],
+            [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
+        ]
+    )
+
+
 def profile_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -109,7 +119,9 @@ def _product_label(p: Product) -> str:
     return f"🎟 {p.name} — {p.price_somoni:.2f} сомонӣ"
 
 
-def products_keyboard(products: list[Product], category: ProductCategory) -> InlineKeyboardMarkup:
+def products_keyboard(
+    products: list[Product], category: ProductCategory, telegram_kind: str | None = None
+) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text=_product_label(p), callback_data=f"product:{p.id}")]
         for p in products
@@ -117,7 +129,10 @@ def products_keyboard(products: list[Product], category: ProductCategory) -> Inl
     # Free Fire (fixed official denominations only, per the admin) and
     # Bigo Live (FazerCards only sells fixed package sizes for it — no
     # sensible "any amount" quote to interpolate) both skip this button.
-    if category == ProductCategory.TELEGRAM:
+    # Telegram Premium is fixed 3/6/12-month plans too (any other number of
+    # months isn't a real FazerCards offer) — only Stars is a flat rate
+    # that any quantity in range can be quoted from.
+    if category == ProductCategory.TELEGRAM and telegram_kind == "stars":
         rows.append(
             [InlineKeyboardButton(text="✏️ Миқдори дигар", callback_data=f"product:custom:{category.value}")]
         )
