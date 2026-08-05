@@ -26,6 +26,10 @@ class ProductCategory(str, enum.Enum):
     DIAMONDS = "diamonds"  # Free Fire diamonds — recipient is a player ID
     TELEGRAM = "telegram"  # Telegram Stars/Premium — recipient is a @username
     BIGO_LIVE = "bigo_live"  # Bigo Live diamonds (gifting currency) — recipient is a Bigo ID
+    FF_INDONESIA = "ff_indonesia"  # Free Fire Indonesia-server diamonds — much
+    # cheaper per-diamond than the regular DIAMONDS tiers, so it needs its own
+    # category (mixing the two would corrupt the custom-amount breakpoint
+    # interpolation, same reasoning as BIGO_LIVE) — recipient is a player ID
 
 
 class User(Base):
@@ -82,7 +86,7 @@ class Product(Base):
 
     @property
     def unit_label(self) -> str:
-        if self.category == ProductCategory.DIAMONDS:
+        if self.category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA):
             return "💎"
         if self.category == ProductCategory.BIGO_LIVE:
             return "💠"

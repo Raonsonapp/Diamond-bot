@@ -42,6 +42,7 @@ def games_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🔥 Free Fire", callback_data="menu:buy_diamonds")],
+            [InlineKeyboardButton(text="🇮🇩 Free Fire Indonesia", callback_data="menu:buy_ff_id")],
             [InlineKeyboardButton(text="📡 Bigo Live", callback_data="menu:buy_bigo")],
             [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
         ]

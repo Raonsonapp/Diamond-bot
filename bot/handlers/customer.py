@@ -294,6 +294,13 @@ async def menu_buy_bigo(callback: CallbackQuery, state: FSMContext) -> None:
     await _open_catalog(callback, state, ProductCategory.BIGO_LIVE, "📡 Бастаи Bigo Live-ро интихоб кунед:")
 
 
+@router.callback_query(F.data == "menu:buy_ff_id")
+async def menu_buy_ff_indonesia(callback: CallbackQuery, state: FSMContext) -> None:
+    await _open_catalog(
+        callback, state, ProductCategory.FF_INDONESIA, "🇮🇩 Бастаи Free Fire Indonesia-ро интихоб кунед:"
+    )
+
+
 @router.callback_query(F.data.regexp(r"^cartmode:(?!exit:).+$"))
 async def enter_cart_mode(callback: CallbackQuery, state: FSMContext) -> None:
     category = ProductCategory(callback.data.split(":", 1)[1])
@@ -568,7 +575,7 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
 
 
 async def _recipient_prompt(category: ProductCategory) -> str:
-    if category == ProductCategory.DIAMONDS:
+    if category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA):
         return "ID-и бозингари Free Fire-и худро (рақаме, ки дар профили худ мебинед)"
     if category == ProductCategory.BIGO_LIVE:
         return "ID-и Bigo Live-и худро (рақаме, ки дар профили худ мебинед)"
@@ -663,7 +670,7 @@ async def enter_player_id(message: Message, state: FSMContext) -> None:
 
     recipient = message.text.strip()
 
-    if product.category in (ProductCategory.DIAMONDS, ProductCategory.BIGO_LIVE):
+    if product.category in (ProductCategory.DIAMONDS, ProductCategory.BIGO_LIVE, ProductCategory.FF_INDONESIA):
         if not recipient.isdigit() or not (5 <= len(recipient) <= 15):
             await message.answer("ID-и нодуруст. Лутфан танҳо рақамҳои ID-и худро ворид кунед.")
             return

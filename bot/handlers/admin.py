@@ -50,42 +50,50 @@ async def _add_product(message: Message, category: ProductCategory, usage_exampl
         await _reject_non_admin(message)
         return
 
-    # The name can contain spaces ("Ваучери лайт"), so take the last three
-    # tokens as amount/price/cost and everything between the command and
-    # those as the name, rather than a fixed maxsplit that breaks multi-word
-    # names.
-    parts = message.text.split()
-    if len(parts) < 5:
+    reports = []
+    for line in _batch_lines(message.text, usage_example):
+        # The name can contain spaces ("Ваучери лайт"), so take the last
+        # three tokens as amount/price/cost and everything between the
+        # command and those as the name, rather than a fixed maxsplit that
+        # breaks multi-word names.
+        parts = line.split()
+        if len(parts) < 5:
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        name = " ".join(parts[1:-3])
+        amount, price, cost = parts[-3:]
+        try:
+            product = Product(
+                name=name,
+                category=category,
+                diamonds=int(amount),
+                price_somoni=float(price),
+                cost_somoni=float(cost),
+            )
+        except ValueError:
+            reports.append(f"⚠️ Миқдор ва нарх бояд рақам бошанд: {line}")
+            continue
+
+        async with get_session() as session:
+            session.add(product)
+            await session.commit()
+            await session.refresh(product)
+
+        extra = f" ({product.display_name})" if product.name[:1].isdigit() else ""
+        reports.append(
+            f"✅ #{product.id} {product.name}{extra} ба {product.price_somoni:.2f} сомонӣ "
+            f"(фоида {product.margin_somoni:.2f} сомонӣ)"
+        )
+
+    if not reports:
         await message.answer(
             f"Истифода: {usage_example} <ном> <миқдор> <нарх_фурӯш> <нарх_харид>\n"
             f"Мисол: {usage_example} Starter 100 10 8"
         )
         return
 
-    name = " ".join(parts[1:-3])
-    amount, price, cost = parts[-3:]
-    try:
-        product = Product(
-            name=name,
-            category=category,
-            diamonds=int(amount),
-            price_somoni=float(price),
-            cost_somoni=float(cost),
-        )
-    except ValueError:
-        await message.answer("Миқдор ва нарх бояд рақам бошанд.")
-        return
-
-    async with get_session() as session:
-        session.add(product)
-        await session.commit()
-        await session.refresh(product)
-
-    extra = f" ({product.display_name})" if product.name[:1].isdigit() else ""
-    await message.answer(
-        f"Маҳсулот сохта шуд: #{product.id} {product.name}{extra} "
-        f"ба {product.price_somoni:.2f} сомонӣ (фоида {product.margin_somoni:.2f} сомонӣ)"
-    )
+    await message.answer("\n".join(reports))
 
 
 @router.message(Command("addproduct"))
@@ -101,6 +109,11 @@ async def add_stars(message: Message) -> None:
 @router.message(Command("addbigo"))
 async def add_bigo(message: Message) -> None:
     await _add_product(message, ProductCategory.BIGO_LIVE, "/addbigo")
+
+
+@router.message(Command("addffid"))
+async def add_ff_indonesia(message: Message) -> None:
+    await _add_product(message, ProductCategory.FF_INDONESIA, "/addffid")
 
 
 @router.message(Command("products"))
