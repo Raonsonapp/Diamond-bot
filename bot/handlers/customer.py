@@ -35,7 +35,7 @@ from bot.keyboards import (
     confirm_order_keyboard,
     contact_keyboard,
     games_menu_keyboard,
-    main_reply_keyboard,
+    main_menu_keyboard,
     payment_link_keyboard,
     products_keyboard,
     profile_menu_keyboard,
@@ -81,8 +81,7 @@ WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фур
 
 async def _show_main_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer("Менюи зерин ҳамеша дар поён дастрас аст 👇", reply_markup=main_reply_keyboard())
-    await message.answer(WELCOME_TEXT)
+    await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
 
 
 async def _format_orders_text(user_id: int) -> str:
@@ -183,16 +182,22 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "menu:main")
 async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text(WELCOME_TEXT, reply_markup=None)
+    await callback.message.edit_text(WELCOME_TEXT, reply_markup=main_menu_keyboard())
     await callback.answer()
 
 
-# --- Persistent reply-keyboard buttons (bot/keyboards.py:main_reply_keyboard) ---
-# Registered ahead of every OrderFlow-state text handler further down, so
-# tapping one of these always wins over whatever mid-flow input state the
-# user was in (typing a player ID, a custom amount, ...) — the same
-# always-available "jump to a section" behavior the inline grid's buttons
-# give, just pinned below the input instead of inside a specific message.
+@router.callback_query(F.data == "menu:reviews")
+async def menu_reviews(callback: CallbackQuery) -> None:
+    await callback.message.edit_text(
+        "Шарҳҳои мизоҷони моро дар канал бинед:", reply_markup=review_channel_keyboard()
+    )
+    await callback.answer()
+
+
+# --- Persistent reply-keyboard buttons (legacy — kept working in case a
+# user still has the old keyboard cached client-side, or types one of these
+# labels manually; the current UI drives navigation via the inline grid in
+# main_menu_keyboard() instead, sent on WELCOME_TEXT). ---
 
 
 @router.message(F.text == "🎮 Бозиҳо")

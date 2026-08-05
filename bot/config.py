@@ -112,7 +112,7 @@ class Config:
     # digits only (country code + number, no "+", spaces or leading zeros).
     contact_whatsapp_url: str = os.getenv("CONTACT_WHATSAPP_URL", "https://wa.me/992971769009")
     contact_instagram_url: str = os.getenv(
-        "CONTACT_INSTAGRAM_URL", "https://www.instagram.com/ff.a1maz?igsh=aGxyNzFtaWtnNjht"
+        "CONTACT_INSTAGRAM_URL", "https://www.instagram.com/ff.margedar?igsh=MWhmNjFkcGZoNzhjNQ=="
     )
 
 

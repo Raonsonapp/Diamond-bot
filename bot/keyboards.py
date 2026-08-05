@@ -1,9 +1,4 @@
-from aiogram.types import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    KeyboardButton,
-    ReplyKeyboardMarkup,
-)
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.config import config
 from bot.db.models import Order, Product, ProductCategory
@@ -24,26 +19,35 @@ def terms_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-# The single always-visible menu — pinned below the message input for the
-# whole chat once sent, independent of whatever inline keyboards later
-# messages carry. WELCOME_TEXT itself carries no inline grid anymore so
-# the two don't show up as a visually duplicated menu.
-def main_reply_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="🎮 Бозиҳо"), KeyboardButton(text="✈️ Telegram")],
-            [KeyboardButton(text="👤 Профил"), KeyboardButton(text="🤝 Реферал")],
-            [KeyboardButton(text="⭐ Отзив"), KeyboardButton(text="🆘 Дастгирӣ")],
-            [KeyboardButton(text="❓ Саволҳои маъмул"), KeyboardButton(text="ℹ️ Маълумот")],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
+def main_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎮 Бозиҳо", callback_data="menu:games"),
+                InlineKeyboardButton(text="✈️ Telegram", callback_data="menu:telegram"),
+            ],
+            [
+                InlineKeyboardButton(text="👤 Профил", callback_data="menu:profile"),
+                InlineKeyboardButton(text="🤝 Реферал", callback_data="menu:referral"),
+            ],
+            [
+                InlineKeyboardButton(text="⭐ Отзив", callback_data="menu:reviews"),
+                InlineKeyboardButton(text="🆘 Дастгирӣ", callback_data="menu:contact"),
+            ],
+            [
+                InlineKeyboardButton(text="❓ Саволҳои маъмул", callback_data="menu:faq"),
+                InlineKeyboardButton(text="ℹ️ Маълумот", callback_data="menu:about"),
+            ],
+        ]
     )
 
 
 def review_channel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="📢 Кушодани канал", url=config.shop_channel_url)]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📢 Кушодани канал", url=config.shop_channel_url)],
+            [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
+        ]
     )
 
 

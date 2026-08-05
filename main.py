@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import ErrorEvent
+from aiogram.types import BotCommand, ErrorEvent
 from aiohttp import web
 
 from bot.config import config
@@ -40,6 +40,18 @@ def build_dispatcher() -> Dispatcher:
         return False
 
     return dp
+
+
+async def _set_bot_commands(bot: Bot) -> None:
+    """Populates Telegram's native "☰ Меню" quick-command popup next to
+    the message box — separate from (and doesn't replace) the persistent
+    reply-keyboard, which stays the primary navigation."""
+    await bot.set_my_commands(
+        [
+            BotCommand(command="start", description="🏠 Ба меню баргаштан"),
+            BotCommand(command="myorders", description="📦 Фармоишҳои ман"),
+        ]
+    )
 
 
 async def run_polling(bot: Bot, dp: Dispatcher) -> None:
@@ -119,6 +131,7 @@ async def main() -> None:
 
     bot = Bot(token=config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = build_dispatcher()
+    await _set_bot_commands(bot)
 
     if config.public_url:
         await run_webhook(bot, dp)
