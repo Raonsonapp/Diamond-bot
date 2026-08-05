@@ -604,6 +604,48 @@ async def fzr_raw(message: Message) -> None:
         await message.answer((f"GET {path}\n" + json.dumps(data, ensure_ascii=False, indent=2))[:3800])
 
 
+@router.message(Command("fzr_docs_search"))
+async def fzr_docs_search(message: Message) -> None:
+    """Searches the full FazerCards OpenAPI spec for matching paths —
+    needed to find e.g. the real order-placement endpoint for Telegram
+    Stars/Premium (POST .../order?) without dumping the whole multi-MB doc,
+    which is far bigger than a Telegram message and would just get cut off
+    uselessly by /fzr_raw's plain truncation."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) != 2:
+        await message.answer("Истифода: /fzr_docs_search telegram")
+        return
+    term = parts[1].strip().lower()
+
+    from bot.services.fazercards import FazerCardsError, fetch_openapi_spec
+
+    try:
+        spec = await fetch_openapi_spec()
+    except FazerCardsError as exc:
+        await message.answer(f"⚠️ Хатои FazerCards: {exc}")
+        return
+
+    paths = spec.get("paths", {}) if isinstance(spec, dict) else {}
+    matches = []
+    for path, methods in paths.items():
+        if term not in path.lower():
+            continue
+        for method, op in (methods or {}).items():
+            if method.lower() not in ("get", "post", "put", "patch", "delete"):
+                continue
+            summary = (op or {}).get("summary") or (op or {}).get("description") or ""
+            matches.append(f"{method.upper()} {path} — {summary}")
+
+    if not matches:
+        await message.answer(f"Ягон роҳ бо '{term}' дар OpenAPI docs ёфт нашуд.")
+        return
+    await message.answer("\n".join(matches)[:3800])
+
+
 def _batch_lines(message_text: str, command: str) -> list[str]:
     """A pasted block of several "/command ..." lines arrives from Telegram
     as ONE message (there's no client-side way to split it into separate

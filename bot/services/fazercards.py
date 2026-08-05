@@ -20,7 +20,11 @@ class FazerCardsError(Exception):
         self.status = status
 
 
-async def _request(method: str, path: str, **kwargs) -> dict:
+async def _raw_fetch(method: str, path: str, **kwargs) -> dict:
+    """Auth + HTTP + JSON-decode only — no {"ok": ...} envelope check, since
+    that's specific to the /api/v2/* product endpoints. The public OpenAPI
+    docs (see fetch_openapi_spec) are a plain OpenAPI document with no such
+    envelope, so they go through this instead of _request."""
     if not config.fazercards_api_key:
         raise FazerCardsError("FAZERCARDS_API_KEY is not set")
 
@@ -33,18 +37,25 @@ async def _request(method: str, path: str, **kwargs) -> dict:
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.request(method, url, headers=headers, **kwargs) as resp:
             try:
-                data = await resp.json(content_type=None)
+                return await resp.json(content_type=None)
             except Exception:
                 text = await resp.text()
                 raise FazerCardsError(
                     f"Non-JSON response (HTTP {resp.status}): {text[:200]}", status=resp.status
                 )
 
+
+async def _request(method: str, path: str, **kwargs) -> dict:
+    data = await _raw_fetch(method, path, **kwargs)
     if not isinstance(data, dict) or not data.get("ok", False):
         error = (data or {}).get("error", "Unknown error") if isinstance(data, dict) else "Unknown error"
         code = (data or {}).get("code") if isinstance(data, dict) else None
         raise FazerCardsError(error, code=code)
     return data
+
+
+async def fetch_openapi_spec() -> dict:
+    return await _raw_fetch("GET", "/public/docs/openapi.json")
 
 
 async def list_topup_categories(limit: int = 200, cursor: str | None = None) -> dict:
