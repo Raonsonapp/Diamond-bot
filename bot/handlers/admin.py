@@ -498,7 +498,11 @@ async def fzr_categories(message: Message) -> None:
 
     items = data.get("items", [])
     if search:
-        items = [i for i in items if search in (i.get("name") or "").lower()]
+        items = [
+            i
+            for i in items
+            if search in (i.get("name") or "").lower() or search in (i.get("category_id") or "").lower()
+        ]
 
     if not items:
         await message.answer("Ягон категория ёфт нашуд. Истифода: /fzr_categories free fire")
@@ -560,6 +564,40 @@ async def fzr_validate_id(message: Message) -> None:
     items = data.get("items", [])
     lines = [f"{i['category_id']} — {i.get('name', '?')}" for i in items[:60]]
     await message.answer("Бозиҳое, ки санҷиши ID доранд:\n" + "\n".join(lines) if lines else "Рӯйхат холист.")
+
+
+@router.message(Command("fzr_raw"))
+async def fzr_raw(message: Message) -> None:
+    """Diagnostic escape hatch: not every FazerCards product line lives
+    under /api/v2/topups (e.g. Telegram Stars/Premium showed up on
+    reseller.fazercards.com but never in /fzr_categories) — this probes
+    an arbitrary GET path with the real API key so we can find the real
+    endpoint interactively instead of guessing blind."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) != 2:
+        await message.answer(
+            "Истифода: /fzr_raw <path>\n"
+            "Мисол: /fzr_raw /api/v2/telegram/stars\n"
+            "Мисол: /fzr_raw /api/v2/telegram/premium"
+        )
+        return
+
+    import json
+
+    from bot.services.fazercards import FazerCardsError, _request
+
+    path = parts[1].strip()
+    try:
+        data = await _request("GET", path)
+    except FazerCardsError as exc:
+        await message.answer(f"⚠️ Хатои FazerCards [{exc.code}]: {exc}"[:1500])
+        return
+
+    await message.answer(f"GET {path}\n\n" + json.dumps(data, ensure_ascii=False, indent=2)[:3800])
 
 
 def _batch_lines(message_text: str, command: str) -> list[str]:
