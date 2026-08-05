@@ -120,7 +120,8 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_text(
         f"✅ Ташаккур! Шартнома қабул шуд.\n\n"
         f"👋 Хуш омадед, {callback.from_user.full_name}!\n"
-        f"🆔 ID-и шумо: {callback.from_user.id}"
+        f"🆔 ID-и шумо: {callback.from_user.id}",
+        reply_markup=None,
     )
     await _show_main_menu(callback.message, state)
     await callback.answer()
@@ -129,7 +130,7 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "menu:main")
 async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text(WELCOME_TEXT)
+    await callback.message.edit_text(WELCOME_TEXT, reply_markup=None)
     await callback.answer()
 
 
@@ -364,7 +365,7 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
         text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
         await callback.message.edit_text(text, reply_markup=reuse_recipient_keyboard(last_recipient))
     else:
-        await callback.message.edit_text(text)
+        await callback.message.edit_text(text, reply_markup=None)
     await callback.answer()
 
 
@@ -497,7 +498,8 @@ async def choose_custom_amount(callback: CallbackQuery, state: FSMContext) -> No
     await state.set_state(OrderFlow.entering_custom_amount)
     unit = "алмаз" if category_value == ProductCategory.DIAMONDS.value else "Stars"
     await callback.message.edit_text(
-        f"Чанд адад {unit} мехоҳед? Рақамро нависед, аз {MIN_CUSTOM_UNITS} то {MAX_CUSTOM_UNITS}:"
+        f"Чанд адад {unit} мехоҳед? Рақамро нависед, аз {MIN_CUSTOM_UNITS} то {MAX_CUSTOM_UNITS}:",
+        reply_markup=None,
     )
     await callback.answer()
 
@@ -598,7 +600,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
         await callback.message.edit_text(text, reply_markup=reuse_recipient_keyboard(last_recipient))
     else:
-        await callback.message.edit_text(text)
+        await callback.message.edit_text(text, reply_markup=None)
     await callback.answer()
 
 
@@ -734,7 +736,7 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str |
 @router.callback_query(OrderFlow.confirming, F.data == "order:cancel")
 async def cancel_order(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("Фармоиш бекор карда шуд.")
+    await callback.message.edit_text("Фармоиш бекор карда шуд.", reply_markup=None)
     await callback.answer()
 
 
@@ -789,7 +791,8 @@ async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text(
         f"✅ Фармоиши #{primary.id} бо баланси реферал пардохт шуд!\n"
-        f"{summary}\n\nДар 1-5 дақиқа ба шумо мерасад."
+        f"{summary}\n\nДар 1-5 дақиқа ба шумо мерасад.",
+        reply_markup=None,
     )
     await callback.answer()
 
@@ -833,7 +836,7 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
     if invoice.pay_url:
         await callback.message.edit_text(text, reply_markup=payment_link_keyboard(invoice.pay_url))
     else:
-        await callback.message.edit_text(text)
+        await callback.message.edit_text(text, reply_markup=None)
     await callback.answer()
 
 
@@ -982,7 +985,7 @@ async def skip_review(callback: CallbackQuery, state: FSMContext) -> None:
         product = await get_product(session, order.product_id)
         await post_review_announcement(callback.bot, session, order, product, None)
 
-    await callback.message.edit_text("Хуб, ташаккур барои харид! 🙏")
+    await callback.message.edit_text("Хуб, ташаккур барои харид! 🙏", reply_markup=None)
     await callback.answer()
 
 
