@@ -577,12 +577,12 @@ async def fzr_raw(message: Message) -> None:
         await _reject_non_admin(message)
         return
 
-    parts = message.text.split(maxsplit=1)
-    if len(parts) != 2:
+    if len(message.text.split(maxsplit=1)) < 2:
         await message.answer(
             "Истифода: /fzr_raw <path>\n"
             "Мисол: /fzr_raw /api/v2/telegram/stars\n"
-            "Мисол: /fzr_raw /api/v2/telegram/premium"
+            "Мисол: /fzr_raw /api/v2/telegram/premium\n\n"
+            "Метавонед якчанд хатро якҷоя фиристед (ҳар кадом бо /fzr_raw)."
         )
         return
 
@@ -590,14 +590,18 @@ async def fzr_raw(message: Message) -> None:
 
     from bot.services.fazercards import FazerCardsError, _request
 
-    path = parts[1].strip()
-    try:
-        data = await _request("GET", path)
-    except FazerCardsError as exc:
-        await message.answer(f"⚠️ Хатои FazerCards [{exc.code}]: {exc}"[:1500])
-        return
-
-    await message.answer(f"GET {path}\n\n" + json.dumps(data, ensure_ascii=False, indent=2)[:3800])
+    for line in _batch_lines(message.text, "/fzr_raw"):
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2:
+            await message.answer(f"⚠️ Формат нодуруст: {line}")
+            continue
+        path = parts[1].strip()
+        try:
+            data = await _request("GET", path)
+        except FazerCardsError as exc:
+            await message.answer(f"⚠️ GET {path} — Хатои FazerCards [{exc.code}]: {exc}"[:1500])
+            continue
+        await message.answer((f"GET {path}\n" + json.dumps(data, ensure_ascii=False, indent=2))[:3800])
 
 
 def _batch_lines(message_text: str, command: str) -> list[str]:
