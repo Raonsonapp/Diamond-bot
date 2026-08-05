@@ -6,7 +6,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from bot.config import config
-from bot.db.models import Base
+from bot.db.models import Base, OrderStatus, ProductCategory
 
 if config.database_url:
     # Supabase's URI comes with libpq-only query params (sslmode,
@@ -116,7 +116,59 @@ async def _apply_column_migrations(conn) -> None:
             await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {column_def}")
 
 
+_ENUM_MIGRATIONS = {
+    "productcategory": ProductCategory,
+    "orderstatus": OrderStatus,
+}
+
+
+async def _apply_enum_migrations() -> None:
+    """create_all() only creates a Postgres native ENUM TYPE if it doesn't
+    exist yet — it never adds new members to a type that's already there.
+    So a member added to ProductCategory/OrderStatus after the type was
+    first created (e.g. FF_INDONESIA, added long after this table already
+    existed live) silently doesn't exist in the database at all: any INSERT
+    using it fails with "invalid input value for enum", which surfaces as
+    the whole admin command just not responding (the exception happens
+    inside session.commit(), after the handler's own try/except has
+    nothing left to catch). SQLite has no native enum type (Enum() falls
+    back to a plain VARCHAR there), so this only matters on Postgres.
+
+    ALTER TYPE ... ADD VALUE cannot run inside a transaction block on
+    Postgres < 12, so each statement gets its own autocommit connection
+    rather than sharing engine.begin() with the rest of init_db()."""
+    if engine.dialect.name == "sqlite":
+        return
+
+    for type_name, enum_cls in _ENUM_MIGRATIONS.items():
+        async with engine.connect() as conn:
+            result = await conn.execute(
+                text(
+                    "SELECT enumlabel FROM pg_enum "
+                    "JOIN pg_type ON pg_enum.enumtypid = pg_type.oid "
+                    "WHERE pg_type.typname = :t"
+                ),
+                {"t": type_name},
+            )
+            existing = {row[0] for row in result.fetchall()}
+
+        if not existing:
+            # Type doesn't exist at all yet (brand new database) —
+            # create_all() below creates it fresh with every current
+            # member, nothing to migrate.
+            continue
+
+        for member in enum_cls:
+            if member.name in existing:
+                continue
+            async with engine.connect() as conn:
+                await conn.execution_options(isolation_level="AUTOCOMMIT")
+                await conn.exec_driver_sql(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS '{member.name}'")
+
+
 async def init_db() -> None:
+    await _apply_enum_migrations()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _apply_column_migrations(conn)
