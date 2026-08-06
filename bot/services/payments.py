@@ -85,7 +85,7 @@ def _build_alif_link(amount_somoni: float) -> str | None:
 
 _BANK_NAMES = {
     "dc": "Душанбе Сити",
-    "eskhata": "Эсхата",
+    "amonat": "Амонатбонк",
     "alif": "Алиф Мобайл",
 }
 
@@ -109,16 +109,19 @@ class ManualBankTransferProvider(PaymentProvider):
             card_line = "⚠️ Рақами корти қабулкунанда танзим нашудааст — бо админ тамос гиред.\n"
         else:
             card_line = f"💳 Корт: {config.receiving_card_number}\n"
-            # Card-to-card transfer reaches this same card from any bank's
-            # app — this line exists purely so a customer whose only
-            # account is with Eskhata isn't confused about whether a
-            # transfer from *their* bank will actually arrive. Not needed
-            # when Alif's own deep link is doing the work instead.
+            # Verified real path (confirmed against the admin's own
+            # screenshot of their bank app): most Tajik banking apps have a
+            # "DC кошелек" top-up option under Платежи → Эл. кошельки,
+            # reachable by phone number — same alif_dc_receiving_account
+            # used for the Alif deep link, since it's the same DC wallet
+            # either way. Not needed when Alif's own deep link is doing the
+            # work instead.
             bank_name = _BANK_NAMES.get(bank_hint or "")
-            if bank_name and bank_hint != "dc" and not alif_url:
+            if bank_name and bank_hint != "dc" and not alif_url and config.alif_dc_receiving_account:
                 card_line += (
-                    f"(Метавонед аз барномаи мобилии {bank_name}-и худ ба ҳамин рақами корт "
-                    f"гузаронед — гузариш байни бонкҳо кор мекунад.)\n"
+                    f"(Ё аз барномаи мобилии {bank_name}-и худ: Платежи → Эл. кошельки → "
+                    f"DC кошелек → рақами телефон {config.alif_dc_receiving_account} → "
+                    f"маблағ {amount_somoni:.2f} сомонӣ → Оплатить.)\n"
                 )
 
         if alif_url:

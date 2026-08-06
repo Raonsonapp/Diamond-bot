@@ -196,7 +196,7 @@ def payment_link_keyboard(pay_url: str) -> InlineKeyboardMarkup:
 # a "DC" card accepts a transfer from, say, their Eskhata app.
 PAYMENT_METHODS = [
     ("dc", "🏦 Душанбе Сити"),
-    ("eskhata", "🏦 Эсхата"),
+    ("amonat", "🏦 Амонатбонк"),
     ("alif", "🏦 Алиф Мобайл"),
 ]
 
