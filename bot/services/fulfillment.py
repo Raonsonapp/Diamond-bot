@@ -221,7 +221,12 @@ async def _attempt_delivery(
     return True, results
 
 
-_DELAYED_RECHECK_ATTEMPTS = 4
+# Bumped from 4 (~2min total with the ~30s initial window) after three real
+# orders in one session (#49, #50, #52 — Weekly Lite, Weekly Membership,
+# 110 Diamonds) all still needed manual /delivered despite that window —
+# FazerCards is apparently often slower than that in practice, not just in
+# the one earlier ord-510807 case this was originally sized for.
+_DELAYED_RECHECK_ATTEMPTS = 10
 _DELAYED_RECHECK_INTERVAL_SECONDS = 30
 
 
@@ -251,6 +256,13 @@ async def _delayed_recheck(bot: Bot, order_id: int) -> None:
                 await bot.send_message(
                     config.admin_chat_id,
                     f"✅ Фармоиши #{order.id} дертар худкор тасдиқ шуд (FazerCards дертар ҷавоб дод).",
+                )
+            return
+        if any(r is not None and r.message.startswith("⛔") for _, r in results):
+            if config.admin_chat_id:
+                await bot.send_message(
+                    config.admin_chat_id,
+                    f"⛔ Фармоиши #{order.id}: FazerCards онро радд кард (refund) — такрор кардан бефоида аст, санҷед.",
                 )
             return
     # Ran out of delayed attempts too — leave it exactly where the
@@ -316,13 +328,21 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
     if not success:
         if progress_message_id:
             await _pause_progress_bar(bot, order, progress_message_id)
+        # "⛔" marks a definitive FazerCards rejection (refund/failed/etc,
+        # see delivery.py's _FAILED_STATUSES) rather than "still
+        # processing" — retrying that in the background for another 5
+        # minutes is pointless, it will just get refused again every time,
+        # so skip straight to telling the admin instead of wasting the
+        # whole recheck window on something that can never complete.
+        is_terminal_failure = any(r is not None and r.message.startswith("⛔") for _, r in results)
         if config.admin_chat_id:
             lines = [f"⚠️ Таҳвили худкор барои фармоиши #{order.id} нашуд — лутфан санҷед ва дастӣ иҷро карда, 'Delivered'-ро занед:"]
             for o, r in results:
                 reason = r.message if r is not None else "delivery provider raised NotImplementedError"
                 lines.append(f"#{o.id} ({o.ff_player_id}): {reason}")
             await bot.send_message(config.admin_chat_id, "\n".join(lines)[:4000])
-        asyncio.create_task(_delayed_recheck(bot, order.id))
+        if not is_terminal_failure:
+            asyncio.create_task(_delayed_recheck(bot, order.id))
         return FulfillmentResult(order=order, auto_delivered=False)
 
     async with get_session() as session:

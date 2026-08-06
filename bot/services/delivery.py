@@ -27,7 +27,14 @@ _ID_FIELD_HINTS = ("player", "user", "uid", "account", "id")
 # success status FazerCards uses; kept as a set in case other categories
 # report an equivalent synonym.
 _CONFIRMED_STATUSES = {"completed", "success", "delivered", "done", "fulfilled", "successful"}
-_FAILED_STATUSES = {"failed", "cancelled", "canceled", "error", "rejected", "declined"}
+# Real observed case: order #52 (110 Diamonds) came back with
+# status="refund" — FazerCards actively rejected and refunded it (wrong
+# player ID, insufficient FazerCards balance, out of stock, etc.), which is
+# a fundamentally different, more urgent situation than "still processing"
+# — it will NEVER become "completed" no matter how long polling continues,
+# so it belongs in the terminal-failure set, not left to exhaust every
+# retry first.
+_FAILED_STATUSES = {"failed", "cancelled", "canceled", "error", "rejected", "declined", "refund", "refunded"}
 # How long to wait for "created" to become "completed" before giving up
 # and falling back to manual. Most orders confirm within ~1 second, but a
 # real order (ord-510807, a Weekly Membership) was observed to still be
@@ -192,14 +199,18 @@ class FazerCardsDeliveryProvider(DeliveryProvider):
         # Anything short of a recognised completed-style status (including
         # an unfamiliar status field) falls back to the admin's manual
         # "Delivered" confirmation instead of guessing.
-        return DeliveryResult(
-            success=False,
-            reference=reference,
-            message=(
+        if status in _FAILED_STATUSES:
+            message = (
+                f"⛔ FazerCards РАДД КАРД ин фармоишро (status={status}) — эҳтимол ID-и бозингар "
+                f"нодуруст аст ё балансатони FazerCards кам аст. Санҷед пеш аз таҳвили дастӣ! "
+                f"Raw order info: {json.dumps(order_info)[:300]}"
+            )
+        else:
+            message = (
                 f"FazerCards accepted the order but hasn't confirmed delivery "
                 f"(status={status or '(none)'}). Raw order info: {json.dumps(order_info)[:300]}"
-            ),
-        )
+            )
+        return DeliveryResult(success=False, reference=reference, message=message)
 
     async def _deliver_telegram(self, order_id: int, recipient: str, product) -> DeliveryResult:
         """Telegram Stars/Premium via FazerCards' dedicated API — found
@@ -252,14 +263,18 @@ class FazerCardsDeliveryProvider(DeliveryProvider):
         if status in _CONFIRMED_STATUSES:
             return DeliveryResult(success=True, reference=reference, message="Delivered via FazerCards Telegram API.")
 
-        return DeliveryResult(
-            success=False,
-            reference=reference,
-            message=(
+        if status in _FAILED_STATUSES:
+            message = (
+                f"⛔ FazerCards РАДД КАРД ин фармоишро (status={status}) — эҳтимол username нодуруст "
+                f"аст ё балансатони FazerCards кам аст. Санҷед пеш аз таҳвили дастӣ! "
+                f"Raw response: {json.dumps(payload)[:300]}"
+            )
+        else:
+            message = (
                 f"FazerCards accepted the Telegram order but hasn't confirmed delivery "
                 f"(status={status or '(none)'}). Raw response: {json.dumps(payload)[:300]}"
-            ),
-        )
+            )
+        return DeliveryResult(success=False, reference=reference, message=message)
 
 
 class AutoDeliveryProvider(DeliveryProvider):

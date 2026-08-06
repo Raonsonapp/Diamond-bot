@@ -124,25 +124,36 @@ class ManualBankTransferProvider(PaymentProvider):
                     f"маблағ {amount_somoni:.2f} сомонӣ → Оплатить.)\n"
                 )
 
+        # A real underpaid order (#49: 5с sent instead of 5.90с) showed the
+        # old, softer "(на кам, на зиёд)" parenthetical wasn't prominent
+        # enough — this line is now its own bold, always-shown warning on
+        # every path (it was missing entirely from the Alif and no-pay_url
+        # branches before).
+        exact_amount_warning = (
+            f"⚠️ <b>ДИҚҚАТ: маблағро АЙНАН {amount_somoni:.2f} сомонӣ фиристед — на 1 дирам кам, на зиёд!</b> "
+            f"Агар камтар фиристед, фармоиш худкор тасдиқ намешавад."
+        )
+
         if alif_url:
             instructions = (
                 f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ\n\n"
                 f"Тугмаи «💳 Пардохт»-ро пахш кунед — мустақим ба барномаи Алиф-и шумо мекушояд, "
                 f"бо маблағи аллакай пуркардашуда. Танҳо тасдиқро занед, баъд расиди пардохтро "
-                f"(скриншот) ба ин ҷо фиристед."
+                f"(скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
             )
         elif pay_url:
             instructions = (
                 f"{card_line}"
-                f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ (на кам, на зиёд)\n\n"
+                f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ\n\n"
                 f"Тугмаи «💳 Пардохт»-ро пахш кунед, маблағро тасдиқ кунед, "
-                f"баъд расиди пардохтро (скриншот) ба ин ҷо фиристед."
+                f"баъд расиди пардохтро (скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
             )
         else:
             instructions = (
                 f"{card_line}"
                 f"Лутфан {amount_somoni:.2f} сомонӣ гузаронед ва расиди пардохтро "
                 f"(скриншот) ба ин ҷо фиристед. Пас аз тасдиқи админ фармоишатон иҷро мешавад."
+                f"\n\n{exact_amount_warning}"
             )
 
         return InvoiceResult(provider_reference=f"manual-{order_id}", pay_url=pay_url, instructions=instructions)
