@@ -297,6 +297,26 @@ async def find_order_by_payment_reference(session: AsyncSession, reference: str)
     return result.scalars().first()
 
 
+async def find_underpaid_candidates(
+    session: AsyncSession, paid_amount: float, since: datetime
+) -> list[Order]:
+    """Pending orders a short bank deposit could plausibly be a partial
+    payment for — the SMS amount is less than the order's price but not
+    wildly so (at least half of it), so a customer who paid 15 for a 15.90
+    order surfaces here, but a stray 2-somoni deposit doesn't get pinned on
+    a 470-somoni order. Never auto-confirms anything — purely surfaces the
+    shortfall to the admin so a human decides."""
+    result = await session.execute(
+        select(Order).where(
+            Order.status == OrderStatus.AWAITING_PAYMENT,
+            Order.created_at >= since,
+            Order.amount_somoni > paid_amount,
+            Order.amount_somoni <= paid_amount * 2,
+        )
+    )
+    return list(result.scalars().all())
+
+
 async def set_payment_proof_hash(session: AsyncSession, order: Order, proof_hash: str) -> Order:
     order.payment_proof_hash = proof_hash
     await session.commit()

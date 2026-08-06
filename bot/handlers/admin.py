@@ -436,6 +436,89 @@ async def paid_command(message: Message) -> None:
     await message.answer("\n".join(reports))
 
 
+@router.message(Command("underpaid"))
+async def underpaid_command(message: Message) -> None:
+    """A customer sent less than the order's price (real observed case:
+    order #41 was 15.90с, customer's bank transfer was exactly 15с — the
+    SMS webhook correctly refused to auto-confirm a mismatched amount, but
+    nobody told the customer why nothing happened next). This tells them
+    the exact shortfall and points at cheaper in-stock alternatives.
+    Never touches order.status — the order is genuinely still unpaid; the
+    customer has to act (top up the difference, or pick something
+    cheaper) before anything gets confirmed."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    reports = []
+    for line in _batch_lines(message.text, "/underpaid"):
+        parts = line.split()
+        if len(parts) != 3:
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+        if not parts[1].isdigit():
+            reports.append(f"⚠️ order_id бояд рақам бошад: {line}")
+            continue
+        try:
+            received = float(parts[2])
+        except ValueError:
+            reports.append(f"⚠️ Маблағ бояд рақам бошад: {line}")
+            continue
+
+        order_id = int(parts[1])
+        async with get_session() as session:
+            order = await get_order(session, order_id)
+            if order is None:
+                reports.append(f"⚠️ Фармоиши #{order_id} ёфт нашуд.")
+                continue
+            if order.status != OrderStatus.AWAITING_PAYMENT:
+                reports.append(f"⚠️ Фармоиши #{order_id} аллакай '{order.status.value}' аст.")
+                continue
+            if received >= order.amount_somoni:
+                reports.append(
+                    f"⚠️ #{order_id}: {received:.2f}с камтар нест (фармоиш {order.amount_somoni:.2f}с) — норасоӣ надорад."
+                )
+                continue
+
+            shortfall = order.amount_somoni - received
+            product = await get_product(session, order.product_id)
+            cheaper = []
+            if product is not None:
+                candidates = await list_active_products(session, category=product.category)
+                cheaper = [p for p in candidates if p.price_somoni <= received and p.id != product.id]
+
+        lines = [
+            f"⚠️ Мо {received:.2f} сомонӣ гирифтем, аммо фармоиши шумо #{order_id} {order.amount_somoni:.2f} сомонӣ буд.",
+            f"Норасоӣ: {shortfall:.2f} сомонӣ.",
+            "",
+            f"Лутфан ё боқимондаи {shortfall:.2f} сомониро бо ҳамон корт/усул фиристед,",
+        ]
+        if cheaper:
+            lines.append("ё бастаи арзонтарро интихоб кунед:")
+            for p in cheaper[:5]:
+                lines.append(f"  • {p.display_name} — {p.price_somoni:.2f} сомонӣ")
+        else:
+            lines.append("ё бо админ тамос гиред барои бастаи мувофиқ.")
+
+        try:
+            await message.bot.send_message(order.user_id, "\n".join(lines))
+        except Exception:
+            reports.append(f"⚠️ Фармоиши #{order_id}: ба мизоҷ фиристода нашуд (шояд ботро блок кардааст).")
+            continue
+
+        reports.append(f"✅ Фармоиши #{order_id}: мизоҷ огоҳ карда шуд (норасоӣ {shortfall:.2f}с).")
+
+    if not reports:
+        await message.answer(
+            "Истифода: /underpaid <order_id> <маблағи гирифташуда>\n"
+            "Мисол: /underpaid 41 15\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
+        return
+
+    await message.answer("\n".join(reports))
+
+
 @router.message(Command("delivered"))
 async def delivered_command(message: Message) -> None:
     """For orders delivered by hand outside the normal flow (e.g. FazerCards

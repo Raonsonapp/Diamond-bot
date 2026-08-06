@@ -15,7 +15,7 @@ from aiogram import Bot
 from aiohttp import web
 
 from bot.config import config
-from bot.db.repo import find_order_by_payment_reference, find_orders_awaiting_amount
+from bot.db.repo import find_order_by_payment_reference, find_orders_awaiting_amount, find_underpaid_candidates
 from bot.db.session import get_session
 from bot.services.fulfillment import confirm_and_deliver
 from bot.services.sms_parser import parse_deposit_sms
@@ -88,9 +88,26 @@ def register_sms_webhook(app: web.Application, bot: Bot) -> None:
             else:
                 ids = ", ".join(f"#{o.id}" for o in candidates)
                 note = f"якчанд фармоиши мувофиқ ёфт шуд ({ids}) — лутфан дастӣ тасдиқ кунед"
+
+            underpaid_note = ""
+            if not candidates:
+                async with get_session() as session:
+                    underpaid = await find_underpaid_candidates(session, parsed.amount_somoni, since)
+                if underpaid:
+                    lines = [
+                        f"  #{o.id}: фармоиш {o.amount_somoni:.2f}с, норасо {o.amount_somoni - parsed.amount_somoni:.2f}с"
+                        for o in underpaid
+                    ]
+                    underpaid_note = (
+                        "\n\n💡 Эҳтимол ин пардохти НОКИФОЯ барои яке аз ин фармоишҳост "
+                        "(мизоҷ камтар аз нархи фармоиш фиристодааст):\n" + "\n".join(lines) +
+                        "\n\nБарои огоҳ кардани мизоҷ: /underpaid <order_id> "
+                        f"{parsed.amount_somoni:.2f}"
+                    )
+
             await bot.send_message(
                 config.admin_chat_id,
-                f"⚠️ SMS-и пардохт омад ({parsed.amount_somoni:.2f} сомонӣ), аммо {note}.\n\n{text}",
+                f"⚠️ SMS-и пардохт омад ({parsed.amount_somoni:.2f} сомонӣ), аммо {note}.\n\n{text}{underpaid_note}",
             )
         return web.Response(status=200, text="unmatched")
 
