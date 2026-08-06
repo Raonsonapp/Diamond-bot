@@ -77,7 +77,7 @@ class Config:
     # phone number. Unrelated to ALIF_SHOP_ID below, which is for the
     # separate (unused, scaffold-only) Alif Business merchant-API integration.
     alif_dc_provider_id: str = os.getenv("ALIF_DC_PROVIDER_ID", "124")
-    alif_dc_receiving_account: str = os.getenv("ALIF_DC_RECEIVING_ACCOUNT", "929998174")
+    alif_dc_receiving_account: str = os.getenv("ALIF_DC_RECEIVING_ACCOUNT", "559994751")
     alif_shop_id: str = os.getenv("ALIF_SHOP_ID", "")
     alif_secret_key: str = os.getenv("ALIF_SECRET_KEY", "")
     alif_api_base_url: str = os.getenv("ALIF_API_BASE_URL", "")
