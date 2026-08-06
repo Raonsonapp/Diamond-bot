@@ -519,6 +519,71 @@ async def underpaid_command(message: Message) -> None:
     await message.answer("\n".join(reports))
 
 
+@router.message(Command("underpaidok"))
+async def underpaid_ok_command(message: Message) -> None:
+    """The opposite of /underpaid: the admin already went ahead and
+    fulfilled a short order as a one-time courtesy (already paid/delivered
+    by the time this runs — unlike /underpaid, it does NOT check or touch
+    order.status) and just wants the customer told not to repeat it. Takes
+    the same <order_id> <received_amount> shape as /underpaid so the
+    shortfall math is identical either way."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    reports = []
+    for line in _batch_lines(message.text, "/underpaidok"):
+        parts = line.split()
+        if len(parts) != 3:
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+        if not parts[1].isdigit():
+            reports.append(f"⚠️ order_id бояд рақам бошад: {line}")
+            continue
+        try:
+            received = float(parts[2])
+        except ValueError:
+            reports.append(f"⚠️ Маблағ бояд рақам бошад: {line}")
+            continue
+
+        order_id = int(parts[1])
+        async with get_session() as session:
+            order = await get_order(session, order_id)
+            if order is None:
+                reports.append(f"⚠️ Фармоиши #{order_id} ёфт нашуд.")
+                continue
+
+        shortfall = order.amount_somoni - received
+        if shortfall <= 0:
+            text = f"✅ Фармоиши шумо #{order_id} гузаронида шуд! Ташаккур барои харид."
+        else:
+            text = (
+                f"✅ Фармоиши шумо #{order_id} гузаронида шуд — гарчанде ки {shortfall:.2f} сомонӣ "
+                f"камтар фиристода будед (бояд {order.amount_somoni:.2f} сомонӣ мебуд, шумо "
+                f"{received:.2f} сомонӣ фиристодед). Ин дафъа мо истисно кардем.\n\n"
+                f"⚠️ Лутфан дар фармоишҳои оянда маблағи ПУРРАРО фиристед — вагарна фармоиш "
+                f"тасдиқ намешавад."
+            )
+
+        try:
+            await message.bot.send_message(order.user_id, text)
+        except Exception:
+            reports.append(f"⚠️ Фармоиши #{order_id}: ба мизоҷ фиристода нашуд (шояд ботро блок кардааст).")
+            continue
+
+        reports.append(f"✅ Фармоиши #{order_id}: мизоҷ огоҳ карда шуд (гузашт, бо огоҳии оянда).")
+
+    if not reports:
+        await message.answer(
+            "Истифода: /underpaidok <order_id> <маблағи гирифташуда>\n"
+            "Мисол: /underpaidok 41 15\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
+        return
+
+    await message.answer("\n".join(reports))
+
+
 @router.message(Command("delivered"))
 async def delivered_command(message: Message) -> None:
     """For orders delivered by hand outside the normal flow (e.g. FazerCards
