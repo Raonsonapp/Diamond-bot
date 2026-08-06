@@ -77,7 +77,14 @@ def _item_line(order: Order, product) -> str:
 
 
 _PROGRESS_TEXT = "⏳ Фармоиши шумо коркард шуда истодааст..."
-_PROGRESS_STEP_SECONDS = 1.3
+# 9 steps (0% -> 90% by +10 each) * 6.4s ≈ 58s — timed to span
+# delivery.py's own ~60s FazerCards polling window (_POLL_ATTEMPTS *
+# _POLL_DELAY_SECONDS) so 90% is reached right around when a genuinely
+# slow order would still be polling, instead of stalling at 90% for up to
+# ~48s beforehand looking stuck. A fast real confirmation (most orders,
+# within ~1s) still jumps straight to 100% via _finish_progress_bar
+# regardless of wherever the animation happens to be.
+_PROGRESS_STEP_SECONDS = 6.4
 _PROGRESS_AUTO_CAP = 90  # never claims 100% on its own — only a confirmed delivery does that
 
 

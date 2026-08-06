@@ -40,11 +40,13 @@ _FAILED_STATUSES = {"failed", "cancelled", "canceled", "error", "rejected", "dec
 # real order (ord-510807, a Weekly Membership) was observed to still be
 # "processing" after the original ~12s window and only show completed on
 # FazerCards' own dashboard some time later — so this is generous on
-# purpose, not a tight timing bet. bot/services/fulfillment.py also does a
-# few longer-spaced background rechecks after this window closes, for
-# orders that take even longer than this.
+# purpose, not a tight timing bet. Bumped from ~30s to a full minute after
+# repeatedly seeing genuinely-still-processing orders outlast the shorter
+# window. bot/services/fulfillment.py also does a few longer-spaced
+# background rechecks after this window closes, for orders that take even
+# longer than this.
 _POLL_ATTEMPTS = 10
-_POLL_DELAY_SECONDS = 3
+_POLL_DELAY_SECONDS = 6
 
 
 @dataclass
