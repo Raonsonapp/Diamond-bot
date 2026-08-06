@@ -584,6 +584,76 @@ async def underpaid_ok_command(message: Message) -> None:
     await message.answer("\n".join(reports))
 
 
+@router.message(Command("apologize"))
+async def apologize_command(message: Message) -> None:
+    """For when diamonds/stars genuinely couldn't be delivered because of a
+    technical problem (FazerCards down, delayed recheck exhausted, etc.) —
+    sends the customer a proper apology instead of leaving the order
+    silently hanging. Never touches order.status; purely a customer-facing
+    message, same spirit as /underpaid and /underpaidok."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    if len(message.text.split(maxsplit=1)) < 2:
+        await message.answer(
+            "Истифода: /apologize <order_id> [шарҳи иловагӣ]\n"
+            "Мисол: /apologize 41\n"
+            "Мисол бо шарҳ: /apologize 41 Фардо пагоҳирӯзӣ ҳал мешавад.\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
+        return
+
+    reports = []
+    for line in _batch_lines(message.text, "/apologize"):
+        parts = line.split(maxsplit=1)
+        if len(parts) < 2:
+            reports.append(f"⚠️ Формат нодуруст: {line}")
+            continue
+
+        rest = parts[1].split(maxsplit=1)
+        if not rest[0].isdigit():
+            reports.append(f"⚠️ order_id бояд рақам бошад: {line}")
+            continue
+        order_id = int(rest[0])
+        extra_note = rest[1].strip() if len(rest) > 1 else ""
+
+        async with get_session() as session:
+            order = await get_order(session, order_id)
+            if order is None:
+                reports.append(f"⚠️ Фармоиши #{order_id} ёфт нашуд.")
+                continue
+
+        text = (
+            f"🙏 Узр мехоҳем! Фармоиши шумо #{order_id} бинобар мушкилии техникӣ "
+            f"(аз тарафи система/провайдер, на аз шумо) ҳанӯз пурра иҷро нашудааст.\n\n"
+            f"Мо аллакай дар ҳоли ҳалли масъала ҳастем ва фармоишатонро дар наздиктарин "
+            f"вақт иҷро мекунем — агар хоҳед, метавонем маблағатонро пурра баргардонем.\n\n"
+            f"Барои нороҳатии эҷодшуда узр мехоҳем ва аз сабри шумо ташаккур мегӯем! 🙏"
+        )
+        if extra_note:
+            text += f"\n\n{extra_note}"
+
+        try:
+            await message.bot.send_message(order.user_id, text)
+        except Exception:
+            reports.append(f"⚠️ Фармоиши #{order_id}: ба мизоҷ фиристода нашуд (шояд ботро блок кардааст).")
+            continue
+
+        reports.append(f"✅ Фармоиши #{order_id}: узрхоҳӣ ба мизоҷ фиристода шуд.")
+
+    if not reports:
+        await message.answer(
+            "Истифода: /apologize <order_id> [шарҳи иловагӣ]\n"
+            "Мисол: /apologize 41\n"
+            "Мисол бо шарҳ: /apologize 41 Фардо пагоҳирӯзӣ ҳал мешавад.\n"
+            "(метавонед якчанд сатрро дар як паём фиристед)"
+        )
+        return
+
+    await message.answer("\n".join(reports))
+
+
 @router.message(Command("delivered"))
 async def delivered_command(message: Message) -> None:
     """For orders delivered by hand outside the normal flow (e.g. FazerCards
