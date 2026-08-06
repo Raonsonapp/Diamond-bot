@@ -197,7 +197,6 @@ def payment_link_keyboard(pay_url: str) -> InlineKeyboardMarkup:
 PAYMENT_METHODS = [
     ("dc", "🏦 Душанбе Сити"),
     ("eskhata", "🏦 Эсхата"),
-    ("amonat", "🏦 Амонатбонк"),
     ("alif", "🏦 Алиф Мобайл"),
 ]
 

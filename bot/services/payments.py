@@ -67,10 +67,25 @@ def _build_expresspay_link(order_id: int, amount_somoni: float) -> str | None:
     )
 
 
+def _build_alif_link(amount_somoni: float) -> str | None:
+    """Deep link straight into the customer's own Alif Mobi app, landing on
+    its "DC кошелек" top-up provider with the amount pre-filled — captured
+    from a real link the admin generated in their own Alif app
+    (https://alifmobi.page.link/providers?id=124&amount=X&account=Y).
+    Unlike ExpressPay (a web page any card can pay on), this only makes
+    sense for a customer who already has the Alif app installed, which is
+    exactly the "🏦 Алиф Мобайл" button in the bank picker."""
+    if not config.alif_dc_receiving_account:
+        return None
+    return (
+        f"https://alifmobi.page.link/providers?id={config.alif_dc_provider_id}"
+        f"&amount={amount_somoni:.2f}&account={config.alif_dc_receiving_account}"
+    )
+
+
 _BANK_NAMES = {
     "dc": "Душанбе Сити",
     "eskhata": "Эсхата",
-    "amonat": "Амонатбонк",
     "alif": "Алиф Мобайл",
 }
 
@@ -82,7 +97,13 @@ class ManualBankTransferProvider(PaymentProvider):
     async def create_invoice(
         self, order_id: int, amount_somoni: float, bank_hint: str | None = None
     ) -> InvoiceResult:
-        pay_url = _build_expresspay_link(order_id, amount_somoni)
+        # Alif gets its own app deep link (opens straight into Alif Mobi
+        # with the amount pre-filled) instead of the generic ExpressPay web
+        # page — a real link the admin captured from their own app, see
+        # _build_alif_link. Every other bank falls back to ExpressPay,
+        # which works from any card regardless of issuing bank.
+        alif_url = _build_alif_link(amount_somoni) if bank_hint == "alif" else None
+        pay_url = alif_url or _build_expresspay_link(order_id, amount_somoni)
 
         if not config.receiving_card_number:
             card_line = "⚠️ Рақами корти қабулкунанда танзим нашудааст — бо админ тамос гиред.\n"
@@ -90,16 +111,24 @@ class ManualBankTransferProvider(PaymentProvider):
             card_line = f"💳 Корт: {config.receiving_card_number}\n"
             # Card-to-card transfer reaches this same card from any bank's
             # app — this line exists purely so a customer whose only
-            # account is with Eskhata/Amonat/Alif isn't confused about
-            # whether a transfer from *their* bank will actually arrive.
+            # account is with Eskhata isn't confused about whether a
+            # transfer from *their* bank will actually arrive. Not needed
+            # when Alif's own deep link is doing the work instead.
             bank_name = _BANK_NAMES.get(bank_hint or "")
-            if bank_name and bank_hint != "dc":
+            if bank_name and bank_hint != "dc" and not alif_url:
                 card_line += (
                     f"(Метавонед аз барномаи мобилии {bank_name}-и худ ба ҳамин рақами корт "
                     f"гузаронед — гузариш байни бонкҳо кор мекунад.)\n"
                 )
 
-        if pay_url:
+        if alif_url:
+            instructions = (
+                f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ\n\n"
+                f"Тугмаи «💳 Пардохт»-ро пахш кунед — мустақим ба барномаи Алиф-и шумо мекушояд, "
+                f"бо маблағи аллакай пуркардашуда. Танҳо тасдиқро занед, баъд расиди пардохтро "
+                f"(скриншот) ба ин ҷо фиристед."
+            )
+        elif pay_url:
             instructions = (
                 f"{card_line}"
                 f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ (на кам, на зиёд)\n\n"
