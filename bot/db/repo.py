@@ -4,7 +4,21 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from bot.db.models import Contest, Order, OrderStatus, Product, ProductCategory, User
+from bot.db.models import BotSetting, Contest, Order, OrderStatus, Product, ProductCategory, User
+
+
+async def get_setting(session: AsyncSession, key: str, default: str | None = None) -> str | None:
+    setting = await session.get(BotSetting, key)
+    return setting.value if setting is not None else default
+
+
+async def set_setting(session: AsyncSession, key: str, value: str) -> None:
+    setting = await session.get(BotSetting, key)
+    if setting is None:
+        session.add(BotSetting(key=key, value=value))
+    else:
+        setting.value = value
+    await session.commit()
 
 
 async def upsert_user(

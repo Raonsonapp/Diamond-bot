@@ -20,6 +20,7 @@ from bot.db.repo import (
     get_buyer_rank,
     get_last_recipient,
     get_product,
+    get_setting,
     get_user,
     get_user_purchase_stats,
     list_active_products,
@@ -819,6 +820,8 @@ async def _cart_products(session, data: dict) -> list[Product]:
 
 @router.callback_query(OrderFlow.confirming, F.data == "order:pay_balance")
 async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
+    if await _blocked_for_maintenance(callback, state):
+        return
     data = await state.get_data()
 
     async with get_session() as session:
@@ -867,8 +870,33 @@ async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+async def _blocked_for_maintenance(callback: CallbackQuery, state: FSMContext) -> bool:
+    """Admin-toggled via /maintenance — blocks NEW payments (e.g. while a
+    FazerCards balance top-up is stuck and new orders couldn't be
+    delivered anyway) without touching catalog browsing or orders already
+    in progress. Checked right at the payment step itself, not earlier in
+    the flow, so browsing/product selection keeps working normally."""
+    async with get_session() as session:
+        maintenance = await get_setting(session, "maintenance_mode", "0")
+    if maintenance != "1":
+        return False
+
+    await state.clear()
+    await callback.message.edit_text(
+        "🛠 Мутаассифона, ҳоло бот муваққатан дар ҳоли таъмирот аст (мушкили техникӣ бо провайдер). "
+        "Лутфан баъд аз чанд соат аз нав кӯшиш кунед.\n\n"
+        "ℹ️ Агар шумо АЛЛАКАЙ пардохта бошед — нигарон нашавед: фармоишатон дар навбат аст, "
+        "баъд аз ҳалли мушкилот алмаз/хидмататон мерасад.",
+        reply_markup=back_to_menu_keyboard(),
+    )
+    await callback.answer()
+    return True
+
+
 @router.callback_query(OrderFlow.confirming, F.data == "order:confirm")
 async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
+    if await _blocked_for_maintenance(callback, state):
+        return
     await callback.message.edit_text(
         "Аз кадом бонк пардохт мекунед? (Ҳамаашон ба ҳамон рақами корт мерасанд — "
         "танҳо барномаи худро интихоб кунед.)",

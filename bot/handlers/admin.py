@@ -15,6 +15,7 @@ from bot.db.repo import (
     get_order,
     get_orders_by_group,
     get_product,
+    get_setting,
     has_referral_with_purchase,
     list_active_products,
     list_all_user_ids,
@@ -26,6 +27,7 @@ from bot.db.repo import (
     set_product_name,
     set_product_telegram_kind,
     set_product_price,
+    set_setting,
 )
 from bot.db.session import get_session
 from bot.keyboards import admin_order_keyboard
@@ -291,6 +293,43 @@ async def contest_status(message: Message) -> None:
             bought = "✅ харид кард" if purchase_flags.get(user.id) else "❌ ҳанӯз харид накард"
             lines.append(f"{icon} {name} — {count}/{contest.target_referrals} (боқӣ {left}) — {bought}")
     await message.answer("\n".join(lines))
+
+
+MAINTENANCE_SETTING_KEY = "maintenance_mode"
+
+
+@router.message(Command("maintenance"))
+async def maintenance_command(message: Message) -> None:
+    """Blocks NEW payments (see bot/handlers/customer.py's confirm_order /
+    pay_with_balance) without touching the bot otherwise — catalog
+    browsing still works, existing orders keep processing normally.
+    Stored in the database (not an in-memory flag) so it survives a
+    Render restart instead of silently flipping back to accepting
+    payments the admin meant to keep blocked."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    arg = message.text.split(maxsplit=1)
+    arg = arg[1].strip().lower() if len(arg) > 1 else ""
+
+    async with get_session() as session:
+        if arg in ("on", "1", "фаъол"):
+            await set_setting(session, MAINTENANCE_SETTING_KEY, "1")
+            await message.answer(
+                "🛠 Ҳолати таъмирот ФАЪОЛ шуд — мизоҷони нав ҳангоми пардохт паёми "
+                "таъмиротро мебинанд, фармоиши нав сохта намешавад.\n"
+                "Хомӯш кардан: /maintenance off"
+            )
+        elif arg in ("off", "0", "хомуш", "хомӯш"):
+            await set_setting(session, MAINTENANCE_SETTING_KEY, "0")
+            await message.answer("✅ Ҳолати таъмирот ХОМӮШ шуд — бот боз пардохти нав қабул мекунад.")
+        else:
+            current = await get_setting(session, MAINTENANCE_SETTING_KEY, "0")
+            state_text = "🛠 ФАЪОЛ (пардохти нав баста аст)" if current == "1" else "✅ хомӯш (пардохт кор мекунад)"
+            await message.answer(
+                f"Ҳолати ҳозира: {state_text}\n\nИстифода: /maintenance on | off"
+            )
 
 
 @router.message(Command("broadcast"))

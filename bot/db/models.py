@@ -179,3 +179,15 @@ class Contest(Base):
     winner_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("bot_users.id"), nullable=True)
     winner_announced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
+
+
+class BotSetting(Base):
+    """Tiny persistent key-value store for admin-toggleable runtime flags
+    (e.g. maintenance mode) — a DB row rather than an in-memory flag or env
+    var so it survives a Render restart/redeploy instead of silently
+    resetting and re-accepting payments the admin meant to keep blocked."""
+
+    __tablename__ = "bot_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(256))
