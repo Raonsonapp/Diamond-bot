@@ -32,8 +32,17 @@ class InvoiceResult:
 
 class PaymentProvider(ABC):
     @abstractmethod
-    async def create_invoice(self, order_id: int, amount_somoni: float) -> InvoiceResult:
-        """Start a payment for an order and return how the customer should pay."""
+    async def create_invoice(
+        self, order_id: int, amount_somoni: float, bank_hint: str | None = None
+    ) -> InvoiceResult:
+        """Start a payment for an order and return how the customer should pay.
+
+        bank_hint: which bank app the customer said they'd pay from (see
+        keyboards.PAYMENT_METHODS) — purely cosmetic, since a card-to-card
+        transfer reaches the same receiving card regardless of which bank's
+        app sent it. None means no picker was shown (e.g. a cart-balance or
+        legacy flow); a real provider is free to ignore it entirely.
+        """
 
     @abstractmethod
     def verify_callback(self, payload: dict, headers: dict) -> tuple[bool, str | None]:
@@ -58,17 +67,37 @@ def _build_expresspay_link(order_id: int, amount_somoni: float) -> str | None:
     )
 
 
+_BANK_NAMES = {
+    "dc": "Душанбе Сити",
+    "eskhata": "Эсхата",
+    "amonat": "Амонатбонк",
+    "alif": "Алиф Мобайл",
+}
+
+
 class ManualBankTransferProvider(PaymentProvider):
     """Works today with zero external accounts: customer transfers by card
     and sends proof; admin taps Confirm in the bot."""
 
-    async def create_invoice(self, order_id: int, amount_somoni: float) -> InvoiceResult:
+    async def create_invoice(
+        self, order_id: int, amount_somoni: float, bank_hint: str | None = None
+    ) -> InvoiceResult:
         pay_url = _build_expresspay_link(order_id, amount_somoni)
 
         if not config.receiving_card_number:
             card_line = "⚠️ Рақами корти қабулкунанда танзим нашудааст — бо админ тамос гиред.\n"
         else:
             card_line = f"💳 Корт: {config.receiving_card_number}\n"
+            # Card-to-card transfer reaches this same card from any bank's
+            # app — this line exists purely so a customer whose only
+            # account is with Eskhata/Amonat/Alif isn't confused about
+            # whether a transfer from *their* bank will actually arrive.
+            bank_name = _BANK_NAMES.get(bank_hint or "")
+            if bank_name and bank_hint != "dc":
+                card_line += (
+                    f"(Метавонед аз барномаи мобилии {bank_name}-и худ ба ҳамин рақами корт "
+                    f"гузаронед — гузариш байни бонкҳо кор мекунад.)\n"
+                )
 
         if pay_url:
             instructions = (
@@ -106,7 +135,9 @@ class AlifPayProvider(PaymentProvider):
         self.secret_key = config.alif_secret_key
         self.api_base_url = config.alif_api_base_url
 
-    async def create_invoice(self, order_id: int, amount_somoni: float) -> InvoiceResult:
+    async def create_invoice(
+        self, order_id: int, amount_somoni: float, bank_hint: str | None = None
+    ) -> InvoiceResult:
         raise NotImplementedError(
             "Wire this up to Alif's real 'create invoice' endpoint once you have "
             "their merchant API doc. Placeholder to prevent silently taking payments "
@@ -146,7 +177,9 @@ class DCBankProvider(PaymentProvider):
         self.secret_key = config.dc_secret_key
         self.api_base_url = config.dc_api_base_url
 
-    async def create_invoice(self, order_id: int, amount_somoni: float) -> InvoiceResult:
+    async def create_invoice(
+        self, order_id: int, amount_somoni: float, bank_hint: str | None = None
+    ) -> InvoiceResult:
         raise NotImplementedError(
             "Wire this up to DC Bank's real 'create invoice' endpoint once you have "
             "their merchant API doc. Placeholder to prevent silently taking payments "

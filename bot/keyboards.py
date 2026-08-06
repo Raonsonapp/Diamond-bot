@@ -186,6 +186,28 @@ def payment_link_keyboard(pay_url: str) -> InlineKeyboardMarkup:
     )
 
 
+# All four route to the exact same receiving card (config.receiving_card_number)
+# — Tajikistan's interbank card-to-card transfer works from any bank's app to
+# any other bank's card, so there's no real difference in *where the money
+# goes*, only in which bank the customer already has open. Keeping them as
+# separate buttons (labelled with each bank's own name, same as a competitor
+# bot's payment picker) rather than one generic "Пардохт" is purely so a
+# customer immediately recognizes their own bank instead of wondering whether
+# a "DC" card accepts a transfer from, say, their Eskhata app.
+PAYMENT_METHODS = [
+    ("dc", "🏦 Душанбе Сити"),
+    ("eskhata", "🏦 Эсхата"),
+    ("amonat", "🏦 Амонатбонк"),
+    ("alif", "🏦 Алиф Мобайл"),
+]
+
+
+def payment_method_keyboard() -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=label, callback_data=f"paymethod:{key}")] for key, label in PAYMENT_METHODS]
+    rows.append([InlineKeyboardButton(text="❌ Бекор", callback_data="order:cancel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def review_prompt_keyboard(order_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

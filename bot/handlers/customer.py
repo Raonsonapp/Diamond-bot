@@ -37,6 +37,7 @@ from bot.keyboards import (
     games_menu_keyboard,
     main_menu_keyboard,
     payment_link_keyboard,
+    payment_method_keyboard,
     products_keyboard,
     profile_menu_keyboard,
     referral_menu_keyboard,
@@ -868,6 +869,17 @@ async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(OrderFlow.confirming, F.data == "order:confirm")
 async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.message.edit_text(
+        "Аз кадом бонк пардохт мекунед? (Ҳамаашон ба ҳамон рақами корт мерасанд — "
+        "танҳо барномаи худро интихоб кунед.)",
+        reply_markup=payment_method_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(OrderFlow.confirming, F.data.startswith("paymethod:"))
+async def choose_payment_method(callback: CallbackQuery, state: FSMContext) -> None:
+    bank_hint = callback.data.split(":", 1)[1]
     data = await state.get_data()
     provider = get_payment_provider()
 
@@ -897,7 +909,7 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
             await session.commit()
             await session.refresh(primary)
 
-    invoice = await provider.create_invoice(primary.id, total)
+    invoice = await provider.create_invoice(primary.id, total, bank_hint=bank_hint)
 
     await state.update_data(order_id=primary.id)
     await state.set_state(OrderFlow.awaiting_payment_proof)
