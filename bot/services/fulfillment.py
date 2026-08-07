@@ -16,7 +16,9 @@ from aiogram.fsm.storage.base import StorageKey
 from bot.config import config
 from bot.db.models import Order, OrderStatus
 from bot.db.repo import (
+    adjust_fazercards_balance,
     credit_referral_balance,
+    get_fazercards_balance,
     get_order,
     get_orders_by_group,
     get_product,
@@ -214,6 +216,15 @@ async def _attempt_delivery(
             fresh = await set_order_status(session, fresh, OrderStatus.DELIVERED, admin_note=note)
             await _credit_referral(session, fresh)
             delivered.append(fresh)
+        # `success` here only ever comes from a real FazerCards call (see
+        # DeliveryProvider.deliver — ManualDeliveryProvider never returns
+        # success=True), so every order in this block genuinely spent
+        # FazerCards balance. Kept as our own best-effort estimate (there's
+        # no confirmed live balance-check endpoint) — see /balance,
+        # /setbalance, /addbalance in admin.py.
+        spent = sum(products[o.id].cost_somoni for o in delivered)
+        if spent:
+            await adjust_fazercards_balance(session, -spent)
 
     if len(delivered) > 1:
         summary = "\n".join(f"{_item_line(o, products[o.id])} → {o.ff_player_id}" for o in delivered)
@@ -319,6 +330,30 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
             f"{product.display_name} ба зудӣ ба ҳисоби шумо ирсол мешавад.",
         )
     await clear_awaiting_review(bot, order)
+
+    # Proactive, honest heads-up when our own tracked FazerCards balance
+    # estimate looks too low for this order — never a blocking gate (the
+    # estimate can be stale/wrong), the real delivery attempt below still
+    # runs exactly as normal either way. Only checked for products actually
+    # wired to FazerCards (cost_somoni > 0 for the rest is 0 anyway, so a
+    # fully-manual order would never trip this).
+    total_cost = sum(products[o.id].cost_somoni for o in group)
+    if total_cost:
+        async with get_session() as session:
+            current_balance = await get_fazercards_balance(session)
+        if current_balance < total_cost:
+            await bot.send_message(
+                order.user_id,
+                "ℹ️ Ҳозир ин маблағ дар балансатони мо назди таъминкунанда нест, "
+                "аммо ба нигарониятон сабаб нест — фармоиши шумо баҳар ҳол иҷро мешавад, "
+                "танҳо метавонад каме бештар вақт гирад. Админ ба зудӣ баланси худро пур мекунад.",
+            )
+            if config.admin_chat_id:
+                await bot.send_message(
+                    config.admin_chat_id,
+                    f"⚠️ Фармоиши #{order.id}: баланси тахминии FazerCards ({current_balance:.2f}с) "
+                    f"аз нархи фармоиш ({total_cost:.2f}с) камтар аст — балки лозим ба пуркунӣ бошад.",
+                )
 
     async with get_session() as session:
         buyer = await get_user(session, order.user_id)

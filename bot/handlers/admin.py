@@ -8,10 +8,12 @@ from aiogram.types import CallbackQuery, Message
 from bot.config import config
 from bot.db.models import OrderStatus, Product, ProductCategory
 from bot.db.repo import (
+    adjust_fazercards_balance,
     contest_leaderboard,
     count_proofs_submitted,
     create_contest,
     get_active_contest,
+    get_fazercards_balance,
     get_order,
     get_orders_by_group,
     get_product,
@@ -21,6 +23,7 @@ from bot.db.repo import (
     list_all_user_ids,
     list_orders_by_status,
     list_proofs_submitted,
+    set_fazercards_balance,
     set_order_status,
     set_product_bonus,
     set_product_fzr_mapping,
@@ -330,6 +333,71 @@ async def maintenance_command(message: Message) -> None:
             await message.answer(
                 f"Ҳолати ҳозира: {state_text}\n\nИстифода: /maintenance on | off"
             )
+
+
+@router.message(Command("balance"))
+async def balance_command(message: Message) -> None:
+    """Shows our own tracked estimate of the admin's FazerCards balance —
+    not a live query (no such endpoint has been found/confirmed on
+    FazerCards' API), just this bot's running tally: starts from whatever
+    /setbalance or /addbalance last set, and auto-decreases by a
+    product's cost_somoni every time a real FazerCards delivery succeeds
+    (see bot/services/fulfillment.py's _attempt_delivery). Can drift from
+    the real number if a top-up happens without /addbalance — resync with
+    /setbalance when in doubt."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    async with get_session() as session:
+        current = await get_fazercards_balance(session)
+    await message.answer(
+        f"💰 Баланси тахминии FazerCards: {current:.2f} сомонӣ\n\n"
+        f"(Ин тахмини худи бот аст, на пурсиши зинда аз FazerCards — "
+        f"баъд аз ҳар пуркунии воқеӣ /addbalance <маблағ>-ро занед, "
+        f"ё барои танзими дуруст /setbalance <маблағ>.)"
+    )
+
+
+@router.message(Command("setbalance"))
+async def setbalance_command(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("Истифода: /setbalance <маблағ дар сомонӣ>\nМасалан: /setbalance 150")
+        return
+    try:
+        amount = float(parts[1].strip().replace(",", "."))
+    except ValueError:
+        await message.answer("⚠️ Маблағ нодуруст аст. Масалан: /setbalance 150")
+        return
+    async with get_session() as session:
+        new_balance = await set_fazercards_balance(session, amount)
+    await message.answer(f"✅ Баланси тахминии FazerCards ба {new_balance:.2f} сомонӣ танзим шуд.")
+
+
+@router.message(Command("addbalance"))
+async def addbalance_command(message: Message) -> None:
+    """After a real FazerCards top-up (e.g. the admin sends $20 via their
+    site) — adds to the tracked estimate instead of overwriting it, so it
+    doesn't lose the running deductions from deliveries that already
+    happened since the last /setbalance."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("Истифода: /addbalance <маблағ дар сомонӣ>\nМасалан: /addbalance 50")
+        return
+    try:
+        delta = float(parts[1].strip().replace(",", "."))
+    except ValueError:
+        await message.answer("⚠️ Маблағ нодуруст аст. Масалан: /addbalance 50")
+        return
+    async with get_session() as session:
+        new_balance = await adjust_fazercards_balance(session, delta)
+    await message.answer(f"✅ {delta:+.2f} сомонӣ илова шуд. Баланси тахминии ҳозира: {new_balance:.2f} сомонӣ.")
 
 
 @router.message(Command("broadcast"))

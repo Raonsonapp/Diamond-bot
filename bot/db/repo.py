@@ -21,6 +21,33 @@ async def set_setting(session: AsyncSession, key: str, value: str) -> None:
     await session.commit()
 
 
+FAZERCARDS_BALANCE_KEY = "fazercards_balance_somoni"
+
+
+async def get_fazercards_balance(session: AsyncSession) -> float:
+    """Our own tracked estimate of the admin's FazerCards balance — not a
+    live query (FazerCards doesn't expose one we've found), so it's only
+    as accurate as /setbalance and /addbalance keep it, and the automatic
+    deduction on every real successful delivery (see
+    bot/services/fulfillment.py's _attempt_delivery)."""
+    value = await get_setting(session, FAZERCARDS_BALANCE_KEY, "0")
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+async def set_fazercards_balance(session: AsyncSession, amount: float) -> float:
+    amount = round(amount, 2)
+    await set_setting(session, FAZERCARDS_BALANCE_KEY, str(amount))
+    return amount
+
+
+async def adjust_fazercards_balance(session: AsyncSession, delta: float) -> float:
+    current = await get_fazercards_balance(session)
+    return await set_fazercards_balance(session, current + delta)
+
+
 async def upsert_user(
     session: AsyncSession,
     user_id: int,
