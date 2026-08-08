@@ -23,6 +23,7 @@ from bot.db.repo import (
     list_all_user_ids,
     list_orders_by_status,
     list_proofs_submitted,
+    round_all_product_prices,
     set_fazercards_balance,
     set_order_status,
     set_product_bonus,
@@ -33,6 +34,7 @@ from bot.db.repo import (
     set_setting,
 )
 from bot.db.session import get_session
+from bot.formatting import format_price
 from bot.keyboards import admin_order_keyboard
 from bot.services.fulfillment import clear_awaiting_review, confirm_and_deliver, mark_delivered_and_notify
 
@@ -74,7 +76,10 @@ async def _add_product(message: Message, category: ProductCategory, usage_exampl
                 name=name,
                 category=category,
                 diamonds=int(amount),
-                price_somoni=float(price),
+                # Customer-facing prices are always whole soms now (see
+                # /roundprices) — round here so a typed-in "8.90" becomes
+                # "9" instead of silently keeping kopecks.
+                price_somoni=round(float(price)),
                 cost_somoni=float(cost),
             )
         except ValueError:
@@ -88,7 +93,7 @@ async def _add_product(message: Message, category: ProductCategory, usage_exampl
 
         extra = f" ({product.display_name})" if product.name[:1].isdigit() else ""
         reports.append(
-            f"✅ #{product.id} {product.name}{extra} ба {product.price_somoni:.2f} сомонӣ "
+            f"✅ #{product.id} {product.name}{extra} ба {format_price(product.price_somoni)} сомонӣ "
             f"(фоида {product.margin_somoni:.2f} сомонӣ)"
         )
 
@@ -139,10 +144,34 @@ async def list_products(message: Message) -> None:
     for p in products:
         qty = f": {p.display_name}" if p.name[:1].isdigit() else ""
         lines.append(
-            f"#{p.id} [{p.category.value}] {p.name}{qty} = {p.price_somoni:.2f}с "
+            f"#{p.id} [{p.category.value}] {p.name}{qty} = {format_price(p.price_somoni)}с "
             f"(харид {p.cost_somoni:.2f}с, фоида {p.margin_somoni:.2f}с)"
         )
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("roundprices"))
+async def round_prices_command(message: Message) -> None:
+    """One-off (and repeatable) cleanup: rounds every product's price to
+    the nearest whole somoni, e.g. 8.90 -> 9. Product prices are meant to
+    always be round numbers going forward (new /addproduct and /setprice
+    calls already round automatically) — this is just for rows that were
+    set before that rule existed."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    async with get_session() as session:
+        changed = await round_all_product_prices(session)
+
+    if not changed:
+        await message.answer("✅ Ҳама нархҳо аллакай рақами том ҳастанд — чизе иваз нашуд.")
+        return
+
+    lines = [f"✅ {len(changed)} нарх рост карда шуд:"]
+    for product, old_price in changed:
+        lines.append(f"#{product.id} {product.name}: {old_price:.2f} → {format_price(product.price_somoni)} сомонӣ")
+    await message.answer("\n".join(lines)[:4000])
 
 
 @router.message(Command("delproduct"))
@@ -603,7 +632,7 @@ async def underpaid_command(message: Message) -> None:
         if cheaper:
             lines.append("ё бастаи арзонтарро интихоб кунед:")
             for p in cheaper[:5]:
-                lines.append(f"  • {p.display_name} — {p.price_somoni:.2f} сомонӣ")
+                lines.append(f"  • {p.display_name} — {format_price(p.price_somoni)} сомонӣ")
         else:
             lines.append("ё бо админ тамос гиред барои бастаи мувофиқ.")
 
@@ -1181,7 +1210,7 @@ async def set_price(message: Message) -> None:
             product = await set_product_price(session, product, price, cost)
 
         reports.append(
-            f"✅ #{product.id} ({product.name}): нарх={product.price_somoni:.2f}с"
+            f"✅ #{product.id} ({product.name}): нарх={format_price(product.price_somoni)}с"
             + (f", харид={product.cost_somoni:.2f}с" if cost is not None else "")
             + f", фоида={product.margin_somoni:.2f}с"
         )

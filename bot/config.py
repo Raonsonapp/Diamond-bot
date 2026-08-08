@@ -90,10 +90,15 @@ class Config:
     webhook_server_port: int = int(os.getenv("WEBHOOK_SERVER_PORT", "8080"))
 
     # Render's free tier spins the service down after ~15 minutes with no
-    # incoming HTTP traffic. Every KEEPALIVE_PING_SECONDS, the bot pings its
-    # own PUBLIC_URL to look "active" and avoid that — set to "0" to disable
-    # (e.g. on a paid plan that doesn't sleep).
-    keepalive_ping_seconds: int = int(os.getenv("KEEPALIVE_PING_SECONDS", "600"))
+    # incoming HTTP traffic — and a sleeping service can silently swallow an
+    # incoming SMS webhook (the caller may give up before the ~30-60s cold
+    # start finishes responding), not just delay it. Every
+    # KEEPALIVE_PING_SECONDS, the bot pings its own PUBLIC_URL to look
+    # "active" and avoid that — set to "0" to disable (e.g. on a paid plan
+    # that doesn't sleep). Lowered from 600s to 300s for a bigger safety
+    # margin under the ~15min window, since a single missed/slow ping at
+    # 600s left less room to recover before the service could sleep.
+    keepalive_ping_seconds: int = int(os.getenv("KEEPALIVE_PING_SECONDS", "300"))
 
     delivery_provider: str = os.getenv("DELIVERY_PROVIDER", "manual")
     supplier_api_base_url: str = os.getenv("SUPPLIER_API_BASE_URL", "")

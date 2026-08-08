@@ -60,19 +60,27 @@ async def run_polling(bot: Bot, dp: Dispatcher) -> None:
     await dp.start_polling(bot)
 
 
+_SELF_PING_RETRY_SECONDS = 20  # how soon to retry after a failed ping, instead of waiting a full interval
+
+
 async def _self_ping_loop(url: str, interval_seconds: int) -> None:
     """Render's free tier sleeps the service after ~15 min without incoming
-    HTTP traffic, which then makes the *next* real user wait ~30-60s for a
-    cold start. Pinging our own health endpoint on a shorter interval keeps
-    it looking active so it never gets the chance to sleep."""
+    HTTP traffic — not just a slow-next-request problem, but a real risk of
+    silently losing an incoming SMS webhook if the sender gives up before
+    the ~30-60s cold start finishes responding. Pinging our own health
+    endpoint on a shorter interval keeps it looking active so it never gets
+    the chance to sleep. On a failed ping, retries soon (not after the full
+    interval again) so one transient network blip can't leave a much
+    longer-than-intended gap for the service to fall asleep in."""
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
         while True:
-            await asyncio.sleep(interval_seconds)
             try:
                 async with session.get(url) as resp:
                     logging.info("Self-ping %s -> HTTP %s", url, resp.status)
+                await asyncio.sleep(interval_seconds)
             except Exception as exc:
-                logging.warning("Self-ping to %s failed: %s", url, exc)
+                logging.warning("Self-ping to %s failed: %s — retrying in %ss", url, exc, _SELF_PING_RETRY_SECONDS)
+                await asyncio.sleep(_SELF_PING_RETRY_SECONDS)
 
 
 async def run_webhook(bot: Bot, dp: Dispatcher) -> None:

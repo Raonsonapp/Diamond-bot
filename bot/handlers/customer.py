@@ -29,6 +29,7 @@ from bot.db.repo import (
     upsert_user,
 )
 from bot.db.session import get_session
+from bot.formatting import format_price
 from bot.keyboards import (
     admin_order_keyboard,
     back_to_menu_keyboard,
@@ -430,7 +431,7 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
     total = sum(p.price_somoni for p in products)
     summary = "\n".join(f"• {p.display_name}" for p in products)
     prompt = await _recipient_prompt(category)
-    text = f"Шумо интихоб кардед:\n{summary}\n\n💰 Ҳамагӣ: {total:.2f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
+    text = f"Шумо интихоб кардед:\n{summary}\n\n💰 Ҳамагӣ: {format_price(total)} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
 
     if last_recipient:
         text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
@@ -626,7 +627,7 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
     await state.set_state(OrderFlow.entering_player_id)
     unit = custom_product.unit_label
     prompt = await _recipient_prompt(category)
-    text = f"{amount} {unit} — {price:.2f} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
+    text = f"{amount} {unit} — {format_price(price)} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
 
     async with get_session() as session:
         last_recipient = await get_last_recipient(session, message.from_user.id, category)
@@ -664,7 +665,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(OrderFlow.entering_player_id)
     prompt = await _recipient_prompt(product.category)
     text = (
-        f"Шумо интихоб кардед: {product.display_name} — {product.price_somoni:.2f} сомонӣ.\n\n"
+        f"Шумо интихоб кардед: {product.display_name} — {format_price(product.price_somoni)} сомонӣ.\n\n"
         f"Лутфан {prompt} ирсол кунед:"
     )
     if last_recipient:
@@ -714,9 +715,9 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     for p in products:
         confirm_lines.append(f"🎁 Маҳсулот: {p.display_name}")
     if len(products) > 1:
-        confirm_lines.append(f"💰 Ҳамагӣ: <b>{total_price:.2f} сомонӣ</b>")
+        confirm_lines.append(f"💰 Ҳамагӣ: <b>{format_price(total_price)} сомонӣ</b>")
     else:
-        confirm_lines.append(f"💰 Нарх: <b>{products[0].price_somoni:.2f} сомонӣ</b>")
+        confirm_lines.append(f"💰 Нарх: <b>{format_price(products[0].price_somoni)} сомонӣ</b>")
 
     confirm_lines.append("\nҲама дуруст аст?")
     await answer_target.answer(
@@ -849,7 +850,7 @@ async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
         ]
 
     primary = orders[0]
-    summary = "\n".join(f"📦 {p.display_name} — {p.price_somoni:.2f} сомонӣ" for p in products)
+    summary = "\n".join(f"📦 {p.display_name} — {format_price(p.price_somoni)} сомонӣ" for p in products)
     if config.admin_chat_id:
         await callback.bot.send_message(
             config.admin_chat_id,

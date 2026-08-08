@@ -235,12 +235,34 @@ async def set_product_bonus(session: AsyncSession, product: Product, bonus_diamo
 async def set_product_price(
     session: AsyncSession, product: Product, price_somoni: float, cost_somoni: float | None = None
 ) -> Product:
-    product.price_somoni = price_somoni
+    # Customer-facing prices are meant to always be whole soms (see
+    # /roundprices) — round here so a slip like "/setprice 5 8.90" can't
+    # quietly reintroduce kopecks the admin didn't actually intend.
+    product.price_somoni = round(price_somoni)
     if cost_somoni is not None:
         product.cost_somoni = cost_somoni
     await session.commit()
     await session.refresh(product)
     return product
+
+
+async def round_all_product_prices(session: AsyncSession) -> list[tuple[Product, float]]:
+    """Bulk-rounds every product's price_somoni to the nearest whole
+    somoni (see /roundprices) — for existing catalog rows set before this
+    rounding rule existed (e.g. 8.90), not just new ones. Returns
+    (product, old_price) pairs for products that actually changed, so the
+    caller can report exactly what moved."""
+    result = await session.execute(select(Product))
+    changed = []
+    for product in result.scalars().all():
+        old_price = product.price_somoni
+        new_price = round(old_price)
+        if new_price != old_price:
+            changed.append((product, old_price))
+            product.price_somoni = new_price
+    if changed:
+        await session.commit()
+    return changed
 
 
 async def set_product_name(session: AsyncSession, product: Product, name: str) -> Product:

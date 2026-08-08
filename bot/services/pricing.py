@@ -16,7 +16,12 @@ Breakpoint = tuple[int, float, float]  # (diamonds, price_somoni, cost_somoni)
 
 
 def quote_custom_price(diamonds: int, breakpoints: list[Breakpoint]) -> tuple[float, float]:
-    """Return (price_somoni, cost_somoni) for `diamonds`, interpolated from breakpoints."""
+    """Return (price_somoni, cost_somoni) for `diamonds`, interpolated from
+    breakpoints. price_somoni is rounded to a whole somoni — every other
+    product price in the catalog is a round number now (see /roundprices),
+    so a custom-amount quote shouldn't be the one place that still shows
+    kopecks. cost_somoni stays at 2 decimals since that's our own internal
+    margin bookkeeping, never shown to the customer."""
     if not breakpoints:
         raise ValueError("No packages configured to price from")
 
@@ -26,7 +31,7 @@ def quote_custom_price(diamonds: int, breakpoints: list[Breakpoint]) -> tuple[fl
         d0, p0, c0 = points[0]
         rate_p = p0 / d0
         rate_c = c0 / d0
-        return round(diamonds * rate_p, 2), round(diamonds * rate_c, 2)
+        return round(diamonds * rate_p), round(diamonds * rate_c, 2)
 
     if diamonds >= points[-1][0]:
         d2, p2, c2 = points[-1]
@@ -35,13 +40,13 @@ def quote_custom_price(diamonds: int, breakpoints: list[Breakpoint]) -> tuple[fl
         rate_c = (c2 - c1) / (d2 - d1)
         price = p2 + (diamonds - d2) * rate_p
         cost = c2 + (diamonds - d2) * rate_c
-        return round(price, 2), round(cost, 2)
+        return round(price), round(cost, 2)
 
     for (d1, p1, c1), (d2, p2, c2) in zip(points, points[1:]):
         if d1 <= diamonds <= d2:
             frac = (diamonds - d1) / (d2 - d1)
             price = p1 + frac * (p2 - p1)
             cost = c1 + frac * (c2 - c1)
-            return round(price, 2), round(cost, 2)
+            return round(price), round(cost, 2)
 
     raise RuntimeError("unreachable")
