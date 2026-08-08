@@ -4,7 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from bot.db.models import BotSetting, Contest, Order, OrderStatus, Product, ProductCategory, User
+from bot.db.models import BotSetting, Contest, Order, OrderStatus, Product, ProductCategory, SmsLogEntry, User
 
 
 async def get_setting(session: AsyncSession, key: str, default: str | None = None) -> str | None:
@@ -360,6 +360,43 @@ async def find_orders_awaiting_amount(
 async def find_order_by_payment_reference(session: AsyncSession, reference: str) -> Order | None:
     result = await session.execute(select(Order).where(Order.payment_reference == reference))
     return result.scalars().first()
+
+
+async def log_sms(
+    session: AsyncSession, amount_somoni: float, kod: str | None, raw_text: str, matched_order_id: int | None = None
+) -> SmsLogEntry:
+    entry = SmsLogEntry(
+        amount_somoni=amount_somoni, kod=kod, raw_text=raw_text[:512], matched_order_id=matched_order_id
+    )
+    session.add(entry)
+    await session.commit()
+    await session.refresh(entry)
+    return entry
+
+
+async def find_unmatched_sms_for_amount(
+    session: AsyncSession, amount_somoni: float, since: datetime
+) -> SmsLogEntry | None:
+    """Most recent still-unclaimed SMS log entry for this exact amount —
+    used by receive_payment_proof to actively cross-check a customer's
+    screenshot against SMS the webhook already saw but couldn't
+    confidently auto-match on its own (ambiguous amount, or arrived
+    before the order existed)."""
+    result = await session.execute(
+        select(SmsLogEntry)
+        .where(
+            SmsLogEntry.matched_order_id.is_(None),
+            SmsLogEntry.received_at >= since,
+            func.abs(SmsLogEntry.amount_somoni - amount_somoni) < 0.01,
+        )
+        .order_by(SmsLogEntry.received_at.desc())
+    )
+    return result.scalars().first()
+
+
+async def mark_sms_matched(session: AsyncSession, entry: SmsLogEntry, order_id: int) -> None:
+    entry.matched_order_id = order_id
+    await session.commit()
 
 
 async def find_underpaid_candidates(

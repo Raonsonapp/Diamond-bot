@@ -198,3 +198,27 @@ class BotSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(256))
+
+
+class SmsLogEntry(Base):
+    """Every bank deposit SMS the webhook (bot/services/sms_webhook.py)
+    ever parsed, matched or not. Exists so a customer's payment-proof
+    screenshot (bot/handlers/customer.py's receive_payment_proof) can
+    actively re-check "did a matching SMS already arrive?" for its own
+    specific order — closing the gap where the webhook's own amount-only
+    matching was ambiguous (several pending orders, same amount) or fired
+    before the order even existed, without the admin needing to eyeball
+    every single screenshot by hand."""
+
+    __tablename__ = "bot_sms_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    amount_somoni: Mapped[float] = mapped_column(Float)
+    kod: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    raw_text: Mapped[str] = mapped_column(String(512))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Set once this SMS has been used to confirm an order — either
+    # immediately by the webhook's own amount-match, or later by a
+    # customer's proof-submission cross-check — so the same SMS can never
+    # be claimed by two different orders.
+    matched_order_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -15,7 +15,13 @@ from aiogram import Bot
 from aiohttp import web
 
 from bot.config import config
-from bot.db.repo import find_order_by_payment_reference, find_orders_awaiting_amount, find_underpaid_candidates
+from bot.db.repo import (
+    find_order_by_payment_reference,
+    find_orders_awaiting_amount,
+    find_underpaid_candidates,
+    log_sms,
+    mark_sms_matched,
+)
 from bot.db.session import get_session
 from bot.services.fulfillment import confirm_and_deliver
 from bot.services.sms_parser import parse_deposit_sms
@@ -69,9 +75,17 @@ def register_sms_webhook(app: web.Application, bot: Bot) -> None:
 
             since = datetime.now(timezone.utc) - timedelta(minutes=config.sms_match_window_minutes)
             candidates = await find_orders_awaiting_amount(session, parsed.amount_somoni, since)
+            # Logged regardless of outcome (matched, ambiguous, or
+            # unmatched) — a customer's later proof-submission screenshot
+            # can cross-check against this even if it isn't claimed here
+            # (see bot/handlers/customer.py's receive_payment_proof).
+            log_entry = await log_sms(session, parsed.amount_somoni, parsed.kod, text)
 
         if len(candidates) == 1:
             order_id = candidates[0].id
+            async with get_session() as session:
+                fresh_entry = await session.get(type(log_entry), log_entry.id)
+                await mark_sms_matched(session, fresh_entry, order_id)
             result = await confirm_and_deliver(bot, order_id, payment_reference=parsed.kod)
             if config.admin_chat_id and result is not None:
                 status_note = "автоматӣ ирсол шуд" if result.auto_delivered else "лутфан дастӣ ирсол кунед ва 'Delivered'-ро занед"
