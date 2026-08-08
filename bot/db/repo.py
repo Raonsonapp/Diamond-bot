@@ -287,6 +287,7 @@ async def create_order(
     payment_provider: str,
     paid_with_referral_balance: bool = False,
     cart_group_id: str | None = None,
+    bank_hint: str | None = None,
 ) -> Order:
     order = Order(
         user_id=user_id,
@@ -297,6 +298,7 @@ async def create_order(
         status=OrderStatus.PAID if paid_with_referral_balance else OrderStatus.AWAITING_PAYMENT,
         paid_with_referral_balance=paid_with_referral_balance,
         cart_group_id=cart_group_id,
+        bank_hint=bank_hint,
     )
     session.add(order)
     await session.commit()

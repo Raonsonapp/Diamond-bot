@@ -133,6 +133,13 @@ class Order(Base):
     )
     payment_provider: Mapped[str] = mapped_column(String(32), default="manual")
     payment_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Which bank the customer said they'd pay from (see keyboards.PAYMENT_METHODS,
+    # e.g. "dc"/"amonat"/"alif") — purely cosmetic (see PaymentProvider.create_invoice),
+    # kept only so the post-delivery receipt (see keyboards.receipt_keyboard /
+    # customer.show_receipt) can display a real "усули пардохт" line instead of
+    # a generic one. None for referral-balance orders or any order created
+    # before this column existed.
+    bank_hint: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Shared token for orders created together in one "buy several packs at
     # once" checkout — one payment/invoice covers the whole group, and
     # admin Paid/Delivered taps cascade to every order sharing this value.

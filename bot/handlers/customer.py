@@ -923,6 +923,7 @@ async def choose_payment_method(callback: CallbackQuery, state: FSMContext) -> N
                 ff_player_id=data["ff_player_id"],
                 payment_provider=config.payment_provider,
                 cart_group_id=group_id,
+                bank_hint=bank_hint,
             )
             for p in products
         ]
@@ -1097,6 +1098,64 @@ async def skip_review(callback: CallbackQuery, state: FSMContext) -> None:
 
     await callback.message.edit_text("Хуб, ташаккур барои харид! 🙏", reply_markup=None)
     await callback.answer()
+
+
+@router.callback_query(F.data.regexp(r"^receipt:\d+$"))
+async def show_receipt(callback: CallbackQuery) -> None:
+    """A shareable proof-of-purchase, inspired by a rival bot's polished
+    post-delivery "чек" card — ours is a formatted message rather than a
+    generated image (no new image-rendering dependency/font risk to add
+    mid-session), but carries the same real details so a customer can
+    forward it as proof."""
+    from bot.db.repo import get_order
+    from bot.keyboards import BANK_HINT_NAMES
+
+    order_id = int(callback.data.split(":", 1)[1])
+    async with get_session() as session:
+        order = await get_order(session, order_id)
+        if order is None:
+            await callback.answer("Фармоиш ёфт нашуд.", show_alert=True)
+            return
+        group = await _resolve_group_orders(session, order)
+        products = {o.id: await get_product(session, o.product_id) for o in group}
+
+    if order.bank_hint:
+        method = BANK_HINT_NAMES.get(order.bank_hint, order.bank_hint)
+    elif order.payment_provider == "referral_balance":
+        method = "Баланси реферал"
+    else:
+        method = "Дастӣ"
+
+    total = sum(o.amount_somoni for o in group) or order.amount_somoni
+    when = order.updated_at.strftime("%d.%m.%Y • %H:%M") if order.updated_at else ""
+
+    if len(group) > 1:
+        items_lines = "\n".join(f"  • {products[o.id].display_name}" for o in group)
+        items_block = f"Маҳсулот:\n{items_lines}\n"
+    else:
+        items_block = f"Маҳсулот: {products[order.id].display_name}\n"
+
+    receipt = (
+        "🧾 <b>Чеки фармоиш</b>\n\n"
+        "✅ <b>МУВАФФАҚ</b>\n\n"
+        f"Фармоиш №: <code>{order.id}</code>\n"
+        f"{items_block}"
+        f"ID: <code>{order.ff_player_id}</code>\n"
+        f"Усули пардохт: {method}\n"
+        f"Сана: {when}\n"
+        f"Маблағ: {total:.2f} сомонӣ\n\n"
+        "🙏 Ташаккур барои харид!"
+    )
+    await callback.message.answer(receipt)
+    await callback.answer()
+
+
+async def _resolve_group_orders(session, order) -> list:
+    if not order.cart_group_id:
+        return [order]
+    from bot.db.repo import get_orders_by_group
+
+    return await get_orders_by_group(session, order.cart_group_id)
 
 
 @router.message(Command("myorders"))

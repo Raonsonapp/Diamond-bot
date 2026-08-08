@@ -200,6 +200,10 @@ PAYMENT_METHODS = [
     ("amonat", "🏦 Амонатбонк"),
     ("alif", "🏦 Алиф Мобайл"),
 ]
+# Plain bank names (no emoji) for reuse outside the picker button labels —
+# e.g. the post-delivery receipt's "Усули пардохт" line (see
+# customer.show_receipt).
+BANK_HINT_NAMES = {key: label.split(" ", 1)[1] for key, label in PAYMENT_METHODS}
 
 
 def payment_method_keyboard() -> InlineKeyboardMarkup:
@@ -212,6 +216,14 @@ def review_prompt_keyboard(order_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="⏭ Гузарондан", callback_data=f"review:skip:{order_id}")]
+        ]
+    )
+
+
+def receipt_keyboard(order_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🧾 Чеки муваффақ", callback_data=f"receipt:{order_id}")]
         ]
     )
 

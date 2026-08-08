@@ -28,7 +28,7 @@ from bot.db.repo import (
 )
 from bot.db.session import get_session
 from bot.fsm_storage import storage
-from bot.keyboards import review_prompt_keyboard
+from bot.keyboards import receipt_keyboard, review_prompt_keyboard
 from bot.services.contest import maybe_declare_contest_winner
 from bot.services.delivery import get_delivery_provider
 from bot.states import OrderFlow
@@ -228,12 +228,17 @@ async def _attempt_delivery(
 
     if len(delivered) > 1:
         summary = "\n".join(f"{_item_line(o, products[o.id])} → {o.ff_player_id}" for o in delivered)
-        await bot.send_message(primary.user_id, f"🎉 Ҳама маҳсулоти фармоиши шумо ирсол шуд:\n{summary}")
+        await bot.send_message(
+            primary.user_id,
+            f"🎉 Ҳама маҳсулоти фармоиши шумо ирсол шуд:\n{summary}",
+            reply_markup=receipt_keyboard(delivered[0].id),
+        )
     else:
         product = products[delivered[0].id]
         await bot.send_message(
             primary.user_id,
             f"🎉 {product.display_name} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
+            reply_markup=receipt_keyboard(delivered[0].id),
         )
     await prompt_for_review(bot, delivered[0])
     return True, results
@@ -412,12 +417,17 @@ async def mark_delivered_and_notify(bot: Bot, order_id: int) -> Order | None:
 
     if len(delivered) > 1:
         summary = "\n".join(f"{_item_line(o, products[o.id])} → {o.ff_player_id}" for o in delivered)
-        await bot.send_message(order.user_id, f"🎉 Ҳама маҳсулоти фармоиши шумо ирсол шуд:\n{summary}")
+        await bot.send_message(
+            order.user_id,
+            f"🎉 Ҳама маҳсулоти фармоиши шумо ирсол шуд:\n{summary}",
+            reply_markup=receipt_keyboard(delivered[0].id),
+        )
     else:
         product = products[delivered[0].id]
         await bot.send_message(
             order.user_id,
             f"🎉 {product.display_name} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
+            reply_markup=receipt_keyboard(delivered[0].id),
         )
     await prompt_for_review(bot, delivered[0])
     return delivered[0]

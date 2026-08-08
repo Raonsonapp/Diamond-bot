@@ -74,6 +74,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("status", "VARCHAR(16) DEFAULT 'AWAITING_PAYMENT'"),
         ("payment_provider", "VARCHAR(32) DEFAULT 'manual'"),
         ("payment_reference", "VARCHAR(128)"),
+        ("bank_hint", "VARCHAR(16)"),
         ("admin_note", "VARCHAR(256)"),
         ("payment_proof_hash", "VARCHAR(64)"),
         ("proof_submitted_at", "DATETIME"),
