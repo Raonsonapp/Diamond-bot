@@ -139,12 +139,19 @@ def generate_receipt_image(
 
     draw = ImageDraw.Draw(img)
 
+    # A thin lighter-green outer ring first (halo), then the solid filled
+    # circle on top — reads much cleaner than a single flat circle.
+    ring_r = circle_r + 10
+    draw.ellipse(
+        (cx - ring_r, circle_cy - ring_r, cx + ring_r, circle_cy + ring_r),
+        outline=(*_ACCENT, 130),
+        width=3,
+    )
     draw.ellipse(
         (cx - circle_r, circle_cy - circle_r, cx + circle_r, circle_cy + circle_r),
         fill=_ACCENT,
     )
-    check_font = _font("DejaVuSans-Bold.ttf", 46)
-    _draw_centered(draw, "✓", cx, circle_cy - 4, check_font, _WHITE)
+    _draw_checkmark(draw, cx, circle_cy, size=circle_r * 0.62, color=_WHITE, width=9)
 
     y = circle_cy + circle_r + 24
     _draw_centered(draw, _clean(title), cx, y, title_font, _WHITE)
@@ -200,3 +207,18 @@ def generate_receipt_image(
 def _draw_centered(draw: ImageDraw.ImageDraw, text: str, cx: int, y: int, font, fill) -> None:
     w = draw.textlength(text, font=font)
     draw.text((cx - w / 2, y), text, font=font, fill=fill)
+
+
+def _draw_checkmark(draw: ImageDraw.ImageDraw, cx: float, cy: float, size: float, color, width: int) -> None:
+    """A hand-drawn checkmark (two thick, round-jointed strokes) instead of
+    relying on a font's "✓" glyph — looks bolder and more consistent
+    across environments than a glyph whose weight/centering varies by
+    font. Proportions: short stroke down-right, long stroke up-right,
+    roughly matching a standard checkmark icon's silhouette."""
+    p1 = (cx - size * 0.55, cy + size * 0.05)
+    p2 = (cx - size * 0.12, cy + size * 0.5)
+    p3 = (cx + size * 0.62, cy - size * 0.45)
+    draw.line([p1, p2, p3], fill=color, width=width, joint="curve")
+    r = width / 2
+    for x, y in (p1, p2, p3):
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=color)
