@@ -67,13 +67,6 @@ def _build_alif_link(amount_somoni: float) -> str | None:
     )
 
 
-_BANK_NAMES = {
-    "dc": "Душанбе Сити",
-    "amonat": "Амонатбонк",
-    "alif": "Алиф Мобайл",
-}
-
-
 class ManualBankTransferProvider(PaymentProvider):
     """Works today with zero external accounts: customer transfers by card
     and sends proof; admin taps Confirm in the bot."""
@@ -81,43 +74,28 @@ class ManualBankTransferProvider(PaymentProvider):
     async def create_invoice(
         self, order_id: int, amount_somoni: float, bank_hint: str | None = None
     ) -> InvoiceResult:
-        # Alif gets its own app deep link (opens straight into Alif Mobi
-        # with the amount pre-filled) — a real link the admin captured from
-        # their own app, see _build_alif_link. Every other bank falls back
-        # to the plain card-number instructions below (card_line) — there
-        # used to be a generic "ExpressPay" pay-by-link fallback here too,
-        # but that domain (pay.expresspay.tj) was never a confirmed real
-        # ExpressPay integration, just reverse-engineered from a similar
-        # shop's bot, and a real customer's screenshot proved it doesn't
-        # even resolve (DNS_PROBE_FINISHED_NXDOMAIN) — removed rather than
-        # keep sending customers a dead payment link.
-        alif_url = _build_alif_link(amount_somoni) if bank_hint == "alif" else None
+        # The Alif Mobi deep link (a real link the admin captured from their
+        # own app, see _build_alif_link) reaches the exact same receiving
+        # account regardless of which bank the customer normally uses —
+        # Tajik interbank transfers work from any bank's app to any other
+        # bank's card/account. Customers kept asking for "the automatic
+        # button" back after it was removed for DC/Amonat (it used to be a
+        # different, fake ExpressPay link there — see the removed
+        # _build_expresspay_link), so now every bank choice gets this one
+        # real, verified button too, alongside the plain card number for
+        # anyone who doesn't have the Alif app installed.
+        alif_url = _build_alif_link(amount_somoni)
         pay_url = alif_url
 
         if not config.receiving_card_number:
             card_line = "⚠️ Рақами корти қабулкунанда танзим нашудааст — бо админ тамос гиред.\n"
         else:
             card_line = f"💳 Корт: {config.receiving_card_number}\n"
-            # Verified real path (confirmed against the admin's own
-            # screenshot of their bank app): most Tajik banking apps have a
-            # "DC кошелек" top-up option under Платежи → Эл. кошельки,
-            # reachable by phone number — same alif_dc_receiving_account
-            # used for the Alif deep link, since it's the same DC wallet
-            # either way. Not needed when Alif's own deep link is doing the
-            # work instead.
-            bank_name = _BANK_NAMES.get(bank_hint or "")
-            if bank_name and bank_hint != "dc" and not alif_url and config.alif_dc_receiving_account:
-                card_line += (
-                    f"(Ё аз барномаи мобилии {bank_name}-и худ: Платежи → Эл. кошельки → "
-                    f"DC кошелек → рақами телефон {config.alif_dc_receiving_account} → "
-                    f"маблағ {amount_somoni:.2f} сомонӣ → Оплатить.)\n"
-                )
 
         # A real underpaid order (#49: 5с sent instead of 5.90с) showed the
         # old, softer "(на кам, на зиёд)" parenthetical wasn't prominent
         # enough — this line is now its own bold, always-shown warning on
-        # every path (it was missing entirely from the Alif and no-pay_url
-        # branches before).
+        # every path.
         exact_amount_warning = (
             f"⚠️ <b>ДИҚҚАТ: маблағро АЙНАН {amount_somoni:.2f} сомонӣ фиристед — на 1 дирам кам, на зиёд!</b> "
             f"Агар камтар фиристед, фармоиш худкор тасдиқ намешавад."
@@ -125,10 +103,12 @@ class ManualBankTransferProvider(PaymentProvider):
 
         if alif_url:
             instructions = (
+                f"{card_line}"
                 f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ\n\n"
-                f"Тугмаи «💳 Пардохт»-ро пахш кунед — мустақим ба барномаи Алиф-и шумо мекушояд, "
-                f"бо маблағи аллакай пуркардашуда. Танҳо тасдиқро занед, баъд расиди пардохтро "
-                f"(скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
+                f"Агар барномаи Алиф Мобайл дошта бошед — тугмаи «💳 Пардохт»-ро пахш кунед, "
+                f"мустақим ба он мекушояд бо маблағи аллакай пуркардашуда, танҳо тасдиқро занед.\n"
+                f"Вагарна ба рақами корти боло аз ягон барномаи бонкии худ гузаронед.\n\n"
+                f"Пас аз пардохт расиди пардохтро (скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
             )
         else:
             instructions = (
