@@ -55,20 +55,17 @@ class Config:
     port: int = int(os.getenv("PORT", "8080"))
 
     payment_provider: str = os.getenv("PAYMENT_PROVIDER", "manual")
-    # Your own card that customers pay into — shown as plain text and (if
-    # set) used to build a pre-filled ExpressPay pay-by-link so the
-    # customer doesn't have to type the card number/amount by hand.
+    # Your own card that customers pay into — shown as plain text so the
+    # customer can transfer to it from any banking app.
     receiving_card_number: str = os.getenv("RECEIVING_CARD_NUMBER", "")
-    # Plain http:// on purpose — pay.expresspay.tj's TLS cert doesn't match
-    # this hostname (ERR_CERT_COMMON_NAME_INVALID over https); the reference
-    # bot's real working link used http:// too.
-    expresspay_base_url: str = os.getenv("EXPRESSPAY_BASE_URL", "http://pay.expresspay.tj/")
-    # Required — the page errors with "one of the parameters is empty"
-    # without it. "133" is the value copied from a real working link;
-    # its actual meaning (service/tariff code?) is unconfirmed. If
-    # ExpressPay ever tells you the correct value for your own account,
-    # override it here.
-    expresspay_f1: str = os.getenv("EXPRESSPAY_F1", "133")
+    # NOTE: an earlier version of this bot also built a pre-filled
+    # "pay.expresspay.tj" link (reverse-engineered from a similar shop's
+    # bot, never actually confirmed against ExpressPay's own docs). A real
+    # customer's screenshot showed that domain doesn't even resolve
+    # (DNS_PROBE_FINISHED_NXDOMAIN) — it was sending everyone who picked
+    # "dc" or "amonat" a dead link. Removed; see bot/services/payments.py.
+    # If a real, verified ExpressPay/DC Bank merchant integration is set up
+    # later, wire it back in from real documentation, not a guessed link.
     # Alif Mobi app deep link into its "DC кошелек" top-up provider —
     # captured from a real link the admin generated in their own app
     # (https://alifmobi.page.link/providers?id=124&amount=X&account=Y).

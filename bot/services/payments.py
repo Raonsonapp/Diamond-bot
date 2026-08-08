@@ -52,29 +52,13 @@ class PaymentProvider(ABC):
         """
 
 
-def _build_expresspay_link(order_id: int, amount_somoni: float) -> str | None:
-    """Pay-by-link with the recipient card and exact amount pre-filled, so
-    the customer just taps "Пардохт" and confirms — reverse-engineered from
-    a real link a similar shop's bot sends
-    (?A=<card>&s=<amount>&c=<label>&f1=<code>). f1 turned out to be
-    required (the page errors "one of the parameters is empty" without
-    it) — see config.expresspay_f1."""
-    if not config.receiving_card_number:
-        return None
-    return (
-        f"{config.expresspay_base_url}?A={config.receiving_card_number}"
-        f"&s={amount_somoni:.2f}&c=order_{order_id}&f1={config.expresspay_f1}"
-    )
-
-
 def _build_alif_link(amount_somoni: float) -> str | None:
     """Deep link straight into the customer's own Alif Mobi app, landing on
     its "DC кошелек" top-up provider with the amount pre-filled — captured
     from a real link the admin generated in their own Alif app
-    (https://alifmobi.page.link/providers?id=124&amount=X&account=Y).
-    Unlike ExpressPay (a web page any card can pay on), this only makes
-    sense for a customer who already has the Alif app installed, which is
-    exactly the "🏦 Алиф Мобайл" button in the bank picker."""
+    (https://alifmobi.page.link/providers?id=124&amount=X&account=Y). Only
+    makes sense for a customer who already has the Alif app installed,
+    which is exactly the "🏦 Алиф Мобайл" button in the bank picker."""
     if not config.alif_dc_receiving_account:
         return None
     return (
@@ -98,12 +82,17 @@ class ManualBankTransferProvider(PaymentProvider):
         self, order_id: int, amount_somoni: float, bank_hint: str | None = None
     ) -> InvoiceResult:
         # Alif gets its own app deep link (opens straight into Alif Mobi
-        # with the amount pre-filled) instead of the generic ExpressPay web
-        # page — a real link the admin captured from their own app, see
-        # _build_alif_link. Every other bank falls back to ExpressPay,
-        # which works from any card regardless of issuing bank.
+        # with the amount pre-filled) — a real link the admin captured from
+        # their own app, see _build_alif_link. Every other bank falls back
+        # to the plain card-number instructions below (card_line) — there
+        # used to be a generic "ExpressPay" pay-by-link fallback here too,
+        # but that domain (pay.expresspay.tj) was never a confirmed real
+        # ExpressPay integration, just reverse-engineered from a similar
+        # shop's bot, and a real customer's screenshot proved it doesn't
+        # even resolve (DNS_PROBE_FINISHED_NXDOMAIN) — removed rather than
+        # keep sending customers a dead payment link.
         alif_url = _build_alif_link(amount_somoni) if bank_hint == "alif" else None
-        pay_url = alif_url or _build_expresspay_link(order_id, amount_somoni)
+        pay_url = alif_url
 
         if not config.receiving_card_number:
             card_line = "⚠️ Рақами корти қабулкунанда танзим нашудааст — бо админ тамос гиред.\n"
@@ -140,13 +129,6 @@ class ManualBankTransferProvider(PaymentProvider):
                 f"Тугмаи «💳 Пардохт»-ро пахш кунед — мустақим ба барномаи Алиф-и шумо мекушояд, "
                 f"бо маблағи аллакай пуркардашуда. Танҳо тасдиқро занед, баъд расиди пардохтро "
                 f"(скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
-            )
-        elif pay_url:
-            instructions = (
-                f"{card_line}"
-                f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ\n\n"
-                f"Тугмаи «💳 Пардохт»-ро пахш кунед, маблағро тасдиқ кунед, "
-                f"баъд расиди пардохтро (скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
             )
         else:
             instructions = (
