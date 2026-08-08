@@ -75,16 +75,14 @@ class ManualBankTransferProvider(PaymentProvider):
         self, order_id: int, amount_somoni: float, bank_hint: str | None = None
     ) -> InvoiceResult:
         # The Alif Mobi deep link (a real link the admin captured from their
-        # own app, see _build_alif_link) reaches the exact same receiving
-        # account regardless of which bank the customer normally uses —
-        # Tajik interbank transfers work from any bank's app to any other
-        # bank's card/account. Customers kept asking for "the automatic
-        # button" back after it was removed for DC/Amonat (it used to be a
-        # different, fake ExpressPay link there — see the removed
-        # _build_expresspay_link), so now every bank choice gets this one
-        # real, verified button too, alongside the plain card number for
-        # anyone who doesn't have the Alif app installed.
-        alif_url = _build_alif_link(amount_somoni)
+        # own app, see _build_alif_link) only makes sense as a BUTTON when
+        # the customer actually picked "Алиф" — showing it for every bank
+        # was tried once, but a customer who picked DC and doesn't have
+        # Alif installed just gets bounced to the Play Store to install an
+        # unrelated app, which is more confusing than no button at all.
+        # Every other bank falls back to the plain card-number
+        # instructions below — no button, nothing to misfire.
+        alif_url = _build_alif_link(amount_somoni) if bank_hint == "alif" else None
         pay_url = alif_url
 
         if not config.receiving_card_number:
@@ -103,12 +101,10 @@ class ManualBankTransferProvider(PaymentProvider):
 
         if alif_url:
             instructions = (
-                f"{card_line}"
                 f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ\n\n"
-                f"Агар барномаи Алиф Мобайл дошта бошед — тугмаи «💳 Пардохт»-ро пахш кунед, "
-                f"мустақим ба он мекушояд бо маблағи аллакай пуркардашуда, танҳо тасдиқро занед.\n"
-                f"Вагарна ба рақами корти боло аз ягон барномаи бонкии худ гузаронед.\n\n"
-                f"Пас аз пардохт расиди пардохтро (скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
+                f"Тугмаи «💳 Пардохт»-ро пахш кунед — мустақим ба барномаи Алиф-и шумо мекушояд, "
+                f"бо маблағи аллакай пуркардашуда. Танҳо тасдиқро занед, баъд расиди пардохтро "
+                f"(скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
             )
         else:
             instructions = (
