@@ -1103,12 +1103,15 @@ async def skip_review(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data.regexp(r"^receipt:\d+$"))
 async def show_receipt(callback: CallbackQuery) -> None:
     """A shareable proof-of-purchase, inspired by a rival bot's polished
-    post-delivery "чек" card — ours is a formatted message rather than a
-    generated image (no new image-rendering dependency/font risk to add
-    mid-session), but carries the same real details so a customer can
-    forward it as proof."""
+    post-delivery "чек" card — rendered as a branded image (see
+    bot/services/receipt_image.py); falls back to a formatted text message
+    if image generation ever fails (missing font package, etc.) so a
+    rendering glitch never breaks the customer's flow."""
+    from aiogram.types import BufferedInputFile
+
     from bot.db.repo import get_order
     from bot.keyboards import BANK_HINT_NAMES
+    from bot.services.receipt_image import generate_receipt_image
 
     order_id = int(callback.data.split(":", 1)[1])
     async with get_session() as session:
@@ -1128,25 +1131,33 @@ async def show_receipt(callback: CallbackQuery) -> None:
 
     total = sum(o.amount_somoni for o in group) or order.amount_somoni
     when = order.updated_at.strftime("%d.%m.%Y • %H:%M") if order.updated_at else ""
+    items = [products[o.id].display_name for o in group]
 
-    if len(group) > 1:
-        items_lines = "\n".join(f"  • {products[o.id].display_name}" for o in group)
-        items_block = f"Маҳсулот:\n{items_lines}\n"
-    else:
-        items_block = f"Маҳсулот: {products[order.id].display_name}\n"
-
-    receipt = (
-        "🧾 <b>Чеки фармоиш</b>\n\n"
-        "✅ <b>МУВАФФАҚ</b>\n\n"
-        f"Фармоиш №: <code>{order.id}</code>\n"
-        f"{items_block}"
-        f"ID: <code>{order.ff_player_id}</code>\n"
-        f"Усули пардохт: {method}\n"
-        f"Сана: {when}\n"
-        f"Маблағ: {total:.2f} сомонӣ\n\n"
-        "🙏 Ташаккур барои харид!"
-    )
-    await callback.message.answer(receipt)
+    try:
+        png = generate_receipt_image(
+            order_id=order.id,
+            title="Фармоиш бо муваффақият анҷом ёфт!",
+            items=items,
+            recipient_id=order.ff_player_id,
+            payment_method=method,
+            when_text=when,
+            amount_somoni=total,
+        )
+        await callback.message.answer_photo(BufferedInputFile(png, filename=f"receipt_{order.id}.png"))
+    except Exception:
+        items_block = "\n".join(f"  • {name}" for name in items) if len(items) > 1 else items[0]
+        receipt = (
+            "🧾 <b>Чеки фармоиш</b>\n\n"
+            "✅ <b>МУВАФФАҚ</b>\n\n"
+            f"Фармоиш №: <code>{order.id}</code>\n"
+            f"Маҳсулот: {items_block}\n"
+            f"ID: <code>{order.ff_player_id}</code>\n"
+            f"Усули пардохт: {method}\n"
+            f"Сана: {when}\n"
+            f"Маблағ: {total:.2f} сомонӣ\n\n"
+            "🙏 Ташаккур барои харид!"
+        )
+        await callback.message.answer(receipt)
     await callback.answer()
 
 
