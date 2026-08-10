@@ -1048,13 +1048,15 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     async with get_session() as session:
         order = await get_order(session, order_id)
         group = await get_orders_by_group(session, order.cart_group_id) if order.cart_group_id else [order]
-        items_summary = ""
-        if len(group) > 1:
-            products = [await get_product(session, o.product_id) for o in group]
-            items_summary = "\n" + "\n".join(
-                f"📦 {p.display_name} — {o.amount_somoni:.2f} сомонӣ" if o.amount_somoni else f"📦 {p.display_name}"
-                for o, p in zip(group, products)
-            )
+        products = [await get_product(session, o.product_id) for o in group]
+        # Always list what was actually ordered — this used to only show
+        # for multi-item carts (len(group) > 1), so a single-product order
+        # (the normal case) gave the admin no way to tell which package the
+        # screenshot's amount was even for without looking it up by hand.
+        items_summary = "\n" + "\n".join(
+            f"📦 {p.display_name} — {o.amount_somoni:.2f} сомонӣ" if o.amount_somoni else f"📦 {p.display_name}"
+            for o, p in zip(group, products)
+        )
 
     caption = (
         f"🆕 Фармоиши #{order_id}{items_summary}\n"
