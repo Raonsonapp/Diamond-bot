@@ -18,6 +18,7 @@ from bot.db.repo import (
     get_orders_by_group,
     get_product,
     get_setting,
+    get_user,
     has_referral_with_purchase,
     list_active_products,
     list_all_user_ids,
@@ -222,6 +223,70 @@ async def pending_orders(message: Message) -> None:
     lines += [f"#{o.id} — {o.amount_somoni:.2f}с — recipient {o.ff_player_id}" for o in awaiting] or ["(нест)"]
     lines.append("\n💰 Пардохт шуда, дар интизори ирсол:")
     lines += [f"#{o.id} — {o.amount_somoni:.2f}с — recipient {o.ff_player_id}" for o in paid] or ["(нест)"]
+    await message.answer("\n".join(lines))
+
+
+@router.message(Command("order"))
+async def order_details(message: Message) -> None:
+    """Full detail view for one order by ID — what got ordered, by whom,
+    for how much, how they said they'd pay, and its current state. Added
+    after an admin couldn't tell what a customer's #90 payment screenshot
+    was even for from the notification alone."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = message.text.split()
+    if len(parts) != 2 or not parts[1].lstrip("#").isdigit():
+        await message.answer("Истифода: /order <order_id>\nМисол: /order 90")
+        return
+
+    order_id = int(parts[1].lstrip("#"))
+    async with get_session() as session:
+        order = await get_order(session, order_id)
+        if order is None:
+            await message.answer(f"⚠️ Фармоиши #{order_id} ёфт нашуд.")
+            return
+        product = await get_product(session, order.product_id)
+        buyer = await get_user(session, order.user_id)
+        group = await get_orders_by_group(session, order.cart_group_id) if order.cart_group_id else [order]
+
+    from bot.keyboards import BANK_HINT_NAMES
+
+    if order.bank_hint:
+        method = BANK_HINT_NAMES.get(order.bank_hint, order.bank_hint)
+    elif order.payment_provider == "referral_balance":
+        method = "Баланси реферал"
+    else:
+        method = "Дастӣ"
+
+    buyer_name = f"@{buyer.username}" if buyer and buyer.username else (buyer.full_name if buyer else None) or "—"
+    fzr = (
+        f"{product.fzr_category_id}/{product.fzr_offer_id}"
+        if product.fzr_category_id and product.fzr_offer_id
+        else "(нест — таҳвили дастӣ)"
+    )
+
+    lines = [
+        f"📦 <b>Фармоиши #{order.id}</b>",
+        f"Маҳсулот: {product.display_name}",
+        f"ID/username-и қабулкунанда: {order.ff_player_id}",
+        f"Мизоҷ: {buyer_name} (id={order.user_id})",
+        f"Маблағ: {format_price(order.amount_somoni)} сомонӣ",
+        f"Усули пардохт: {method}",
+        f"Ҳолат: {order.status.value}",
+        f"FazerCards mapping: {fzr}",
+        f"Сохта шуд: {order.created_at.strftime('%d.%m.%Y %H:%M')}",
+        f"Навсозӣ шуд: {order.updated_at.strftime('%d.%m.%Y %H:%M')}",
+    ]
+    if order.payment_reference:
+        lines.append(f"Payment reference: {order.payment_reference}")
+    if order.admin_note:
+        lines.append(f"Ёддошт: {order.admin_note}")
+    if len(group) > 1:
+        others = "\n".join(f"  #{o.id} — {o.ff_player_id}" for o in group if o.id != order.id)
+        lines.append(f"Қисми фармоиши гурӯҳӣ (боқимонда):\n{others}")
+
     await message.answer("\n".join(lines))
 
 
