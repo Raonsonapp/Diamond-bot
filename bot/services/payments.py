@@ -67,6 +67,22 @@ def _build_alif_link(amount_somoni: float) -> str | None:
     )
 
 
+def _build_dc_link(order_id: int, amount_somoni: float) -> str | None:
+    """Pay-by-link with the receiving card and exact amount pre-filled,
+    landing on a real Dushanbe City Bank payment page — the admin
+    personally opened this exact URL pattern in a browser and confirmed it
+    works (unlike the earlier pay.expresspay.tj guess, which was copied
+    from a rival bot and turned out to not even resolve). Only used for
+    bank_hint=="dc", the same way _build_alif_link is only used for
+    "alif" — no reason to assume this works for other banks' apps."""
+    if not config.receiving_card_number:
+        return None
+    return (
+        f"{config.dc_pay_base_url}?a={config.receiving_card_number}"
+        f"&s={amount_somoni:.2f}&c=order_{order_id}&f1={config.dc_pay_f1}"
+    )
+
+
 class ManualBankTransferProvider(PaymentProvider):
     """Works today with zero external accounts: customer transfers by card
     and sends proof; admin taps Confirm in the bot."""
@@ -74,16 +90,13 @@ class ManualBankTransferProvider(PaymentProvider):
     async def create_invoice(
         self, order_id: int, amount_somoni: float, bank_hint: str | None = None
     ) -> InvoiceResult:
-        # The Alif Mobi deep link (a real link the admin captured from their
-        # own app, see _build_alif_link) only makes sense as a BUTTON when
-        # the customer actually picked "Алиф" — showing it for every bank
-        # was tried once, but a customer who picked DC and doesn't have
-        # Alif installed just gets bounced to the Play Store to install an
-        # unrelated app, which is more confusing than no button at all.
-        # Every other bank falls back to the plain card-number
-        # instructions below — no button, nothing to misfire.
+        # Each real deep link is only ever offered for the specific bank
+        # it was captured/verified for — showing Alif's button for a "DC"
+        # pick (tried once) just bounced a customer without Alif installed
+        # to the Play Store; no reason to assume that mistake generalizes.
         alif_url = _build_alif_link(amount_somoni) if bank_hint == "alif" else None
-        pay_url = alif_url
+        dc_url = _build_dc_link(order_id, amount_somoni) if bank_hint == "dc" else None
+        pay_url = alif_url or dc_url
 
         if not config.receiving_card_number:
             card_line = "⚠️ Рақами корти қабулкунанда танзим нашудааст — бо админ тамос гиред.\n"
@@ -105,6 +118,13 @@ class ManualBankTransferProvider(PaymentProvider):
                 f"Тугмаи «💳 Пардохт»-ро пахш кунед — мустақим ба барномаи Алиф-и шумо мекушояд, "
                 f"бо маблағи аллакай пуркардашуда. Танҳо тасдиқро занед, баъд расиди пардохтро "
                 f"(скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
+            )
+        elif dc_url:
+            instructions = (
+                f"{card_line}"
+                f"💰 Маблағи дақиқ: {amount_somoni:.2f} сомонӣ\n\n"
+                f"Тугмаи «💳 Пардохт»-ро пахш кунед, маблағро тасдиқ кунед, "
+                f"баъд расиди пардохтро (скриншот) ба ин ҷо фиристед.\n\n{exact_amount_warning}"
             )
         else:
             instructions = (

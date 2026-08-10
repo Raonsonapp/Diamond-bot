@@ -64,8 +64,14 @@ class Config:
     # customer's screenshot showed that domain doesn't even resolve
     # (DNS_PROBE_FINISHED_NXDOMAIN) — it was sending everyone who picked
     # "dc" or "amonat" a dead link. Removed; see bot/services/payments.py.
-    # If a real, verified ExpressPay/DC Bank merchant integration is set up
-    # later, wire it back in from real documentation, not a guessed link.
+    #
+    # pay.dc.tj is a DIFFERENT, separately-verified link — the admin
+    # personally opened https://pay.dc.tj/?a=<card>&s=<amount>&c=<label>&f1=133
+    # in a browser and confirmed it lands on a real payment page (not
+    # reverse-engineered from a rival bot this time). Only used for
+    # bank_hint=="dc" — see _build_dc_link in bot/services/payments.py.
+    dc_pay_base_url: str = os.getenv("DC_PAY_BASE_URL", "https://pay.dc.tj/")
+    dc_pay_f1: str = os.getenv("DC_PAY_F1", "133")
     # Alif Mobi app deep link into its "DC кошелек" top-up provider —
     # captured from a real link the admin generated in their own app
     # (https://alifmobi.page.link/providers?id=124&amount=X&account=Y).
