@@ -93,15 +93,19 @@ class Config:
     webhook_server_port: int = int(os.getenv("WEBHOOK_SERVER_PORT", "8080"))
 
     # Render's free tier spins the service down after ~15 minutes with no
-    # incoming HTTP traffic — and a sleeping service can silently swallow an
-    # incoming SMS webhook (the caller may give up before the ~30-60s cold
-    # start finishes responding), not just delay it. Every
-    # KEEPALIVE_PING_SECONDS, the bot pings its own PUBLIC_URL to look
-    # "active" and avoid that — set to "0" to disable (e.g. on a paid plan
-    # that doesn't sleep). Lowered from 600s to 300s for a bigger safety
-    # margin under the ~15min window, since a single missed/slow ping at
-    # 600s left less room to recover before the service could sleep.
-    keepalive_ping_seconds: int = int(os.getenv("KEEPALIVE_PING_SECONDS", "300"))
+    # incoming HTTP traffic. Pinging it every few minutes (what this used
+    # to default to) keeps it awake 24/7 instead — which is exactly what
+    # burned through Render's free-tier monthly usage allowance and got
+    # the whole service suspended ("Free usage limit reached") days before
+    # the billing period reset. There is no genuinely free host anywhere
+    # that both never sleeps AND has generous limits — that combination
+    # always costs money somewhere. Defaulting this to disabled (0) now:
+    # the service sleeps when idle (the free tier's actual intended usage
+    # pattern) and wakes with a real but survivable ~30-60s cold start on
+    # the first request after a quiet period, instead of staying always-on
+    # and running out of quota again. Set a positive value only on a paid
+    # plan that doesn't meter uptime.
+    keepalive_ping_seconds: int = int(os.getenv("KEEPALIVE_PING_SECONDS", "0"))
 
     delivery_provider: str = os.getenv("DELIVERY_PROVIDER", "manual")
     supplier_api_base_url: str = os.getenv("SUPPLIER_API_BASE_URL", "")
