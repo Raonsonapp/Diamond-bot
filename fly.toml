@@ -1,18 +1,20 @@
-app = "almaz-tj-bot"
-primary_region = "fra"
+# fly.toml app configuration file generated for diamond-bot on 2026-08-15T15:50:35Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'diamond-bot'
+primary_region = 'ams'
 
 [build]
 
 [http_service]
-internal_port = 8080
-force_https = true
-# Never scale to zero — this is the whole point of leaving Render's free
-# tier (which suspended the service after a usage-limit hit). A real
-# always-on machine, paid per second it runs, not a hard monthly quota.
-auto_stop_machines = false
-auto_start_machines = true
-min_machines_running = 1
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
 
 [[vm]]
-size = "shared-cpu-1x"
-memory = "256mb"
+  size = 'shared-cpu-1x'
+  memory = '256mb'
