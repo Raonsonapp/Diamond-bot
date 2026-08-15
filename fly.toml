@@ -1,0 +1,18 @@
+app = "almaz-tj-bot"
+primary_region = "fra"
+
+[build]
+
+[http_service]
+internal_port = 8080
+force_https = true
+# Never scale to zero — this is the whole point of leaving Render's free
+# tier (which suspended the service after a usage-limit hit). A real
+# always-on machine, paid per second it runs, not a hard monthly quota.
+auto_stop_machines = false
+auto_start_machines = true
+min_machines_running = 1
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "256mb"
