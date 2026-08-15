@@ -1,5 +1,10 @@
+# fly.toml app configuration file generated for diamond-bot on 2026-08-15T17:53:14Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
 app = "diamond-bot"
-primary_region = "ams"
+primary_region = 'ams'
 
 [build]
 
@@ -14,9 +19,13 @@ auto_start_machines = true
 min_machines_running = 1
 
 [[vm]]
-size = "shared-cpu-1x"
-# 256mb OOM-killed the process every ~10-15s in real production testing
-# (aiogram + SQLAlchemy/asyncpg + aiohttp + Pillow for the receipt image
-# generator add up fast) — bumped to 512mb, the smallest size that
-# actually stayed up.
-memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '256mb'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
+  processes = ['app']
