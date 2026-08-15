@@ -1,5 +1,5 @@
-app = "almaz-tj-bot"
-primary_region = "fra"
+app = "diamond-bot"
+primary_region = "ams"
 
 [build]
 
@@ -15,4 +15,8 @@ min_machines_running = 1
 
 [[vm]]
 size = "shared-cpu-1x"
-memory = "256mb"
+# 256mb OOM-killed the process every ~10-15s in real production testing
+# (aiogram + SQLAlchemy/asyncpg + aiohttp + Pillow for the receipt image
+# generator add up fast) — bumped to 512mb, the smallest size that
+# actually stayed up.
+memory = "512mb"
