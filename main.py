@@ -107,6 +107,24 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
         return web.Response(text="OK")
 
     app.router.add_get("/", health)
+
+    async def adsgram_reward_callback(request: web.Request) -> web.Response:
+        """Accept AdsGram's optional reward postback without granting money/items.
+
+        This bot does not currently promise an in-bot reward for viewing ads.
+        The endpoint only acknowledges the callback and logs the Telegram ID;
+        do not use it as proof of a reward unless a reward system is implemented.
+        """
+        user_id = request.query.get("userid") or request.query.get("userId")
+        if not user_id or not user_id.isdigit():
+            return web.Response(status=400, text="Missing or invalid userid")
+        logging.info(
+            "AdsGram reward postback received for Telegram user %s; no reward configured",
+            user_id,
+        )
+        return web.Response(text="OK")
+
+    app.router.add_get("/adsgram/reward", adsgram_reward_callback)
     register_sms_webhook(app, bot)
 
     SimpleRequestHandler(
