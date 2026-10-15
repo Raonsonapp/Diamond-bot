@@ -1,12 +1,14 @@
 import asyncio
 import re
 
+from sqlalchemy import func, select
+
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import config
-from bot.db.models import OrderStatus, Product, ProductCategory
+from bot.db.models import Order, OrderStatus, Product, ProductCategory
 from bot.db.repo import (
     adjust_fazercards_balance,
     contest_leaderboard,
@@ -1389,4 +1391,49 @@ async def adsgram_stats(message: Message) -> None:
         f"📨 Рекламаҳои ба Telegram фиристодашуда: {delivered}\n"
         f"👥 Корбарони нодир: {unique_users}\n\n"
         "Эзоҳ: ин омори фиристодани паём аст, на тасдиқи хондани он."
+    )
+
+
+@router.message(Command("salesstats"))
+async def sales_stats(message: Message) -> None:
+    """All-time sales summary using confirmed/fulfilled orders only."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    completed_states = [OrderStatus.PAID, OrderStatus.DELIVERING, OrderStatus.DELIVERED]
+    async with get_session() as session:
+        total_orders = int(await session.scalar(select(func.count(Order.id))) or 0)
+        completed_count = int(await session.scalar(
+            select(func.count(Order.id)).where(Order.status.in_(completed_states))
+        ) or 0)
+        delivered_count = int(await session.scalar(
+            select(func.count(Order.id)).where(Order.status == OrderStatus.DELIVERED)
+        ) or 0)
+        pending_count = int(await session.scalar(
+            select(func.count(Order.id)).where(Order.status == OrderStatus.AWAITING_PAYMENT)
+        ) or 0)
+        totals = await session.execute(
+            select(
+                func.coalesce(func.sum(Order.amount_somoni), 0.0),
+                func.coalesce(func.sum(Product.cost_somoni), 0.0),
+            )
+            .join(Product, Product.id == Order.product_id)
+            .where(Order.status.in_(completed_states))
+        )
+        revenue, cost = totals.one()
+        revenue = float(revenue or 0)
+        cost = float(cost or 0)
+        all_margin = revenue - cost
+
+    await message.answer(
+        "📊 <b>Ҳисоботи умумии фурӯш</b>\n\n"
+        f"🧾 Ҳамаи фармоишҳо: {total_orders}\n"
+        f"💰 Фармоишҳои пардохтшуда/дар иҷро: {completed_count}\n"
+        f"✅ Расонида шудааст: {delivered_count}\n"
+        f"⏳ Дар интизори пардохт: {pending_count}\n\n"
+        f"📈 Даромади фармоишҳои тасдиқшуда: {format_price(revenue)} сомонӣ\n"
+        f"📦 Арзиши харид: {format_price(cost)} сомонӣ\n"
+        f"💎 Фарқи тахминии фурӯш ва харид: {format_price(all_margin)} сомонӣ\n\n"
+        "Эзоҳ: ин фоидаи соф нест; комиссияи пардохт, баргардонидани маблағ ва хароҷоти дигар ҳисоб нашудаанд."
     )
