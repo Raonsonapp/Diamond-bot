@@ -93,13 +93,19 @@ router = Router(name="customer")
 WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фурӯши хидматҳои рақамӣ.\n\nЧиро интихоб мекунед?"
 
 
-async def _show_main_menu(message: Message, state: FSMContext) -> None:
+async def _show_main_menu(
+    message: Message, state: FSMContext, user_id: int | None = None, language: str | None = None
+) -> None:
     await state.clear()
     await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+    # CallbackQuery.message.from_user is the bot itself, so callback paths
+    # explicitly pass callback.from_user to ensure the ad targets the customer.
     # Ads are optional and fail-open: an AdsGram outage must not block the shop.
     from bot.services.adsgram import maybe_send_ad
 
-    await maybe_send_ad(message.bot, message.from_user.id, message.from_user.language_code or "ru")
+    recipient_id = user_id if user_id is not None else message.from_user.id
+    recipient_language = language or getattr(message.from_user, "language_code", None) or "ru"
+    await maybe_send_ad(message.bot, recipient_id, recipient_language)
 
 
 async def _format_orders_text(user_id: int) -> str:
@@ -143,7 +149,7 @@ async def _register_and_continue(message: Message, state: FSMContext, from_user,
         await message.answer(TERMS_TEXT, reply_markup=terms_keyboard())
         return
 
-    await _show_main_menu(message, state)
+    await _show_main_menu(message, state, from_user.id, from_user.language_code or "ru")
 
 
 @router.message(CommandStart())
@@ -193,7 +199,7 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
         f"🆔 ID-и шумо: {callback.from_user.id}",
         reply_markup=None,
     )
-    await _show_main_menu(callback.message, state)
+    await _show_main_menu(callback.message, state, callback.from_user.id, callback.from_user.language_code or "ru")
     await callback.answer()
 
 
