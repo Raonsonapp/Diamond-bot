@@ -109,6 +109,20 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
 
     app.router.add_get("/", health)
 
+    async def promo_click(request: web.Request) -> web.StreamResponse:
+        """Track an app-promo redirect and send the user to the official Play Store page."""
+        from bot.services.ad_campaign import APP_URL, record_promo_click
+
+        raw_user_id = request.query.get("uid", "")
+        if raw_user_id.isdigit() and int(raw_user_id) > 0:
+            try:
+                await record_promo_click(int(raw_user_id))
+            except Exception:
+                logging.exception("Could not record app promo click")
+        raise web.HTTPFound(location=APP_URL)
+
+    app.router.add_get("/promo/click", promo_click)
+
     async def adsgram_reward_callback(request: web.Request) -> web.Response:
         """Accept AdsGram's optional reward postback without granting money/items.
 
