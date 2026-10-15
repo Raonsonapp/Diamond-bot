@@ -38,11 +38,18 @@ async def adsgram_check(message: Message) -> None:
             async with session.get("https://api.adsgram.ai/advbot", params=params) as response:
                 status = response.status
                 if status != 200:
-                    # Never print the request URL: it contains the private token.
-                    log.warning("AdsGram diagnostic returned HTTP %s", status)
+                    # Read the provider's error message, but never log the request URL:
+                    # aiohttp's request URL includes the private token.
+                    try:
+                        body = (await response.text())[:700]
+                    except Exception:
+                        body = "(ҷавоби матнӣ хонда нашуд)"
+                    log.warning("AdsGram diagnostic HTTP %s; response body: %s", status, body)
+                    safe_body = body.replace(config.adsgram_token, "[HIDDEN TOKEN]") if config.adsgram_token else body
                     await message.answer(
-                        f"⚠️ AdsGram API ҷавоби HTTP {status} дод. "
-                        "Токен, рақами блок ва ҳолати тасдиқи платформаро санҷед."
+                        f"⚠️ AdsGram API: HTTP {status}.\n"
+                        f"Ҷавоби сервер: <code>{safe_body.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')}</code>\n\n"
+                        "Токенро махфӣ нигоҳ доред; агар дар ҷавоб сабаб равшан набошад, матнро ба ман фиристед."
                     )
                     return
                 payload = await response.json(content_type=None)
