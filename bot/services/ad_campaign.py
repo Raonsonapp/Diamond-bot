@@ -145,14 +145,7 @@ async def campaign_stats() -> tuple[int, int, int, int, str, str]:
         ends = await get_setting(db, "campaign_ends_at", "")
         text = await get_setting(db, "campaign_text", "")
         disabled = await get_setting(db, "campaign_disabled", "0")
+    # Expired custom campaigns fall back to the default app promo, unless
+    # the admin explicitly disabled all promo messages.
     active = disabled != "1"
-    if text and ends:
-        try:
-            end_dt = datetime.fromisoformat(ends)
-            if end_dt.tzinfo is None:
-                end_dt = end_dt.replace(tzinfo=timezone.utc)
-            # Expired custom campaigns fall back to the default app promo.
-            active = active and end_dt > datetime.now(timezone.utc)
-        except ValueError:
-            pass
     return delivered, unique, clicks, unique_clicks, ("фаъол" if active else "ғайрифаъол"), ends
