@@ -96,6 +96,10 @@ WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фур
 async def _show_main_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+    # Ads are optional and fail-open: an AdsGram outage must not block the shop.
+    from bot.services.adsgram import maybe_send_ad
+
+    await maybe_send_ad(message.bot, message.from_user.id, message.from_user.language_code or "ru")
 
 
 async def _format_orders_text(user_id: int) -> str:

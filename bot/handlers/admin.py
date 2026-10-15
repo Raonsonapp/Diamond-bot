@@ -38,6 +38,7 @@ from bot.db.session import get_session
 from bot.formatting import format_price
 from bot.keyboards import admin_order_keyboard
 from bot.services.fulfillment import clear_awaiting_review, confirm_and_deliver, mark_delivered_and_notify
+from bot.services.adsgram import get_ad_stats
 
 router = Router(name="admin")
 
@@ -1371,3 +1372,21 @@ async def set_tg_kind(message: Message) -> None:
         return
 
     await message.answer("\n".join(reports))
+
+
+@router.message(Command("adstats"))
+async def adsgram_stats(message: Message) -> None:
+    """Show AdsGram delivery totals; Telegram delivery is not a read receipt."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    delivered, unique_users, enabled = await get_ad_stats()
+    status = "фаъол" if enabled else "танзим нашудааст"
+    await message.answer(
+        "📢 <b>Омори AdsGram</b>\n\n"
+        f"⚙️ Ҳолат: {status}\n"
+        f"📨 Рекламаҳои ба Telegram фиристодашуда: {delivered}\n"
+        f"👥 Корбарони нодир: {unique_users}\n\n"
+        "Эзоҳ: ин омори фиристодани паём аст, на тасдиқи хондани он."
+    )

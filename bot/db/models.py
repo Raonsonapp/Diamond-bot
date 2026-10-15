@@ -222,3 +222,17 @@ class SmsLogEntry(Base):
     # customer's proof-submission cross-check — so the same SMS can never
     # be claimed by two different orders.
     matched_order_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class AdsGramEvent(Base):
+    """Audit log for AdsGram ads accepted by Telegram for delivery.
+
+    This records delivery, not proof that a person actually read the message.
+    """
+    __tablename__ = "bot_adsgram_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    event_type: Mapped[str] = mapped_column(String(24), default="delivered", index=True)
+    message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

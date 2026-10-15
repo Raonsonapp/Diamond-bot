@@ -107,6 +107,10 @@ class Config:
     # plan that doesn't meter uptime.
     keepalive_ping_seconds: int = int(os.getenv("KEEPALIVE_PING_SECONDS", "0"))
 
+    # AdsGram monetization. Keep the token in the host secret store, never in git.
+    adsgram_token: str = os.getenv("ADSGRAM_TOKEN", "")
+    adsgram_block_id: str = os.getenv("ADSGRAM_BLOCK_ID", "")
+
     delivery_provider: str = os.getenv("DELIVERY_PROVIDER", "manual")
     supplier_api_base_url: str = os.getenv("SUPPLIER_API_BASE_URL", "")
     supplier_api_key: str = os.getenv("SUPPLIER_API_KEY", "")
