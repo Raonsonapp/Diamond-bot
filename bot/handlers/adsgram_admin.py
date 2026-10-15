@@ -138,6 +138,7 @@ async def set_campaign_ad(message: Message) -> None:
 
 @router.message(Command("stopad"))
 async def stop_campaign_ad(message: Message) -> None:
+    from datetime import datetime, timezone
     from bot.db.repo import set_setting
     from bot.db.session import get_session
 
