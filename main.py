@@ -12,7 +12,7 @@ from aiohttp import web
 from bot.config import config
 from bot.db.session import init_db
 from bot.fsm_storage import storage
-from bot.handlers import admin, customer
+from bot.handlers import admin, customer, adsgram_admin
 from bot.services.sms_webhook import register_sms_webhook
 
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +22,7 @@ def build_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=storage)
     dp.include_router(admin.router)
     dp.include_router(customer.router)
+    dp.include_router(adsgram_admin.router)
 
     @dp.errors()
     async def handle_stale_edit(event: ErrorEvent) -> bool:
