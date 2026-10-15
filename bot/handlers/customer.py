@@ -97,14 +97,15 @@ async def _show_main_menu(
     message: Message, state: FSMContext, user_id: int | None = None, language: str | None = None
 ) -> None:
     await state.clear()
-    await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
-    # CallbackQuery.message.from_user is the bot itself, so callback paths
-    # explicitly pass callback.from_user to ensure the ad targets the customer.
-    # Ads are optional and fail-open: an AdsGram outage must not block the shop.
-    from bot.services.adsgram import maybe_send_ad
-
+    # Sponsored campaign is shown before the shop menu so it appears at the top.
+    # Campaign/AdsGram errors fail open and never block buying.
     recipient_id = user_id if user_id is not None else message.from_user.id
     recipient_language = language or getattr(message.from_user, "language_code", None) or "ru"
+    from bot.services.ad_campaign import maybe_send_campaign_ad
+    from bot.services.adsgram import maybe_send_ad
+
+    await maybe_send_campaign_ad(message.bot, recipient_id)
+    await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
     await maybe_send_ad(message.bot, recipient_id, recipient_language)
 
 
