@@ -109,7 +109,7 @@ class Config:
 
     # AdsGram monetization. Keep the token in the host secret store, never in git.
     adsgram_token: str = os.getenv("ADSGRAM_TOKEN", "")
-    adsgram_block_id: str = os.getenv("ADSGRAM_BLOCK_ID", "")
+    adsgram_block_id: str = os.getenv("ADSGRAM_BLOCK_ID", "54082")
 
     delivery_provider: str = os.getenv("DELIVERY_PROVIDER", "manual")
     supplier_api_base_url: str = os.getenv("SUPPLIER_API_BASE_URL", "")
