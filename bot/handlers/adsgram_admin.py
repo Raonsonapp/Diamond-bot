@@ -125,6 +125,7 @@ async def set_campaign_ad(message: Message) -> None:
         await set_setting(db, "campaign_url", url)
         await set_setting(db, "campaign_ends_at", ends.isoformat())
         await set_setting(db, "campaign_id", campaign_id)
+        await set_setting(db, "campaign_disabled", "0")
 
     await message.answer(
         "✅ <b>Реклама фаъол шуд!</b>\n"
@@ -147,6 +148,7 @@ async def stop_campaign_ad(message: Message) -> None:
         return
     async with get_session() as db:
         await set_setting(db, "campaign_ends_at", datetime.now(timezone.utc).isoformat())
+        await set_setting(db, "campaign_disabled", "1")
     await message.answer("🛑 Рекламаи дохилӣ хомӯш карда шуд.")
 
 
@@ -157,12 +159,15 @@ async def campaign_ad_stats(message: Message) -> None:
     if message.from_user.id not in config.admin_user_ids:
         await message.answer("⛔ Ин фармон танҳо барои админ аст.")
         return
-    delivered, unique, status, ends = await campaign_stats()
+    delivered, unique, clicks, unique_clicks, status, ends = await campaign_stats()
     await message.answer(
         "📊 <b>Ҳисоботи рекламаи дохилӣ</b>\n"
         f"Статус: {status}\n"
         f"Паёмҳои қабулкардаи Telegram: {delivered}\n"
         f"Корбарони нодир: {unique}\n"
-        f"Анҷом: {ends or '—'}\n\n"
-        "Эзоҳ: ин ҳисоб паёми фиристодашударо мешуморад, на дидани воқеии онро."
+        f"Кликҳои пайванд: {clicks}\n"
+        f"Корбарони нодири кликкунанда: {unique_clicks}\n"
+        f"Анҷоми рекламаи фармоишӣ: {ends or '—'}\n\n"
+        "Агар рекламаи фармоишӣ фаъол набошад, бот барномаи Raonson-ро нишон медиҳад. "
+        "Паёми фиристодашуда дидани воқеиро тасдиқ намекунад; клик ҳам насбро тасдиқ намекунад."
     )
