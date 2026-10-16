@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -291,5 +291,5 @@ class ApiOrderRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     __table_args__ = (
-        __import__("sqlalchemy").UniqueConstraint("user_id", "idempotency_key", name="uq_api_order_idempotency"),
+        UniqueConstraint("user_id", "idempotency_key", name="uq_api_order_idempotency"),
     )
