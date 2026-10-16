@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 
 from bot.config import config
-from bot.db.models import OrderStatus, Product, ProductCategory
+from bot.db.models import OrderStatus, Product, ProductCategory, User
 from bot.db.repo import (
     accept_terms,
     count_referrals,
@@ -1352,6 +1352,7 @@ async def wallet_command(message: Message) -> None:
         for amount in (50, 100, 200, 500)
     ])
     async with get_session() as session:
+        await upsert_user(session, message.from_user.id, message.from_user.username, message.from_user.full_name)
         user = await get_user(session, message.from_user.id)
         balance = float(user.wallet_balance_somoni or 0) if user else 0.0
     await message.answer(
@@ -1377,6 +1378,7 @@ async def wallet_topup_request(callback: CallbackQuery) -> None:
         await callback.answer("Маблағ иҷозат дода нашудааст.", show_alert=True)
         return
     async with get_session() as session:
+        await upsert_user(session, callback.from_user.id, callback.from_user.username, callback.from_user.full_name)
         req = WalletTopupRequest(
             user_id=callback.from_user.id, amount_somoni=float(amount),
             status="pending", created_at=datetime.now(timezone.utc),
