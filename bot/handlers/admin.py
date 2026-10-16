@@ -1494,6 +1494,15 @@ async def wallet_approve(message: Message) -> None:
         if req.status != "pending":
             await message.answer(f"Ин дархост аллакай ҳолати {req.status} дорад; дубора кредит намешавад.")
             return
+        duplicate_ref = await session.execute(
+            select(WalletTopupRequest).where(
+                WalletTopupRequest.payment_reference == payment_ref,
+                WalletTopupRequest.status == "approved",
+            )
+        )
+        if duplicate_ref.scalar_one_or_none() is not None:
+            await message.answer("Ин payment_reference аллакай барои пуркунии дигар истифода шудааст.")
+            return
         user = await session.get(User, req.user_id)
         if user is None:
             await message.answer("Корбар дар база ёфт нашуд.")
