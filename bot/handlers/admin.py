@@ -1437,3 +1437,91 @@ async def sales_stats(message: Message) -> None:
         f"💎 Фарқи тахминии фурӯш ва харид: {format_price(all_margin)} сомонӣ\n\n"
         "Эзоҳ: ин фоидаи соф нест; комиссияи пардохт, баргардонидани маблағ ва хароҷоти дигар ҳисоб нашудаанд."
     )
+
+
+@router.message(Command("walletpending"))
+async def wallet_pending(message: Message) -> None:
+    """List manual top-ups that require checking the real payment in the receiving account."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    from bot.db.models import WalletTopupRequest
+    async with get_session() as session:
+        result = await session.execute(
+            select(WalletTopupRequest).where(WalletTopupRequest.status == "pending")
+            .order_by(WalletTopupRequest.created_at.asc()).limit(30)
+        )
+        requests = list(result.scalars().all())
+    if not requests:
+        await message.answer("Ҳоло дархости пуркунии баланс нест.")
+        return
+    await message.answer(
+        "⏳ Дархостҳои интизори тасдиқ (аввал маблағро дар ҳисоби қабулкунанда воқеан санҷед):\n\n"
+        + "\n".join(
+            f"#{r.id} — user {r.user_id} — {r.amount_somoni:.2f} сомонӣ"
+            for r in requests
+        )
+        + "\n\nТасдиқ: /walletapprove <request_id> <payment_reference>"
+    )
+
+
+@router.message(Command("walletapprove"))
+async def wallet_approve(message: Message) -> None:
+    """Credit a pending top-up exactly once, after admin independently verifies receipt."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    from datetime import datetime, timezone
+    from bot.db.models import WalletTopupRequest, WalletTransaction, User
+
+    parts = (message.text or "").split(maxsplit=2)
+    if len(parts) != 3 or not parts[1].isdigit() or not parts[2].strip():
+        await message.answer("Истифода: /walletapprove <request_id> <payment_reference>")
+        return
+    req_id, payment_ref = int(parts[1]), parts[2].strip()
+    if len(payment_ref) > 100:
+        await message.answer("Reference аз ҳад дароз аст.")
+        return
+
+    credited_user_id = None
+    amount = 0.0
+    async with get_session() as session:
+        req = await session.get(WalletTopupRequest, req_id)
+        if req is None:
+            await message.answer("Дархост ёфт нашуд.")
+            return
+        if req.status != "pending":
+            await message.answer(f"Ин дархост аллакай ҳолати {req.status} дорад; дубора кредит намешавад.")
+            return
+        user = await session.get(User, req.user_id)
+        if user is None:
+            await message.answer("Корбар дар база ёфт нашуд.")
+            return
+        # Unique ledger reference prevents the same request being credited twice.
+        ledger_ref = f"manual_topup:{req.id}"
+        existing = await session.execute(
+            select(WalletTransaction).where(WalletTransaction.reference == ledger_ref)
+        )
+        if existing.scalar_one_or_none() is not None:
+            await message.answer("Ин пуркунӣ аллакай ба баланс сабт шудааст.")
+            return
+        user.wallet_balance_somoni = round(float(user.wallet_balance_somoni or 0) + req.amount_somoni, 2)
+        session.add(WalletTransaction(
+            user_id=req.user_id, amount_somoni=req.amount_somoni,
+            kind="manual_topup", reference=ledger_ref,
+            note=f"payment_ref:{payment_ref}",
+        ))
+        req.status = "approved"
+        req.payment_reference = payment_ref
+        req.approved_at = datetime.now(timezone.utc)
+        await session.commit()
+        credited_user_id, amount = req.user_id, req.amount_somoni
+
+    await message.answer(f"✅ Дархости #{req_id} тасдиқ шуд; {amount:.2f} сомонӣ ба баланс илова шуд.")
+    try:
+        await message.bot.send_message(
+            credited_user_id,
+            f"✅ Баланс пур шуд: +{amount:.2f} сомонӣ. Барои дидани баланс /wallet",
+        )
+    except Exception:
+        pass
