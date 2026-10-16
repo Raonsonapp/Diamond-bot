@@ -102,7 +102,7 @@ def contact_keyboard() -> InlineKeyboardMarkup:
     """Contact options deliberately expose no phone/WhatsApp number."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✉️ Паём ба дастгирӣ (Telegram)", callback_data="support:write")],
+            
             [InlineKeyboardButton(text="📢 Канали Telegram", url=config.shop_channel_url)],
             [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
         ]
