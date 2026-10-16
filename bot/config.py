@@ -133,12 +133,10 @@ class Config:
     shop_channel_url: str = os.getenv("SHOP_CHANNEL_URL", "https://t.me/ALMAZ_TJ_SHOP")
     review_channel_id: str = os.getenv("REVIEW_CHANNEL_ID", "@ALMAZ_TJ_SHOP")
 
-    # wa.me link opens WhatsApp directly to a chat with this number —
-    # digits only (country code + number, no "+", spaces or leading zeros).
-    contact_whatsapp_url: str = os.getenv("CONTACT_WHATSAPP_URL", "https://wa.me/992971769009")
-    contact_instagram_url: str = os.getenv(
-        "CONTACT_INSTAGRAM_URL", "https://www.instagram.com/ff.margedar?igsh=MWhmNjFkcGZoNzhjNQ=="
-    )
+    # Customer support is Telegram-only. Set this to the owner's public
+    # Telegram username, e.g. https://t.me/your_support_account.
+    # Falls back to the shop channel until the support username is configured.
+    support_telegram_url: str = os.getenv("SUPPORT_TELEGRAM_URL", "https://t.me/ALMAZ_TJ_SHOP")
 
 
 config = Config()
