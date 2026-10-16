@@ -1260,3 +1260,106 @@ async def stale_callback_fallback(callback: CallbackQuery, state: FSMContext) ->
     await callback.answer("Ин тугма кӯҳна шудааст, лутфан аз нав кушоед 👇", show_alert=True)
     await state.clear()
     await callback.message.answer(WELCOME_TEXT)
+
+
+# --- Prepaid wallet and customer API access ---------------------------------
+
+@router.message(Command("wallet"))
+async def wallet_command(message: Message) -> None:
+    """Show wallet balance and create a manual top-up request."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from bot.db.models import WalletTopupRequest, User
+    from bot.db.session import get_session
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"➕ Пур кардан: {amount} сомонӣ", callback_data=f"wallet:topup:{amount}")]
+        for amount in (50, 100, 200, 500)
+    ])
+    async with get_session() as session:
+        user = await get_user(session, message.from_user.id)
+        balance = float(user.wallet_balance_somoni or 0) if user else 0.0
+    await message.answer(
+        f"👛 <b>Ҳамёни ALMAZ TJ</b>\nБаланс: <b>{balance:.2f} сомонӣ</b>\n\n"
+        "Маблағи пуркуниро интихоб кунед. Пуркунӣ дастӣ тасдиқ мешавад: "
+        "админ бояд ворид шудани маблағро дар ҳисоби қабулкунанда санҷад.",
+        reply_markup=keyboard,
+    )
+
+
+@router.callback_query(F.data.startswith("wallet:topup:"))
+async def wallet_topup_request(callback: CallbackQuery) -> None:
+    from datetime import datetime, timezone
+    from bot.db.models import WalletTopupRequest
+    from bot.db.session import get_session
+
+    try:
+        amount = int(callback.data.rsplit(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Маблағ нодуруст аст.", show_alert=True)
+        return
+    if amount not in (50, 100, 200, 500):
+        await callback.answer("Маблағ иҷозат дода нашудааст.", show_alert=True)
+        return
+    async with get_session() as session:
+        req = WalletTopupRequest(
+            user_id=callback.from_user.id, amount_somoni=float(amount),
+            status="pending", created_at=datetime.now(timezone.utc),
+        )
+        session.add(req)
+        await session.commit()
+        await session.refresh(req)
+        req_id = req.id
+
+    await callback.message.answer(
+        f"🧾 Дархости пуркунӣ #{req_id}: <b>{amount} сомонӣ</b>\n\n"
+        "Пардохтро ба соҳиби мағоза бо усули қаблан тасдиқшуда фиристед ва "
+        "рақами дархостро ба админ хабар диҳед. Баланс танҳо баъди санҷиши воқеии ворид шудани пул зиёд мешавад.\n\n"
+        "Дастгирӣ: @ehson_o9"
+    )
+    if config.admin_chat_id:
+        try:
+            await callback.bot.send_message(
+                config.admin_chat_id,
+                f"🆕 Дархости пуркунии баланс #{req_id}: {amount} сомонӣ\n"
+                f"User ID: {callback.from_user.id} (@{callback.from_user.username or '—'})\n"
+                "Санҷед, ки маблағ воқеан ворид шудааст. Барои тасдиқ: "
+                f"/walletapprove {req_id} <payment_reference>",
+            )
+        except Exception:
+            pass
+    await callback.answer("Дархост сабт шуд.")
+
+
+@router.message(Command("apikey"))
+async def api_key_command(message: Message) -> None:
+    """Generate or rotate a personal API secret; display it once only."""
+    import hashlib
+    import secrets
+    from bot.db.models import CustomerApiKey
+    from bot.db.session import get_session
+
+    raw_key = "almt_" + secrets.token_urlsafe(32)
+    digest = hashlib.sha256(raw_key.encode()).hexdigest()
+    prefix = raw_key[:12]
+    async with get_session() as session:
+        row = await session.execute(
+            select(CustomerApiKey).where(CustomerApiKey.user_id == message.from_user.id)
+        )
+        api_key = row.scalar_one_or_none()
+        if api_key is None:
+            api_key = CustomerApiKey(user_id=message.from_user.id, key_hash=digest, key_prefix=prefix)
+            session.add(api_key)
+        else:
+            api_key.key_hash = digest
+            api_key.key_prefix = prefix
+            api_key.revoked_at = None
+        await session.commit()
+
+    await message.answer(
+        "🔐 <b>API-ключи шахсӣ</b>\n\n"
+        "Калиди нави API сохта шуд. Онро танҳо як бор мебинед — дар ҷои махфӣ нигоҳ доред "
+        "ва ба дигарон/скриншот нафиристед. Калиди пешина бекор шуд.\n\n"
+        f"<code>{raw_key}</code>\n\n"
+        "Ҳоло API барои санҷидани баланс ва каталоги маҳсулот фаъол мешавад; "
+        "хариди API бояд баъди татбиқи санҷишҳои пардохт/расонидан фаъол карда шавад."
+    )
