@@ -48,6 +48,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("accepted_terms_at", "DATETIME"),
         ("referred_by", "BIGINT"),
         ("referral_balance", "FLOAT DEFAULT 0.0"),
+        ("wallet_balance_somoni", "FLOAT DEFAULT 0.0"),
     ],
     "bot_products": [
         ("name", "VARCHAR(64)"),
