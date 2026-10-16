@@ -51,6 +51,8 @@ class User(Base):
         BigInteger, ForeignKey("bot_users.id"), nullable=True
     )
     referral_balance: Mapped[float] = mapped_column(Float, default=0.0)
+    # Customer prepaid wallet, separate from referral rewards.
+    wallet_balance_somoni: Mapped[float] = mapped_column(Float, default=0.0)
 
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
 
@@ -236,3 +238,28 @@ class AdsGramEvent(Base):
     event_type: Mapped[str] = mapped_column(String(24), default="delivered", index=True)
     message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class CustomerApiKey(Base):
+    """One API credential per Telegram customer; only its SHA-256 hash is stored."""
+    __tablename__ = "bot_customer_api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"), unique=True, index=True)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    key_prefix: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class WalletTransaction(Base):
+    """Append-only wallet ledger; reference is unique to prevent duplicate credit/debit."""
+    __tablename__ = "bot_wallet_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"), index=True)
+    amount_somoni: Mapped[float] = mapped_column(Float)  # positive credit, negative debit
+    kind: Mapped[str] = mapped_column(String(24))
+    reference: Mapped[str] = mapped_column(String(128), unique=True)
+    note: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
