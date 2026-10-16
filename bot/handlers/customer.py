@@ -1344,7 +1344,7 @@ async def stale_callback_fallback(callback: CallbackQuery, state: FSMContext) ->
 async def wallet_command(message: Message) -> None:
     """Show wallet balance and create a manual top-up request."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-    from bot.db.models import WalletTopupRequest, User
+    from bot.db.models import WalletTransaction
     from bot.db.session import get_session
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1355,8 +1355,18 @@ async def wallet_command(message: Message) -> None:
         await upsert_user(session, message.from_user.id, message.from_user.username, message.from_user.full_name)
         user = await get_user(session, message.from_user.id)
         balance = float(user.wallet_balance_somoni or 0) if user else 0.0
+        rows = await session.execute(
+            select(WalletTransaction).where(WalletTransaction.user_id == message.from_user.id)
+            .order_by(WalletTransaction.created_at.desc()).limit(5)
+        )
+        history = list(rows.scalars().all())
+    history_text = "\n".join(
+        f"• {tx.amount_somoni:+.2f}с — {tx.kind} — {tx.created_at.strftime('%d.%m %H:%M')}"
+        for tx in history
+    ) or "Ҳоло амалиёт нест."
     await message.answer(
         f"👛 <b>Ҳамёни ALMAZ TJ</b>\nБаланс: <b>{balance:.2f} сомонӣ</b>\n\n"
+        f"<b>Амалиёти охирин:</b>\n{history_text}\n\n"
         "Маблағи пуркуниро интихоб кунед. Пуркунӣ дастӣ тасдиқ мешавад: "
         "админ бояд ворид шудани маблағро дар ҳисоби қабулкунанда санҷад.",
         reply_markup=keyboard,
