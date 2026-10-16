@@ -108,6 +108,8 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
         return web.Response(text="OK")
 
     app.router.add_get("/", health)
+    from bot.services.wallet_api import register_wallet_api
+    register_wallet_api(app, bot)
 
     async def promo_click(request: web.Request) -> web.StreamResponse:
         """Track an app-promo redirect and send the user to the official Play Store page."""
