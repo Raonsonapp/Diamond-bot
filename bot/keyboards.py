@@ -99,15 +99,14 @@ def back_to_menu_keyboard() -> InlineKeyboardMarkup:
 
 
 def contact_keyboard() -> InlineKeyboardMarkup:
-    """Contact options deliberately expose no phone/WhatsApp number."""
+    """Offer Telegram-only support; never expose phone or WhatsApp details."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            
-            [InlineKeyboardButton(text="📢 Канали Telegram", url=config.shop_channel_url)],
+            [InlineKeyboardButton(text="💬 Навиштан ба дастгирӣ дар Telegram", url=config.support_telegram_url)],
+            [InlineKeyboardButton(text="📢 Канали мағоза", url=config.shop_channel_url)],
             [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
         ]
     )
-
 
 def _product_label(p: Product) -> str:
     # A plain pack's admin-given name is just its size ("100 диамонд"), so a
