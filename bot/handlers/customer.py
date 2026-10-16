@@ -724,6 +724,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
 
     total_price = sum(p.price_somoni for p in products)
     offer_balance = user is not None and user.referral_balance >= total_price > 0
+    offer_wallet = user is not None and float(user.wallet_balance_somoni or 0) >= total_price > 0
     category = products[0].category
 
     player_name = None
@@ -750,7 +751,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     confirm_lines.append("\nҲама дуруст аст?")
     await answer_target.answer(
         "\n".join(confirm_lines),
-        reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance),
+        reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance, offer_wallet_payment=offer_wallet),
     )
 
 
