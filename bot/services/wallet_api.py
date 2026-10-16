@@ -95,6 +95,8 @@ async def api_create_order(request: web.Request) -> web.Response:
         return web.json_response({"error": "Idempotency-Key header (1-128 chars) is required"}, status=400)
     try:
         body = await request.json()
+        if not isinstance(body, dict):
+            return web.json_response({"error": "JSON object required"}, status=400)
         product_id = int(body.get("product_id"))
         recipient = str(body.get("recipient", "")).strip()
     except (ValueError, TypeError, json.JSONDecodeError):
@@ -148,7 +150,7 @@ async def api_create_order(request: web.Request) -> web.Response:
             await session.flush()
             session.add(WalletTransaction(
                 user_id=user_id, amount_somoni=-price, kind="api_purchase",
-                reference=f"api_purchase:{user_id}:{idem}", note=f"order_id:{order.id}",
+                reference=f"api_purchase:{user_id}:{hashlib.sha256(idem.encode()).hexdigest()}", note=f"order_id:{order.id}",
             ))
             session.add(ApiOrderRequest(
                 user_id=user_id, idempotency_key=idem, product_id=product_id,
