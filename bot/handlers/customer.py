@@ -8,6 +8,7 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import select
 
 from bot.config import config
 from bot.db.models import OrderStatus, Product, ProductCategory
