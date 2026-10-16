@@ -923,6 +923,80 @@ async def _blocked_for_maintenance(callback: CallbackQuery, state: FSMContext) -
     return True
 
 
+@router.callback_query(OrderFlow.confirming, F.data == "order:pay_wallet")
+async def pay_with_wallet(callback: CallbackQuery, state: FSMContext) -> None:
+    """Atomically debit the customer's prepaid wallet and create paid order(s)."""
+    if await _blocked_for_maintenance(callback, state):
+        return
+    data = await state.get_data()
+    from bot.db.models import Order, WalletTransaction
+
+    async with get_session() as session:
+        products = await _cart_products(session, data)
+        if not products or any(p is None or not p.is_active for p in products):
+            await callback.answer("Маҳсулот дигар дастрас нест.", show_alert=True)
+            return
+        total = round(sum(p.price_somoni for p in products), 2)
+        locked = await session.execute(
+            select(User).where(User.id == callback.from_user.id).with_for_update()
+        )
+        user = locked.scalar_one_or_none()
+        balance = round(float(user.wallet_balance_somoni or 0), 2) if user else 0.0
+        if user is None or total <= 0 or balance < total:
+            await callback.answer(
+                f"Баланс кофӣ нест. Баланс: {balance:.2f} сомонӣ; лозим: {total:.2f}.",
+                show_alert=True,
+            )
+            return
+
+        user.wallet_balance_somoni = round(balance - total, 2)
+        group_id = uuid.uuid4().hex if len(products) > 1 else None
+        orders = []
+        for product in products:
+            order = Order(
+                user_id=callback.from_user.id, product_id=product.id,
+                ff_player_id=data["ff_player_id"], amount_somoni=product.price_somoni,
+                payment_provider="wallet_telegram", paid_with_referral_balance=False,
+                status=OrderStatus.PAID, cart_group_id=group_id,
+            )
+            session.add(order)
+            orders.append(order)
+        await session.flush()
+        ledger_ref = f"tg_wallet_checkout:{callback.from_user.id}:{uuid.uuid4().hex}"
+        session.add(WalletTransaction(
+            user_id=callback.from_user.id, amount_somoni=-total,
+            kind="telegram_purchase", reference=ledger_ref,
+            note="orders:" + ",".join(str(o.id) for o in orders),
+        ))
+        if len(orders) > 1:
+            orders[0].amount_somoni = total
+            for sibling in orders[1:]:
+                sibling.amount_somoni = 0.0
+        await session.commit()
+        await session.refresh(orders[0])
+
+    await state.clear()
+    primary = orders[0]
+    summary = "\n".join(f"📦 {p.display_name} — {format_price(p.price_somoni)} сомонӣ" for p in products)
+    if config.admin_chat_id:
+        try:
+            await callback.bot.send_message(
+                config.admin_chat_id,
+                f"🆕 Фармоиши #{primary.id} (пардохт аз ҳамёни муштарӣ — тасдиқшуда)\n"
+                f"👤 Мизоҷ: {callback.from_user.full_name} (@{callback.from_user.username or '—'}, id={callback.from_user.id})\n"
+                f"{summary}\n🎮 {primary.ff_player_id}\n\n"
+                "Лутфан иҷро карда, 'Delivered'-ро зер кунед.",
+                reply_markup=admin_order_keyboard(primary),
+            )
+        except Exception:
+            pass
+    await callback.message.edit_text(
+        f"✅ Фармоиш #{primary.id} қабул шуд. Аз баланс {total:.2f} сомонӣ кам шуд.\n"
+        "Таҳвил пас аз иҷрои фармоиш тасдиқ мешавад."
+    )
+    await callback.answer("Пардохт аз баланс қабул шуд.")
+
+
 @router.callback_query(OrderFlow.confirming, F.data == "order:confirm")
 async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
     if await _blocked_for_maintenance(callback, state):
