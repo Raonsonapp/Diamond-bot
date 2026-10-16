@@ -185,3 +185,34 @@ main.py                 # нуқтаи вуруд (polling)
 - Барои кушодани дастгирӣ аз фармони `/support` истифода баред.
 - Дар Render тағйирёбандаи `SUPPORT_TELEGRAM_URL`-ро ба профили Telegram-и дастгирӣ гузоред, масалан `https://t.me/your_support_username`. То он даме, ки ин танзим нашавад, тугма ба канали мағоза меравад.
 - `CONTACT_WHATSAPP_URL` ва `CONTACT_INSTAGRAM_URL` дигар истифода намешаванд.
+
+
+## Customer wallet and API (MVP)
+
+### Wallet
+- Customers use `/wallet` to view their prepaid balance and create a top-up request for 50, 100, 200, or 500 TJS.
+- Top-ups are **manual verification only**: the owner must independently confirm that the money actually arrived before using `/walletapprove <request_id> <payment_reference>`. `/walletpending` lists requests. Do not credit based only on a screenshot or an unverified claim.
+- Wallet credit is recorded in a ledger with a unique request reference; the approval handler locks the request and rejects already-approved requests.
+- This is not a payment-provider integration. A Telegram profile/QR link is not proof of payment. For automatic credit, connect a supported payment merchant API/webhook and verify its signed transaction status.
+
+### Customer API
+- Each customer can create/rotate a personal API secret with `/apikey`. The secret is shown once; only its SHA-256 hash is stored. Rotating it invalidates the previous key.
+- Send the key as `Authorization: Bearer YOUR_API_KEY`.
+- `GET /api/v1/me` — own Telegram ID and wallet balance.
+- `GET /api/v1/products` — active product catalog and prices.
+- `POST /api/v1/orders` — buy from the wallet. JSON: `{"product_id": 1, "recipient": "player-id-or-username"}`; requires a unique `Idempotency-Key` header. Same key + same payload returns the existing order and does not debit twice.
+- `GET /api/v1/orders/{order_id}` — status of an order owned by that API-key user.
+- API purchases debit the wallet and create the order/ledger/idempotency record in one DB transaction. Supplier fulfillment runs asynchronously; inspect order status and admin queue if it remains paid/processing.
+
+Example:
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" https://YOUR_RENDER_HOST/api/v1/me
+curl -H "Authorization: Bearer YOUR_API_KEY" https://YOUR_RENDER_HOST/api/v1/products
+curl -X POST https://YOUR_RENDER_HOST/api/v1/orders \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Idempotency-Key: site-order-00001" \
+  -H "Content-Type: application/json" \
+  -d '{"product_id":1,"recipient":"123456789"}'
+```
+
+Treat API keys as passwords. Do not embed a server-side key in public browser JavaScript or a mobile app. Give each site/bot its own customer's key and keep it in server-side environment secrets. The API currently has no automated payment gateway, per-key rate limiting, or full refund endpoint; test with small values/staging before live sales.
