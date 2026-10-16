@@ -273,7 +273,7 @@ class WalletTopupRequest(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"), index=True)
     amount_somoni: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
-    payment_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    payment_reference: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
