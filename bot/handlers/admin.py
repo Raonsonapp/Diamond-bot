@@ -1486,7 +1486,8 @@ async def wallet_approve(message: Message) -> None:
     credited_user_id = None
     amount = 0.0
     async with get_session() as session:
-        req = await session.get(WalletTopupRequest, req_id)
+        locked = await session.execute(select(WalletTopupRequest).where(WalletTopupRequest.id == req_id).with_for_update())
+        req = locked.scalar_one_or_none()
         if req is None:
             await message.answer("Дархост ёфт нашуд.")
             return
