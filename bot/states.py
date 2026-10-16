@@ -10,3 +10,4 @@ class OrderFlow(StatesGroup):
     awaiting_payment_proof = State()
     awaiting_admin_review = State()
     awaiting_review = State()
+    writing_support_message = State()
