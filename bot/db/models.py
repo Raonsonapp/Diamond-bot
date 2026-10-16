@@ -263,3 +263,16 @@ class WalletTransaction(Base):
     reference: Mapped[str] = mapped_column(String(128), unique=True)
     note: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class WalletTopupRequest(Base):
+    """Manual wallet top-up awaiting admin verification of the actual transfer."""
+    __tablename__ = "bot_wallet_topup_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"), index=True)
+    amount_somoni: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    payment_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
