@@ -1339,6 +1339,8 @@ async def api_key_command(message: Message) -> None:
     from bot.db.session import get_session
 
     raw_key = "almt_" + secrets.token_urlsafe(32)
+    async with get_session() as session:
+        await upsert_user(session, message.from_user.id, message.from_user.username, message.from_user.full_name)
     digest = hashlib.sha256(raw_key.encode()).hexdigest()
     prefix = raw_key[:12]
     async with get_session() as session:
