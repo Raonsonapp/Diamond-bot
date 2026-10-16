@@ -142,7 +142,7 @@ async def api_create_order(request: web.Request) -> web.Response:
             order = Order(
                 user_id=user_id, product_id=product.id, ff_player_id=recipient,
                 amount_somoni=price, payment_provider="wallet_api",
-                status=OrderStatus.AWAITING_PAYMENT,
+                status=OrderStatus.PAID,
             )
             session.add(order)
             await session.flush()
