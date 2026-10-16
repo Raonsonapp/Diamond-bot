@@ -1,6 +1,10 @@
 from aiogram.fsm.state import State, StatesGroup
 
 
+class SupportFlow(StatesGroup):
+    writing_message = State()
+
+
 class OrderFlow(StatesGroup):
     choosing_product = State()
     choosing_cart = State()
@@ -10,4 +14,3 @@ class OrderFlow(StatesGroup):
     awaiting_payment_proof = State()
     awaiting_admin_review = State()
     awaiting_review = State()
-    writing_support_message = State()
