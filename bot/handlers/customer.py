@@ -290,8 +290,18 @@ async def reply_review_channel(message: Message, state: FSMContext) -> None:
 async def reply_contact(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(
-        "📞 Тамос бо мо — тугмаро зер кунед, мустақим кушода мешавад:\n\n"
-        "🛡 Бехатар · 🎧 Дастгирии 24/7 · ⏱ Дар 1-5 дақиқа",
+        "💬 Барои тамос бо ALMAZ TJ танҳо Telegram-ро истифода баред. "
+        "Рақами телефон ва WhatsApp дар бот нишон дода намешавад.",
+        reply_markup=contact_keyboard(),
+    )
+
+
+@router.message(Command("support"))
+async def support_command(message: Message, state: FSMContext) -> None:
+    """Quick access to Telegram-only support from any point in the bot."""
+    await state.clear()
+    await message.answer(
+        "💬 Дастгирии ALMAZ TJ дар Telegram:",
         reply_markup=contact_keyboard(),
     )
 
