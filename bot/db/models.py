@@ -276,3 +276,20 @@ class WalletTopupRequest(Base):
     payment_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ApiOrderRequest(Base):
+    """Idempotency record for API purchases, scoped to one customer."""
+    __tablename__ = "bot_api_order_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    product_id: Mapped[int] = mapped_column(Integer)
+    recipient: Mapped[str] = mapped_column(String(32))
+    order_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        __import__("sqlalchemy").UniqueConstraint("user_id", "idempotency_key", name="uq_api_order_idempotency"),
+    )
