@@ -56,7 +56,7 @@ from bot.services.payments import get_payment_provider
 from bot.services.pricing import quote_custom_price
 from bot.services.referral_rewards import maybe_credit_referral_milestone
 from bot.services.sponsor import is_subscribed_to_sponsor_channel
-from bot.states import OrderFlow
+from bot.states import OrderFlow, WalletTopupFlow
 from bot.texts import FAQ_TEXT, TERMS_TEXT
 
 # Custom-amount ("Миқдори дигар") is only ever shown on the Telegram
@@ -1374,8 +1374,9 @@ async def wallet_command(message: Message) -> None:
 
 
 @router.callback_query(F.data.startswith("wallet:topup:"))
-async def wallet_topup_request(callback: CallbackQuery) -> None:
+async def wallet_topup_request(callback: CallbackQuery, state: FSMContext) -> None:
     from datetime import datetime, timezone
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     from bot.db.models import WalletTopupRequest
     from bot.db.session import get_session
 
@@ -1398,24 +1399,76 @@ async def wallet_topup_request(callback: CallbackQuery) -> None:
         await session.refresh(req)
         req_id = req.id
 
+    if config.receiving_card_number:
+        payment_details = f"💳 Рақам/ҳисоби қабул: <code>{html.escape(config.receiving_card_number)}</code>\\n"
+    else:
+        payment_details = (
+            "⚠️ Рақами қабул дар Render Environment (RECEIVING_CARD_NUMBER) танзим нашудааст. "
+            "Пеш аз пардохт бо дастгирӣ тамос гиред.\\n"
+        )
+    await state.set_state(WalletTopupFlow.awaiting_proof)
+    await state.update_data(wallet_topup_request_id=req_id)
     await callback.message.answer(
-        f"🧾 Дархости пуркунӣ #{req_id}: <b>{amount} сомонӣ</b>\n\n"
-        "Пардохтро ба соҳиби мағоза бо усули қаблан тасдиқшуда фиристед ва "
-        "рақами дархостро ба админ хабар диҳед. Баланс танҳо баъди санҷиши воқеии ворид шудани пул зиёд мешавад.\n\n"
-        "Дастгирӣ: @ehson_o9"
+        f"👛 <b>Пур кардани баланс — {amount} сомонӣ</b>\\n"
+        f"Дархост: <code>#{req_id}</code>\\n\\n"
+        f"{payment_details}\\n"
+        "1) Маблағи дақиқро ба ҳисоби қабулкунанда гузаронед.\\n"
+        "2) Скриншот ё файли чеки пардохтро ҳамин ҷо фиристед.\\n"
+        "3) Админ пардохтро месанҷад; баланс танҳо баъди тасдиқи воқеии маблағ зиёд мешавад.\\n\\n"
+        "Агар ҳоло пардохт кардан нахоҳед, /start фиристед.",
     )
-    if config.admin_chat_id:
-        try:
-            await callback.bot.send_message(
-                config.admin_chat_id,
-                f"🆕 Дархости пуркунии баланс #{req_id}: {amount} сомонӣ\n"
-                f"User ID: {callback.from_user.id} (@{callback.from_user.username or '—'})\n"
-                "Санҷед, ки маблағ воқеан ворид шудааст. Барои тасдиқ: "
-                f"/walletapprove {req_id} <payment_reference>",
-            )
-        except Exception:
-            pass
-    await callback.answer("Дархост сабт шуд.")
+    await callback.answer("Дархост сохта шуд.")
+
+
+@router.message(WalletTopupFlow.awaiting_proof)
+async def wallet_topup_receive_proof(message: Message, state: FSMContext) -> None:
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from bot.db.models import WalletTopupRequest
+    from bot.db.session import get_session
+
+    data = await state.get_data()
+    req_id = data.get("wallet_topup_request_id")
+    if not req_id:
+        await state.clear()
+        await message.answer("Дархост ёфт нашуд. Аз нав /wallet-ро кушоед.")
+        return
+    if not message.photo and not message.document:
+        await message.answer("Лутфан скриншот ё файли чеки пардохтро фиристед.")
+        return
+
+    async with get_session() as session:
+        req = await session.get(WalletTopupRequest, int(req_id))
+        if req is None or req.user_id != message.from_user.id or req.status != "pending":
+            await state.clear()
+            await message.answer("Ин дархост дигар фаъол нест. Барои пуркунии нав /wallet-ро кушоед.")
+            return
+        amount = req.amount_somoni
+
+    admin_keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Тасдиқ ва пур кардани баланс", callback_data=f"wallet:approve:{req_id}"),
+        InlineKeyboardButton(text="❌ Рад", callback_data=f"wallet:reject:{req_id}"),
+    ]])
+    caption = (
+        f"🧾 <b>Чеки пуркунии баланс #{req_id}</b>\\n"
+        f"💰 Маблағ: {amount:.2f} сомонӣ\\n"
+        f"👤 Корбар: {message.from_user.full_name} (@{message.from_user.username or '—'})\\n"
+        f"🆔 User ID: <code>{message.from_user.id}</code>\\n\\n"
+        "❗️ Пеш аз тасдиқ, маблағи воқеан воридшударо дар барномаи бонк санҷед."
+    )
+    if not config.admin_chat_id:
+        await message.answer("⚠️ Админ дар бот танзим нашудааст (ADMIN_CHAT_ID). Чек қабул шуд, аммо ба админ фиристода нашуд.")
+        return
+    try:
+        if message.photo:
+            await message.bot.send_photo(config.admin_chat_id, message.photo[-1].file_id, caption=caption, reply_markup=admin_keyboard)
+        else:
+            await message.bot.send_document(config.admin_chat_id, message.document.file_id, caption=caption, reply_markup=admin_keyboard)
+    except Exception:
+        await message.answer("Фиристодани чек ба админ муваффақ нашуд. Лутфан баъдтар дубора кӯшиш кунед.")
+        return
+
+    await state.clear()
+    await message.answer(f"✅ Чек барои дархости #{req_id} ба админ фиристода шуд. Баланс баъди санҷиш пур мешавад.")
 
 
 @router.message(Command("apikey"))
