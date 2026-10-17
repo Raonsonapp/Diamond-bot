@@ -1325,7 +1325,7 @@ async def my_orders(message: Message) -> None:
     await message.answer(text)
 
 
-@router.callback_query()
+@router.callback_query(~F.data.startswith("wallet:"), ~F.data.startswith("api:"))
 async def stale_callback_fallback(callback: CallbackQuery, state: FSMContext) -> None:
     """Registered last on purpose: only reached when no handler above
     matched. That happens when a button belongs to a screen the user has
