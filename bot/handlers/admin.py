@@ -1535,3 +1535,114 @@ async def wallet_approve(message: Message) -> None:
         )
     except Exception:
         pass
+
+
+@router.callback_query(F.data.regexp(r"^wallet:approve:\\d+$"))
+async def wallet_topup_approve_callback(callback: CallbackQuery) -> None:
+    """Admin approves a wallet top-up only after checking the actual bank credit."""
+    from datetime import datetime, timezone
+    from bot.db.models import WalletTopupRequest, WalletTransaction, User
+
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ин амал танҳо барои админ аст.", show_alert=True)
+        return
+    req_id = int(callback.data.rsplit(":", 1)[1])
+    user_id = None
+    amount = 0.0
+    async with get_session() as session:
+        locked = await session.execute(
+            select(WalletTopupRequest).where(WalletTopupRequest.id == req_id).with_for_update()
+        )
+        req = locked.scalar_one_or_none()
+        if req is None:
+            await callback.answer("Дархост ёфт нашуд.", show_alert=True)
+            return
+        if req.status != "pending":
+            await callback.answer(f"Дархост аллакай {req.status} аст.", show_alert=True)
+            return
+        user = await session.get(User, req.user_id)
+        if user is None:
+            await callback.answer("Корбар ёфт нашуд.", show_alert=True)
+            return
+        ledger_ref = f"manual_topup:{req.id}"
+        existing = await session.execute(
+            select(WalletTransaction).where(WalletTransaction.reference == ledger_ref)
+        )
+        if existing.scalar_one_or_none() is not None:
+            await callback.answer("Ин дархост аллакай ба баланс гузаронида шудааст.", show_alert=True)
+            return
+        payment_ref = f"admin_verified_topup:{req.id}"
+        user.wallet_balance_somoni = round(float(user.wallet_balance_somoni or 0) + req.amount_somoni, 2)
+        session.add(WalletTransaction(
+            user_id=req.user_id, amount_somoni=req.amount_somoni,
+            kind="manual_topup", reference=ledger_ref,
+            note=f"payment_ref:{payment_ref}",
+        ))
+        req.status = "approved"
+        req.payment_reference = payment_ref
+        req.approved_at = datetime.now(timezone.utc)
+        await session.commit()
+        user_id, amount = req.user_id, req.amount_somoni
+
+    try:
+        await callback.bot.send_message(
+            user_id,
+            f"✅ Пардохти шумо тасдиқ шуд! Ба баланс +{amount:.2f} сомонӣ илова шуд.\\nБарои дидани баланс: /wallet",
+        )
+    except Exception:
+        pass
+    try:
+        await callback.message.edit_caption(
+            caption=(callback.message.caption or "") + "\\n\\n✅ ТАСДИҚ ШУД — баланс пур карда шуд.",
+            reply_markup=None,
+        )
+    except Exception:
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+    await callback.answer("Тасдиқ шуд; баланс як бор пур карда шуд.")
+
+
+@router.callback_query(F.data.regexp(r"^wallet:reject:\\d+$"))
+async def wallet_topup_reject_callback(callback: CallbackQuery) -> None:
+    """Reject a pending wallet top-up without crediting any balance."""
+    from bot.db.models import WalletTopupRequest
+
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ин амал танҳо барои админ аст.", show_alert=True)
+        return
+    req_id = int(callback.data.rsplit(":", 1)[1])
+    user_id = None
+    async with get_session() as session:
+        locked = await session.execute(
+            select(WalletTopupRequest).where(WalletTopupRequest.id == req_id).with_for_update()
+        )
+        req = locked.scalar_one_or_none()
+        if req is None:
+            await callback.answer("Дархост ёфт нашуд.", show_alert=True)
+            return
+        if req.status != "pending":
+            await callback.answer(f"Дархост аллакай {req.status} аст.", show_alert=True)
+            return
+        req.status = "rejected"
+        user_id = req.user_id
+        await session.commit()
+    try:
+        await callback.bot.send_message(
+            user_id,
+            f"❌ Дархости пуркунии баланс #{req_id} рад шуд. Агар фикр мекунед хато шудааст, ба @ehson_o9 нависед.",
+        )
+    except Exception:
+        pass
+    try:
+        await callback.message.edit_caption(
+            caption=(callback.message.caption or "") + "\\n\\n❌ РАД ШУД — баланс тағйир дода нашуд.",
+            reply_markup=None,
+        )
+    except Exception:
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+    await callback.answer("Дархост рад шуд.")
