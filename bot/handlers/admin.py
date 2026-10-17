@@ -1537,7 +1537,7 @@ async def wallet_approve(message: Message) -> None:
         pass
 
 
-@router.callback_query(F.data.regexp(r"^wallet:approve:\\d+$"))
+@router.callback_query(F.data.regexp(r"^wallet:approve:\d+$"))
 async def wallet_topup_approve_callback(callback: CallbackQuery) -> None:
     """Admin approves a wallet top-up only after checking the actual bank credit."""
     from datetime import datetime, timezone
@@ -1604,7 +1604,7 @@ async def wallet_topup_approve_callback(callback: CallbackQuery) -> None:
     await callback.answer("Тасдиқ шуд; баланс як бор пур карда шуд.")
 
 
-@router.callback_query(F.data.regexp(r"^wallet:reject:\\d+$"))
+@router.callback_query(F.data.regexp(r"^wallet:reject:\d+$"))
 async def wallet_topup_reject_callback(callback: CallbackQuery) -> None:
     """Reject a pending wallet top-up without crediting any balance."""
     from bot.db.models import WalletTopupRequest
