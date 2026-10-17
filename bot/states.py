@@ -10,3 +10,7 @@ class OrderFlow(StatesGroup):
     awaiting_payment_proof = State()
     awaiting_admin_review = State()
     awaiting_review = State()
+
+
+class WalletTopupFlow(StatesGroup):
+    awaiting_proof = State()
