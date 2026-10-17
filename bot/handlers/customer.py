@@ -1400,21 +1400,21 @@ async def wallet_topup_request(callback: CallbackQuery, state: FSMContext) -> No
         req_id = req.id
 
     if config.receiving_card_number:
-        payment_details = f"💳 Рақам/ҳисоби қабул: <code>{html.escape(config.receiving_card_number)}</code>\\n"
+        payment_details = f"💳 Рақам/ҳисоби қабул: <code>{html.escape(config.receiving_card_number)}</code>\n"
     else:
         payment_details = (
             "⚠️ Рақами қабул дар Render Environment (RECEIVING_CARD_NUMBER) танзим нашудааст. "
-            "Пеш аз пардохт бо дастгирӣ тамос гиред.\\n"
+            "Пеш аз пардохт бо дастгирӣ тамос гиред.\n"
         )
     await state.set_state(WalletTopupFlow.awaiting_proof)
     await state.update_data(wallet_topup_request_id=req_id)
     await callback.message.answer(
-        f"👛 <b>Пур кардани баланс — {amount} сомонӣ</b>\\n"
-        f"Дархост: <code>#{req_id}</code>\\n\\n"
-        f"{payment_details}\\n"
-        "1) Маблағи дақиқро ба ҳисоби қабулкунанда гузаронед.\\n"
-        "2) Скриншот ё файли чеки пардохтро ҳамин ҷо фиристед.\\n"
-        "3) Админ пардохтро месанҷад; баланс танҳо баъди тасдиқи воқеии маблағ зиёд мешавад.\\n\\n"
+        f"👛 <b>Пур кардани баланс — {amount} сомонӣ</b>\n"
+        f"Дархост: <code>#{req_id}</code>\n\n"
+        f"{payment_details}\n"
+        "1) Маблағи дақиқро ба ҳисоби қабулкунанда гузаронед.\n"
+        "2) Скриншот ё файли чеки пардохтро ҳамин ҷо фиристед.\n"
+        "3) Админ пардохтро месанҷад; баланс танҳо баъди тасдиқи воқеии маблағ зиёд мешавад.\n\n"
         "Агар ҳоло пардохт кардан нахоҳед, /start фиристед.",
     )
     await callback.answer("Дархост сохта шуд.")
@@ -1449,10 +1449,10 @@ async def wallet_topup_receive_proof(message: Message, state: FSMContext) -> Non
         InlineKeyboardButton(text="❌ Рад", callback_data=f"wallet:reject:{req_id}"),
     ]])
     caption = (
-        f"🧾 <b>Чеки пуркунии баланс #{req_id}</b>\\n"
-        f"💰 Маблағ: {amount:.2f} сомонӣ\\n"
-        f"👤 Корбар: {message.from_user.full_name} (@{message.from_user.username or '—'})\\n"
-        f"🆔 User ID: <code>{message.from_user.id}</code>\\n\\n"
+        f"🧾 <b>Чеки пуркунии баланс #{req_id}</b>\n"
+        f"💰 Маблағ: {amount:.2f} сомонӣ\n"
+        f"👤 Корбар: {message.from_user.full_name} (@{message.from_user.username or '—'})\n"
+        f"🆔 User ID: <code>{message.from_user.id}</code>\n\n"
         "❗️ Пеш аз тасдиқ, маблағи воқеан воридшударо дар барномаи бонк санҷед."
     )
     if not config.admin_chat_id:
