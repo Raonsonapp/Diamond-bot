@@ -1587,13 +1587,13 @@ async def wallet_topup_approve_callback(callback: CallbackQuery) -> None:
     try:
         await callback.bot.send_message(
             user_id,
-            f"✅ Пардохти шумо тасдиқ шуд! Ба баланс +{amount:.2f} сомонӣ илова шуд.\\nБарои дидани баланс: /wallet",
+            f"✅ Пардохти шумо тасдиқ шуд! Ба баланс +{amount:.2f} сомонӣ илова шуд.\nБарои дидани баланс: /wallet",
         )
     except Exception:
         pass
     try:
         await callback.message.edit_caption(
-            caption=(callback.message.caption or "") + "\\n\\n✅ ТАСДИҚ ШУД — баланс пур карда шуд.",
+            caption=(callback.message.caption or "") + "\n\n✅ ТАСДИҚ ШУД — баланс пур карда шуд.",
             reply_markup=None,
         )
     except Exception:
@@ -1637,7 +1637,7 @@ async def wallet_topup_reject_callback(callback: CallbackQuery) -> None:
         pass
     try:
         await callback.message.edit_caption(
-            caption=(callback.message.caption or "") + "\\n\\n❌ РАД ШУД — баланс тағйир дода нашуд.",
+            caption=(callback.message.caption or "") + "\n\n❌ РАД ШУД — баланс тағйир дода нашуд.",
             reply_markup=None,
         )
     except Exception:
