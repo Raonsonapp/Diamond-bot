@@ -1453,3 +1453,50 @@ async def api_key_command(message: Message) -> None:
         "API-и шумо баланс ва каталоги маҳсулотро мехонад ва метавонад аз ҳамён фармоиш созад. "
         "Ҳангоми истифода калидро танҳо дар сервери шахсии худ нигоҳ доред."
     )
+
+
+@router.callback_query(F.data == "wallet:open")
+async def wallet_open_button(callback: CallbackQuery) -> None:
+    """Open the same wallet/top-up choices as /wallet from the main menu."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from bot.db.models import WalletTransaction
+    from bot.db.session import get_session
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"➕ Пур кардан: {amount} сомонӣ", callback_data=f"wallet:topup:{amount}")]
+        for amount in (50, 100, 200, 500)
+    ])
+    async with get_session() as session:
+        await upsert_user(
+            session, callback.from_user.id, callback.from_user.username,
+            callback.from_user.full_name,
+        )
+        user = await get_user(session, callback.from_user.id)
+        balance = float(user.wallet_balance_somoni or 0) if user else 0.0
+        rows = await session.execute(
+            select(WalletTransaction)
+            .where(WalletTransaction.user_id == callback.from_user.id)
+            .order_by(WalletTransaction.created_at.desc()).limit(5)
+        )
+        history = list(rows.scalars().all())
+    history_text = "\\n".join(
+        f"• {tx.amount_somoni:+.2f}с — {tx.kind} — {tx.created_at.strftime('%d.%m %H:%M')}"
+        for tx in history
+    ) or "Ҳоло амалиёт нест."
+    await callback.message.answer(
+        f"👛 <b>Ҳамёни ALMAZ TJ</b>\\nБаланс: <b>{balance:.2f} сомонӣ</b>\\n\\n"
+        f"<b>Амалиёти охирин:</b>\\n{history_text}\\n\\n"
+        "Маблағро интихоб кунед. Пуркунӣ ҳоло дастӣ баррасӣ мешавад; "
+        "баланс танҳо баъди тасдиқи админ зиёд мешавад.",
+        reply_markup=keyboard,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "api:open")
+async def api_open_button(callback: CallbackQuery) -> None:
+    await callback.message.answer(
+        "🔑 Барои сохтани API-ключи шахсии худ фармони /apikey-ро пахш кунед.\\n"
+        "Калид танҳо як бор нишон дода мешавад; онро ба касе нафиристед."
+    )
+    await callback.answer()
