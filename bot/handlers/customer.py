@@ -8,9 +8,10 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import select
 
 from bot.config import config
-from bot.db.models import OrderStatus, Product, ProductCategory
+from bot.db.models import OrderStatus, Product, ProductCategory, User
 from bot.db.repo import (
     accept_terms,
     count_referrals,
@@ -723,6 +724,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
 
     total_price = sum(p.price_somoni for p in products)
     offer_balance = user is not None and user.referral_balance >= total_price > 0
+    offer_wallet = user is not None and float(user.wallet_balance_somoni or 0) >= total_price > 0
     category = products[0].category
 
     player_name = None
@@ -749,7 +751,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     confirm_lines.append("\nҲама дуруст аст?")
     await answer_target.answer(
         "\n".join(confirm_lines),
-        reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance),
+        reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance, offer_wallet_payment=offer_wallet),
     )
 
 
@@ -919,6 +921,80 @@ async def _blocked_for_maintenance(callback: CallbackQuery, state: FSMContext) -
     )
     await callback.answer()
     return True
+
+
+@router.callback_query(OrderFlow.confirming, F.data == "order:pay_wallet")
+async def pay_with_wallet(callback: CallbackQuery, state: FSMContext) -> None:
+    """Atomically debit the customer's prepaid wallet and create paid order(s)."""
+    if await _blocked_for_maintenance(callback, state):
+        return
+    data = await state.get_data()
+    from bot.db.models import Order, WalletTransaction
+
+    async with get_session() as session:
+        products = await _cart_products(session, data)
+        if not products or any(p is None or not p.is_active for p in products):
+            await callback.answer("Маҳсулот дигар дастрас нест.", show_alert=True)
+            return
+        total = round(sum(p.price_somoni for p in products), 2)
+        locked = await session.execute(
+            select(User).where(User.id == callback.from_user.id).with_for_update()
+        )
+        user = locked.scalar_one_or_none()
+        balance = round(float(user.wallet_balance_somoni or 0), 2) if user else 0.0
+        if user is None or total <= 0 or balance < total:
+            await callback.answer(
+                f"Баланс кофӣ нест. Баланс: {balance:.2f} сомонӣ; лозим: {total:.2f}.",
+                show_alert=True,
+            )
+            return
+
+        user.wallet_balance_somoni = round(balance - total, 2)
+        group_id = uuid.uuid4().hex if len(products) > 1 else None
+        orders = []
+        for product in products:
+            order = Order(
+                user_id=callback.from_user.id, product_id=product.id,
+                ff_player_id=data["ff_player_id"], amount_somoni=product.price_somoni,
+                payment_provider="wallet_telegram", paid_with_referral_balance=False,
+                status=OrderStatus.PAID, cart_group_id=group_id,
+            )
+            session.add(order)
+            orders.append(order)
+        await session.flush()
+        ledger_ref = f"tg_wallet_checkout:{callback.from_user.id}:{uuid.uuid4().hex}"
+        session.add(WalletTransaction(
+            user_id=callback.from_user.id, amount_somoni=-total,
+            kind="telegram_purchase", reference=ledger_ref,
+            note="orders:" + ",".join(str(o.id) for o in orders),
+        ))
+        if len(orders) > 1:
+            orders[0].amount_somoni = total
+            for sibling in orders[1:]:
+                sibling.amount_somoni = 0.0
+        await session.commit()
+        await session.refresh(orders[0])
+
+    await state.clear()
+    primary = orders[0]
+    summary = "\n".join(f"📦 {p.display_name} — {format_price(p.price_somoni)} сомонӣ" for p in products)
+    if config.admin_chat_id:
+        try:
+            await callback.bot.send_message(
+                config.admin_chat_id,
+                f"🆕 Фармоиши #{primary.id} (пардохт аз ҳамёни муштарӣ — тасдиқшуда)\n"
+                f"👤 Мизоҷ: {callback.from_user.full_name} (@{callback.from_user.username or '—'}, id={callback.from_user.id})\n"
+                f"{summary}\n🎮 {primary.ff_player_id}\n\n"
+                "Лутфан иҷро карда, 'Delivered'-ро зер кунед.",
+                reply_markup=admin_order_keyboard(primary),
+            )
+        except Exception:
+            pass
+    await callback.message.edit_text(
+        f"✅ Фармоиш #{primary.id} қабул шуд. Аз баланс {total:.2f} сомонӣ кам шуд.\n"
+        "Таҳвил пас аз иҷрои фармоиш тасдиқ мешавад."
+    )
+    await callback.answer("Пардохт аз баланс қабул шуд.")
 
 
 @router.callback_query(OrderFlow.confirming, F.data == "order:confirm")
@@ -1260,3 +1336,120 @@ async def stale_callback_fallback(callback: CallbackQuery, state: FSMContext) ->
     await callback.answer("Ин тугма кӯҳна шудааст, лутфан аз нав кушоед 👇", show_alert=True)
     await state.clear()
     await callback.message.answer(WELCOME_TEXT)
+
+
+# --- Prepaid wallet and customer API access ---------------------------------
+
+@router.message(Command("wallet"))
+async def wallet_command(message: Message) -> None:
+    """Show wallet balance and create a manual top-up request."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from bot.db.models import WalletTransaction
+    from bot.db.session import get_session
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"➕ Пур кардан: {amount} сомонӣ", callback_data=f"wallet:topup:{amount}")]
+        for amount in (50, 100, 200, 500)
+    ])
+    async with get_session() as session:
+        await upsert_user(session, message.from_user.id, message.from_user.username, message.from_user.full_name)
+        user = await get_user(session, message.from_user.id)
+        balance = float(user.wallet_balance_somoni or 0) if user else 0.0
+        rows = await session.execute(
+            select(WalletTransaction).where(WalletTransaction.user_id == message.from_user.id)
+            .order_by(WalletTransaction.created_at.desc()).limit(5)
+        )
+        history = list(rows.scalars().all())
+    history_text = "\n".join(
+        f"• {tx.amount_somoni:+.2f}с — {tx.kind} — {tx.created_at.strftime('%d.%m %H:%M')}"
+        for tx in history
+    ) or "Ҳоло амалиёт нест."
+    await message.answer(
+        f"👛 <b>Ҳамёни ALMAZ TJ</b>\nБаланс: <b>{balance:.2f} сомонӣ</b>\n\n"
+        f"<b>Амалиёти охирин:</b>\n{history_text}\n\n"
+        "Маблағи пуркуниро интихоб кунед. Пуркунӣ дастӣ тасдиқ мешавад: "
+        "админ бояд ворид шудани маблағро дар ҳисоби қабулкунанда санҷад.",
+        reply_markup=keyboard,
+    )
+
+
+@router.callback_query(F.data.startswith("wallet:topup:"))
+async def wallet_topup_request(callback: CallbackQuery) -> None:
+    from datetime import datetime, timezone
+    from bot.db.models import WalletTopupRequest
+    from bot.db.session import get_session
+
+    try:
+        amount = int(callback.data.rsplit(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Маблағ нодуруст аст.", show_alert=True)
+        return
+    if amount not in (50, 100, 200, 500):
+        await callback.answer("Маблағ иҷозат дода нашудааст.", show_alert=True)
+        return
+    async with get_session() as session:
+        await upsert_user(session, callback.from_user.id, callback.from_user.username, callback.from_user.full_name)
+        req = WalletTopupRequest(
+            user_id=callback.from_user.id, amount_somoni=float(amount),
+            status="pending", created_at=datetime.now(timezone.utc),
+        )
+        session.add(req)
+        await session.commit()
+        await session.refresh(req)
+        req_id = req.id
+
+    await callback.message.answer(
+        f"🧾 Дархости пуркунӣ #{req_id}: <b>{amount} сомонӣ</b>\n\n"
+        "Пардохтро ба соҳиби мағоза бо усули қаблан тасдиқшуда фиристед ва "
+        "рақами дархостро ба админ хабар диҳед. Баланс танҳо баъди санҷиши воқеии ворид шудани пул зиёд мешавад.\n\n"
+        "Дастгирӣ: @ehson_o9"
+    )
+    if config.admin_chat_id:
+        try:
+            await callback.bot.send_message(
+                config.admin_chat_id,
+                f"🆕 Дархости пуркунии баланс #{req_id}: {amount} сомонӣ\n"
+                f"User ID: {callback.from_user.id} (@{callback.from_user.username or '—'})\n"
+                "Санҷед, ки маблағ воқеан ворид шудааст. Барои тасдиқ: "
+                f"/walletapprove {req_id} <payment_reference>",
+            )
+        except Exception:
+            pass
+    await callback.answer("Дархост сабт шуд.")
+
+
+@router.message(Command("apikey"))
+async def api_key_command(message: Message) -> None:
+    """Generate or rotate a personal API secret; display it once only."""
+    import hashlib
+    import secrets
+    from bot.db.models import CustomerApiKey
+    from bot.db.session import get_session
+
+    raw_key = "almt_" + secrets.token_urlsafe(32)
+    async with get_session() as session:
+        await upsert_user(session, message.from_user.id, message.from_user.username, message.from_user.full_name)
+    digest = hashlib.sha256(raw_key.encode()).hexdigest()
+    prefix = raw_key[:12]
+    async with get_session() as session:
+        row = await session.execute(
+            select(CustomerApiKey).where(CustomerApiKey.user_id == message.from_user.id)
+        )
+        api_key = row.scalar_one_or_none()
+        if api_key is None:
+            api_key = CustomerApiKey(user_id=message.from_user.id, key_hash=digest, key_prefix=prefix)
+            session.add(api_key)
+        else:
+            api_key.key_hash = digest
+            api_key.key_prefix = prefix
+            api_key.revoked_at = None
+        await session.commit()
+
+    await message.answer(
+        "🔐 <b>API-ключи шахсӣ</b>\n\n"
+        "Калиди нави API сохта шуд. Онро танҳо як бор мебинед — дар ҷои махфӣ нигоҳ доред "
+        "ва ба дигарон/скриншот нафиристед. Калиди пешина бекор шуд.\n\n"
+        f"<code>{raw_key}</code>\n\n"
+        "API-и шумо баланс ва каталоги маҳсулотро мехонад ва метавонад аз ҳамён фармоиш созад. "
+        "Ҳангоми истифода калидро танҳо дар сервери шахсии худ нигоҳ доред."
+    )

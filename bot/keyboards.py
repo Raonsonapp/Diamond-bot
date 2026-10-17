@@ -227,11 +227,15 @@ def receipt_keyboard(order_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def confirm_order_keyboard(offer_balance_payment: bool = False) -> InlineKeyboardMarkup:
+def confirm_order_keyboard(offer_balance_payment: bool = False, offer_wallet_payment: bool = False) -> InlineKeyboardMarkup:
     rows = []
     if offer_balance_payment:
         rows.append(
             [InlineKeyboardButton(text="💰 Пардохт аз баланси реферал", callback_data="order:pay_balance")]
+        )
+    if offer_wallet_payment:
+        rows.append(
+            [InlineKeyboardButton(text="👛 Пардохт аз ҳамён", callback_data="order:pay_wallet")]
         )
     rows.append(
         [

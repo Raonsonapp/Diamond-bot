@@ -51,6 +51,8 @@ async def _set_bot_commands(bot: Bot) -> None:
         [
             BotCommand(command="start", description="🏠 Ба меню баргаштан"),
             BotCommand(command="myorders", description="📦 Фармоишҳои ман"),
+            BotCommand(command="wallet", description="👛 Баланс ва пуркунӣ"),
+            BotCommand(command="apikey", description="🔑 Калиди API-и шахсӣ"),
         ]
     )
 
@@ -108,6 +110,8 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
         return web.Response(text="OK")
 
     app.router.add_get("/", health)
+    from bot.services.wallet_api import register_wallet_api
+    register_wallet_api(app, bot)
 
     async def promo_click(request: web.Request) -> web.StreamResponse:
         """Track an app-promo redirect and send the user to the official Play Store page."""
