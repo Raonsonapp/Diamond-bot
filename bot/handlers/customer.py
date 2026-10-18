@@ -37,6 +37,7 @@ from bot.keyboards import (
     back_to_menu_keyboard,
     cart_select_keyboard,
     confirm_order_keyboard,
+    change_payment_method_keyboard,
     contact_keyboard,
     games_menu_keyboard,
     main_menu_keyboard,
@@ -1564,5 +1565,95 @@ async def api_open_button(callback: CallbackQuery) -> None:
     await callback.message.answer(
         "🔑 Барои сохтани API-ключи шахсии худ фармони /apikey-ро пахш кунед.\\n"
         "Калид танҳо як бор нишон дода мешавад; онро ба касе нафиристед."
+    )
+    await callback.answer()
+
+
+@router.callback_query(OrderFlow.awaiting_payment_proof, F.data == "payment:change_bank")
+async def payment_change_bank(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    if not order_id:
+        await callback.answer("Фармоиш ёфт нашуд. Аз нав оғоз кунед.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "🔄 <b>Иваз кардани бонк</b>\n\n"
+        "🏦 Бонки дигарро интихоб кунед. Фармоиши шумо ҳамон мемонад — "
+        "фармоиши нав сохта намешавад.\n\n"
+        "💙 Душанбе Сити\n🟢 Алиф Мобайл",
+        reply_markup=change_payment_method_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(OrderFlow.awaiting_payment_proof, F.data.startswith("bankchange:"))
+async def payment_change_bank_selected(callback: CallbackQuery, state: FSMContext) -> None:
+    bank_hint = callback.data.split(":", 1)[1]
+    if bank_hint not in {"dc", "alif"}:
+        await callback.answer("Ин бонк дастрас нест.", show_alert=True)
+        return
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    if not order_id:
+        await callback.answer("Фармоиш ёфт нашуд.", show_alert=True)
+        return
+
+    from bot.db.repo import get_order
+    async with get_session() as session:
+        order = await get_order(session, int(order_id))
+        if order is None or order.status != OrderStatus.AWAITING_PAYMENT:
+            await callback.answer("Ин фармоиш дигар интизори пардохт нест.", show_alert=True)
+            return
+        order.bank_hint = bank_hint
+        await session.commit()
+        amount = float(order.amount_somoni)
+
+    invoice = await get_payment_provider().create_invoice(int(order_id), amount, bank_hint=bank_hint)
+    await state.update_data(bank_hint=bank_hint)
+    bank_label = {"dc": "💙 Душанбе Сити", "alif": "🟢 Алиф Мобайл"}[bank_hint]
+    text = (
+        f"🧾 <b>Фармоиш #{order_id}</b>\n"
+        "━━━━━━━━━━━━━━\n"
+        f"🏦 Усули пардохт: <b>{bank_label}</b>\n"
+        f"💰 Маблағ: <b>{amount:.2f} сомонӣ</b>\n\n"
+        f"{invoice.instructions}\n\n"
+        "📷 Пас аз пардохт расиди воқеиро фиристед."
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=payment_link_keyboard(invoice.pay_url) if invoice.pay_url else payment_link_keyboard(),
+    )
+    await callback.answer("Бонк иваз шуд.")
+
+
+@router.callback_query(OrderFlow.awaiting_payment_proof, F.data == "payment:back")
+async def payment_change_bank_back(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    bank_hint = data.get("bank_hint", "dc")
+    order_id = data.get("order_id")
+    if not order_id:
+        await callback.answer("Фармоиш ёфт нашуд.", show_alert=True)
+        return
+    from bot.db.repo import get_order
+    async with get_session() as session:
+        order = await get_order(session, int(order_id))
+        if order is None:
+            await callback.answer("Фармоиш ёфт нашуд.", show_alert=True)
+            return
+        amount = float(order.amount_somoni)
+        bank_hint = order.bank_hint or bank_hint
+    invoice = await get_payment_provider().create_invoice(int(order_id), amount, bank_hint=bank_hint)
+    bank_label = {"dc": "💙 Душанбе Сити", "alif": "🟢 Алиф Мобайл"}.get(bank_hint, "🏦 Бонк")
+    text = (
+        f"🧾 <b>Фармоиш #{order_id}</b>\n"
+        "━━━━━━━━━━━━━━\n"
+        f"🏦 Усули пардохт: <b>{bank_label}</b>\n"
+        f"💰 Маблағ: <b>{amount:.2f} сомонӣ</b>\n\n"
+        f"{invoice.instructions}\n\n"
+        "📷 Пас аз пардохт расиди воқеиро фиристед."
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=payment_link_keyboard(invoice.pay_url) if invoice.pay_url else payment_link_keyboard(),
     )
     await callback.answer()
