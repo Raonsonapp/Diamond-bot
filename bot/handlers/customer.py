@@ -536,9 +536,20 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
 
     if last_recipient:
         text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
-        await callback.message.edit_text(text, reply_markup=reuse_recipient_keyboard(last_recipient))
+        markup = reuse_recipient_keyboard(last_recipient)
     else:
-        await callback.message.edit_text(text, reply_markup=None)
+        markup = None
+
+    # The catalog is now a photo message; Telegram cannot edit its photo as text.
+    # Send the next step as a normal message, then remove the old catalog photo.
+    if callback.message.photo or callback.message.animation or callback.message.video:
+        await callback.message.answer(text, reply_markup=markup)
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+    else:
+        await callback.message.edit_text(text, reply_markup=markup)
     await callback.answer()
 
 
