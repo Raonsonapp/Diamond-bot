@@ -381,37 +381,56 @@ async def reply_about(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data == "menu:games")
-async def menu_games(callback: CallbackQuery) -> None:
-    # Keep the game picker compact; large artwork does not fit inside Telegram buttons.
-    await callback.message.edit_text(
-        "🎮 Бозиро интихоб кунед:",
-        reply_markup=games_menu_keyboard(),
-    )
+async def menu_games(callback: CallbackQuery, state: FSMContext) -> None:
+    # Acknowledge immediately to prevent Telegram's spinner from appearing stuck.
     await callback.answer()
+    await state.clear()
+    try:
+        await callback.message.edit_text(
+            "🎮 Бозиро интихоб кунед:",
+            reply_markup=games_menu_keyboard(),
+        )
+    except Exception:
+        # If the current message is a media message, send a fresh compact menu.
+        await callback.message.answer(
+            "🎮 Бозиро интихоб кунед:",
+            reply_markup=games_menu_keyboard(),
+        )
 
 
 async def _open_catalog(
     callback: CallbackQuery, state: FSMContext, category: ProductCategory, title: str, telegram_kind: str | None = None
 ) -> None:
-    async with get_session() as session:
-        products = await list_active_products(session, category=category, telegram_kind=telegram_kind)
-
-    if not products:
-        await callback.message.edit_text(
-            "Ҳозир маҳсулот дастрас нест. Лутфан баъдтар кӯшиш кунед ё бо админ тамос гиред.",
-            reply_markup=back_to_menu_keyboard(),
-        )
-        await callback.answer()
-        return
-
-    # Compact competitor-style catalog: keep artwork out of the catalog so each
-    # pack button remains small and easy to scan. Icons are in the button labels.
-    await callback.message.edit_text(
-        title,
-        reply_markup=products_keyboard(products, category, telegram_kind),
-    )
-    await state.set_state(OrderFlow.choosing_product)
+    # Answer the callback before any database work; Telegram requires this promptly.
     await callback.answer()
+    try:
+        async with get_session() as session:
+            products = await list_active_products(session, category=category, telegram_kind=telegram_kind)
+
+        if not products:
+            await callback.message.answer(
+                "Ҳозир маҳсулот дастрас нест. Лутфан баъдтар кӯшиш кунед ё бо админ тамос гиред.",
+                reply_markup=back_to_menu_keyboard(),
+            )
+            return
+
+        # Keep the catalog compact: product icons and prices are shown on buttons.
+        try:
+            await callback.message.edit_text(
+                title,
+                reply_markup=products_keyboard(products, category, telegram_kind),
+            )
+        except Exception:
+            await callback.message.answer(
+                title,
+                reply_markup=products_keyboard(products, category, telegram_kind),
+            )
+        await state.set_state(OrderFlow.choosing_product)
+    except Exception:
+        await callback.message.answer(
+            "⚠️ Каталог ҳоло кушода нашуд. Лутфан /start фиристед ва дубора кӯшиш кунед."
+        )
+        raise
 
 
 @router.callback_query(F.data == "menu:buy_diamonds")
