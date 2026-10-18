@@ -98,23 +98,41 @@ WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фур
 
 
 
-@router.message(F.video | F.animation)
-async def admin_get_animation_file_id(message: Message) -> None:
-    """Let configured admins retrieve a Telegram media file_id for bot branding."""
+@router.message(F.video | F.animation | F.photo)
+async def admin_get_media_file_id(message: Message) -> None:
+    """Let configured admins retrieve Telegram media IDs for shop branding."""
     sender_id = message.from_user.id if message.from_user else 0
     if sender_id not in config.admin_user_ids and sender_id != config.admin_chat_id:
         return
 
-    media = message.animation or message.video
-    if media is None:
-        return
-    media_kind = "GIF/аниматсия" if message.animation else "Видео MP4"
+    if message.photo:
+        media = message.photo[-1]
+        media_kind = "Расм"
+        caption = (message.caption or "").lower()
+        if "free" in caption or "fire" in caption:
+            env_key = "FREE_FIRE_IMAGE_FILE_ID"
+        elif "pubg" in caption:
+            env_key = "PUBG_IMAGE_FILE_ID"
+        elif "alif" in caption or "алиф" in caption:
+            env_key = "ALIF_IMAGE_FILE_ID"
+        elif "dc" in caption or "душанбе" in caption:
+            env_key = "DC_IMAGE_FILE_ID"
+        elif "diamond" in caption or "алмаз" in caption:
+            env_key = "DIAMOND_IMAGE_FILE_ID"
+        else:
+            env_key = "SHOP_IMAGE_FILE_ID"
+    else:
+        media = message.animation or message.video
+        media_kind = "GIF/аниматсия" if message.animation else "Видео MP4"
+        env_key = "WELCOME_ANIMATION_FILE_ID"
+
     await message.reply(
         f"✅ {media_kind} қабул шуд.\n\n"
-        f"file_id барои танзими WELCOME_ANIMATION_FILE_ID:\n"
+        f"file_id барои танзими {env_key}:\n"
         f"<code>{media.file_id}</code>",
         parse_mode="HTML",
     )
+
 
 
 async def _show_main_menu(
