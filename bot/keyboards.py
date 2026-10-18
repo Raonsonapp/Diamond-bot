@@ -1,8 +1,18 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
 from bot.config import config
 from bot.db.models import Order, Product, ProductCategory
 from bot.formatting import format_price
+
+
+def persistent_menu_keyboard() -> ReplyKeyboardMarkup:
+    """A single persistent bottom button, like the competitor bot's Menu button."""
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📋 Меню")]],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="📋 Менюро пахш кунед",
+    )
 
 
 def sponsor_gate_keyboard() -> InlineKeyboardMarkup:
