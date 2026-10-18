@@ -1,46 +1,71 @@
-"""Default product catalog, seeded automatically on first run.
+"""Default product catalog for ALMAZ TJ.
 
-Values taken directly from the price list image the admin provided. Cost
-(харид/purchase price) is unknown, so it's set equal to the sale price as
-a neutral placeholder — that's only used for the admin's own profit view
-(/products) and is never shown to customers. Tell the bot the real
-wholesale cost and it'll be corrected.
+Prices were updated from the latest shop price list provided by the owner.
+Existing databases are updated by product name for these known catalog items.
 """
-
 from sqlalchemy import select
 
 from bot.db.models import Product, ProductCategory
 
-# Telegram Stars packages are intentionally not seeded here — unlike the
-# Free Fire prices above (given directly by the admin), no real Stars
-# pricing was provided, and seeding made-up numbers would show customers
-# a price nobody decided on. Add real ones with /addstars.
+# (canonical name, diamond count, selling price in TJS)
 DEFAULT_PRODUCTS = [
-    # (name, diamonds, price_somoni)
-    ("100 диамонд", 100, 10),
-    ("310 диамонд", 310, 30),
-    ("520 диамонд", 520, 50),
-    ("1060 диамонд", 1060, 110),
-    ("2180 диамонд", 2180, 210),
-    ("5600 диамонд", 5600, 500),
-    ("Ваучери ҳафтагӣ", 450, 18),
-    ("Ваучери моҳона", 2600, 99),
+    ("110 алмаз", 110, 9),
+    ("341 алмаз", 341, 28),
+    ("572 алмаз", 572, 47),
+    ("1166 алмаз", 1166, 91),
+    ("2398 алмаз", 2398, 184),
+    ("6160 алмаз", 6160, 445),
+    ("Ваучер Lite 90", 90, 5.50),
+    ("Ваучер ҳафтагӣ 450", 450, 17),
+    ("Ваучер моҳона 2600", 2600, 62),
 ]
 
 
 async def seed_default_products(session) -> None:
-    result = await session.execute(select(Product.id).limit(1))
-    if result.scalar_one_or_none() is not None:
-        return  # products already exist — never overwrite admin's own edits
-
-    for name, diamonds, price in DEFAULT_PRODUCTS:
-        session.add(
-            Product(
+    """Create defaults on empty DB; update only these named catalog products on existing DB."""
+    result = await session.execute(select(Product))
+    products = list(result.scalars().all())
+    if not products:
+        for name, diamonds, price in DEFAULT_PRODUCTS:
+            session.add(Product(
                 name=name,
                 category=ProductCategory.DIAMONDS,
                 diamonds=diamonds,
                 price_somoni=price,
                 cost_somoni=price,
+            ))
+        await session.commit()
+        return
+
+    # Update matching products by known diamond quantity and category, so
+    # current customers get the new prices after deployment. Do not touch
+    # unrelated products or products outside this requested price list.
+    changed = False
+    for name, diamonds, price in DEFAULT_PRODUCTS:
+        candidates = [
+            p for p in products
+            if p.category == ProductCategory.DIAMONDS and p.diamonds == diamonds
+            and (
+                ("ваучер" in name.lower() and "ваучер" in p.name.lower())
+                or ("ваучер" not in name.lower() and "ваучер" not in p.name.lower())
             )
-        )
-    await session.commit()
+        ]
+        product = candidates[0] if candidates else None
+        if product is None:
+            session.add(Product(
+                name=name,
+                category=ProductCategory.DIAMONDS,
+                diamonds=diamonds,
+                price_somoni=price,
+                cost_somoni=price,
+            ))
+            changed = True
+        else:
+            if product.name != name:
+                product.name = name
+                changed = True
+            if round(float(product.price_somoni), 2) != price:
+                product.price_somoni = price
+                changed = True
+    if changed:
+        await session.commit()
