@@ -1580,7 +1580,7 @@ async def payment_change_bank(callback: CallbackQuery, state: FSMContext) -> Non
         "🔄 <b>Иваз кардани бонк</b>\n\n"
         "🏦 Бонки дигарро интихоб кунед. Фармоиши шумо ҳамон мемонад — "
         "фармоиши нав сохта намешавад.\n\n"
-        "💙 Душанбе Сити\n🟢 Алиф Мобайл",
+        "💙 Душанбе Сити\n🟢 Алиф Мобайл\n💳 Ҳумо\n🏦 Эсхата Бонк\n🏦 Спитамен Бонк",
         reply_markup=change_payment_method_keyboard(),
     )
     await callback.answer()
@@ -1589,7 +1589,7 @@ async def payment_change_bank(callback: CallbackQuery, state: FSMContext) -> Non
 @router.callback_query(OrderFlow.awaiting_payment_proof, F.data.startswith("bankchange:"))
 async def payment_change_bank_selected(callback: CallbackQuery, state: FSMContext) -> None:
     bank_hint = callback.data.split(":", 1)[1]
-    if bank_hint not in {"dc", "alif"}:
+    if bank_hint not in {key for key, _label in PAYMENT_METHODS}:
         await callback.answer("Ин бонк дастрас нест.", show_alert=True)
         return
     data = await state.get_data()
@@ -1610,7 +1610,7 @@ async def payment_change_bank_selected(callback: CallbackQuery, state: FSMContex
 
     invoice = await get_payment_provider().create_invoice(int(order_id), amount, bank_hint=bank_hint)
     await state.update_data(bank_hint=bank_hint)
-    bank_label = {"dc": "💙 Душанбе Сити", "alif": "🟢 Алиф Мобайл"}[bank_hint]
+    bank_label = BANK_HINT_NAMES.get(bank_hint, "🏦 Бонк")
     text = (
         f"🧾 <b>Фармоиш #{order_id}</b>\n"
         "━━━━━━━━━━━━━━\n"
