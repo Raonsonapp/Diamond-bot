@@ -43,6 +43,7 @@ from bot.keyboards import (
     games_menu_keyboard,
     main_menu_keyboard,
     payment_link_keyboard,
+    persistent_menu_keyboard,
     payment_method_keyboard,
     PAYMENT_METHODS,
     BANK_HINT_NAMES,
@@ -148,14 +149,18 @@ async def _show_main_menu(
     from bot.services.adsgram import maybe_send_ad
 
     await maybe_send_campaign_ad(message.bot, recipient_id)
+    # Telegram cannot combine a persistent reply keyboard and inline buttons
+    # on one message. Keep the bottom Menu button persistent, then show the
+    # inline shop navigation as a separate, editable message.
     if config.welcome_animation_file_id:
         await message.answer_animation(
             animation=config.welcome_animation_file_id,
             caption=WELCOME_TEXT,
-            reply_markup=main_menu_keyboard(),
+            reply_markup=persistent_menu_keyboard(),
         )
     else:
-        await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+        await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_keyboard())
+    await message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
     await maybe_send_ad(message.bot, recipient_id, recipient_language)
 
 
@@ -257,7 +262,7 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "menu:main")
 async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+    await callback.message.edit_text("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
     await callback.answer()
 
 
@@ -269,10 +274,14 @@ async def menu_reviews(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-# --- Persistent reply-keyboard buttons (legacy — kept working in case a
-# user still has the old keyboard cached client-side, or types one of these
-# labels manually; the current UI drives navigation via the inline grid in
-# main_menu_keyboard() instead, sent on WELCOME_TEXT). ---
+# The persistent bottom button is the only general-purpose text command.
+# Other arbitrary text outside an active input step is ignored.
+@router.message(F.text == "📋 Меню")
+async def persistent_menu_button(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
+
+
 
 
 @router.message(F.text == "🎮 Бозиҳо")
@@ -1773,3 +1782,12 @@ async def payment_change_bank_back(callback: CallbackQuery, state: FSMContext) -
         reply_markup=payment_link_keyboard(invoice.pay_url) if invoice.pay_url else payment_link_keyboard(),
     )
     await callback.answer()
+
+
+@router.message(F.text)
+async def ignore_unexpected_text(message: Message, state: FSMContext) -> None:
+    """Ignore free-form chat text unless an earlier order/API handler expects it."""
+    if await state.get_state() is None:
+        # Users can still type in Telegram, but the shop does not process random
+        # text. Navigation is through the persistent Menu button.
+        return
