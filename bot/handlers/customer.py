@@ -759,40 +759,47 @@ async def _recipient_prompt(category: ProductCategory) -> str:
 
 @router.callback_query(F.data.regexp(r"^product:\d+$"))
 async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
-    product_id = int(callback.data.split(":", 1)[1])
-    async with get_session() as session:
-        product = await get_product(session, product_id)
-        if product is not None:
-            last_recipient = await get_last_recipient(session, callback.from_user.id, product.category)
+    # Acknowledge immediately so Telegram's button spinner never appears stuck.
+    await callback.answer()
+    try:
+        product_id = int(callback.data.split(":", 1)[1])
+        async with get_session() as session:
+            product = await get_product(session, product_id)
+            if product is not None:
+                last_recipient = await get_last_recipient(
+                    session, callback.from_user.id, product.category
+                )
 
-    if product is None or not product.is_active:
-        await callback.answer("Ин маҳсулот дастрас нест.", show_alert=True)
-        return
+        if product is None or not product.is_active:
+            await callback.message.answer("Ин маҳсулот дастрас нест. Лутфан рӯйхатро аз нав кушоед.")
+            return
 
-    await state.update_data(product_id=product.id)
-    await state.set_state(OrderFlow.entering_player_id)
-    prompt = await _recipient_prompt(product.category)
-    text = (
-        f"Шумо интихоб кардед: {product.display_name} — {format_price(product.price_somoni)} сомонӣ.\n\n"
-        f"Лутфан {prompt} ирсол кунед:"
-    )
-    if last_recipient:
-        text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
-        markup = reuse_recipient_keyboard(last_recipient)
-    else:
+        await state.update_data(product_id=product.id)
+        await state.set_state(OrderFlow.entering_player_id)
+        prompt = await _recipient_prompt(product.category)
+        text = (
+            f"Шумо интихоб кардед: {product.display_name} — "
+            f"{format_price(product.price_somoni)} сомонӣ.\\n\\n"
+            f"Лутфан {prompt} ирсол кунед:"
+        )
         markup = None
+        if last_recipient:
+            text += f"\\n\\nШумо пештар бо ин истифода карда будед: {last_recipient}"
+            markup = reuse_recipient_keyboard(last_recipient)
 
-    # Product buttons are attached to a photo catalog. A photo message cannot
-    # be edited into a text prompt, so send the next step as a text message.
-    if callback.message.photo or callback.message.animation or callback.message.video:
+        # Always send the next step as a fresh text message. This works whether
+        # Telegram attached the button to text, photo, or a media-group message.
         await callback.message.answer(text, reply_markup=markup)
         try:
             await callback.message.delete()
         except Exception:
             pass
-    else:
-        await callback.message.edit_text(text, reply_markup=markup)
-    await callback.answer()
+    except Exception:
+        # Keep the customer informed rather than leaving a silent, dead button.
+        await callback.message.answer(
+            "⚠️ Ҳангоми интихоби баста хато шуд. Лутфан /start фиристед ва дубора кӯшиш кунед."
+        )
+        raise
 
 
 async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, answer_target) -> None:
