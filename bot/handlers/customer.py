@@ -382,17 +382,11 @@ async def reply_about(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "menu:games")
 async def menu_games(callback: CallbackQuery) -> None:
-    # Compact game artwork above the existing inline menu, similar to rival shops.
-    await callback.message.answer_photo(
-        photo=FREE_FIRE_IMAGE_FILE_ID,
-        caption="🎮 <b>Бозиро интихоб кунед:</b>",
-        parse_mode="HTML",
+    # Keep the game picker compact; large artwork does not fit inside Telegram buttons.
+    await callback.message.edit_text(
+        "🎮 Бозиро интихоб кунед:",
         reply_markup=games_menu_keyboard(),
     )
-    try:
-        await callback.message.delete()
-    except Exception:
-        pass
     await callback.answer()
 
 
@@ -410,21 +404,12 @@ async def _open_catalog(
         await callback.answer()
         return
 
-    # Show a compact relevant image above the product buttons; Telegram does not
-    # support thumbnails inside ordinary inline keyboard buttons.
-    artwork = FREE_FIRE_IMAGE_FILE_ID if category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA) else None
-    if artwork:
-        await callback.message.answer_photo(
-            photo=artwork,
-            caption=title,
-            reply_markup=products_keyboard(products, category, telegram_kind),
-        )
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-    else:
-        await callback.message.edit_text(title, reply_markup=products_keyboard(products, category, telegram_kind))
+    # Compact competitor-style catalog: keep artwork out of the catalog so each
+    # pack button remains small and easy to scan. Icons are in the button labels.
+    await callback.message.edit_text(
+        title,
+        reply_markup=products_keyboard(products, category, telegram_kind),
+    )
     await state.set_state(OrderFlow.choosing_product)
     await callback.answer()
 
