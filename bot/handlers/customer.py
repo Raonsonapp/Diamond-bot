@@ -475,10 +475,16 @@ async def enter_cart_mode(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.update_data(cart_category=category.value, cart_ids=[])
     await state.set_state(OrderFlow.choosing_cart)
-    await callback.message.edit_text(
-        "🛒 Бастаҳоеро, ки мехоҳед якҷоя харед, интихоб кунед (якчанд адад мумкин аст):",
-        reply_markup=cart_select_keyboard(products, category, set()),
-    )
+    cart_text = "🛒 Бастаҳоеро, ки мехоҳед якҷоя харед, интихоб кунед (якчанд адад мумкин аст):"
+    cart_markup = cart_select_keyboard(products, category, set())
+    if callback.message.photo or callback.message.animation or callback.message.video:
+        await callback.message.answer(cart_text, reply_markup=cart_markup)
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+    else:
+        await callback.message.edit_text(cart_text, reply_markup=cart_markup)
     await callback.answer()
 
 
