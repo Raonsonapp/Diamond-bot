@@ -97,6 +97,26 @@ router = Router(name="customer")
 WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фурӯши хидматҳои рақамӣ.\n\nЧиро интихоб мекунед?"
 
 
+
+@router.message(F.video | F.animation)
+async def admin_get_animation_file_id(message: Message) -> None:
+    """Let configured admins retrieve a Telegram media file_id for bot branding."""
+    sender_id = message.from_user.id if message.from_user else 0
+    if sender_id not in config.admin_user_ids and sender_id != config.admin_chat_id:
+        return
+
+    media = message.animation or message.video
+    if media is None:
+        return
+    media_kind = "GIF/аниматсия" if message.animation else "Видео MP4"
+    await message.reply(
+        f"✅ {media_kind} қабул шуд.\n\n"
+        f"file_id барои танзими WELCOME_ANIMATION_FILE_ID:\n"
+        f"<code>{media.file_id}</code>",
+        parse_mode="HTML",
+    )
+
+
 async def _show_main_menu(
     message: Message, state: FSMContext, user_id: int | None = None, language: str | None = None
 ) -> None:
