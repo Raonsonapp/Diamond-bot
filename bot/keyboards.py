@@ -116,14 +116,21 @@ def contact_keyboard() -> InlineKeyboardMarkup:
     )
 
 def _product_label(p: Product) -> str:
-    # A plain pack's admin-given name is just its size ("100 диамонд"), so a
-    # numeric diamond count says more than the name; a voucher/subscription
-    # ("Ваучери ҳафтагӣ") has a name that carries real information the raw
-    # diamond-equivalent number would hide — show whichever is meaningful.
+    # Keep compact, recognizable icons on every product button, similar to
+    # the competitor's list: diamond packs use a diamond, vouchers a ticket.
     if p.name[:1].isdigit():
         bonus = f" (+{p.bonus_diamonds} бонус)" if p.bonus_diamonds else ""
-        return f"{p.diamonds}{bonus} {p.unit_label} — {format_price(p.price_somoni)} сомонӣ"
-    return f"🎟 {p.name} — {format_price(p.price_somoni)} сомонӣ"
+        return f"💎 {p.diamonds}{bonus} {p.unit_label} — {format_price(p.price_somoni)} сомонӣ"
+    name = p.name.lower()
+    if "лайт" in name or "lite" in name or "ваучер" in name:
+        icon = "🎟️"
+    elif "ҳафта" in name or "weekly" in name:
+        icon = "🗓️"
+    elif "моҳ" in name or "monthly" in name:
+        icon = "📅"
+    else:
+        icon = "🎁"
+    return f"{icon} {p.name} — {format_price(p.price_somoni)} сомонӣ"
 
 
 def products_keyboard(
