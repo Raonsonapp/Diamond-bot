@@ -681,16 +681,21 @@ async def menu_myorders(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-@router.callback_query(OrderFlow.choosing_product, F.data.startswith("product:custom:"))
+@router.callback_query(F.data.startswith("product:custom:"))
 async def choose_custom_amount(callback: CallbackQuery, state: FSMContext) -> None:
     category_value = callback.data.split(":", 2)[2]
     await state.update_data(custom_category=category_value)
     await state.set_state(OrderFlow.entering_custom_amount)
     unit = "алмаз" if category_value == ProductCategory.DIAMONDS.value else "Stars"
-    await callback.message.edit_text(
-        f"Чанд адад {unit} мехоҳед? Рақамро нависед, аз {MIN_CUSTOM_UNITS} то {MAX_CUSTOM_UNITS}:",
-        reply_markup=None,
-    )
+    prompt_text = f"Чанд адад {unit} мехоҳед? Рақамро нависед, аз {MIN_CUSTOM_UNITS} то {MAX_CUSTOM_UNITS}:"
+    if callback.message.photo or callback.message.animation or callback.message.video:
+        await callback.message.answer(prompt_text)
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+    else:
+        await callback.message.edit_text(prompt_text, reply_markup=None)
     await callback.answer()
 
 
@@ -767,7 +772,7 @@ async def _recipient_prompt(category: ProductCategory) -> str:
     )
 
 
-@router.callback_query(OrderFlow.choosing_product, F.data.regexp(r"^product:\d+$"))
+@router.callback_query(F.data.regexp(r"^product:\d+$"))
 async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
     product_id = int(callback.data.split(":", 1)[1])
     async with get_session() as session:
@@ -788,9 +793,20 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
     )
     if last_recipient:
         text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
-        await callback.message.edit_text(text, reply_markup=reuse_recipient_keyboard(last_recipient))
+        markup = reuse_recipient_keyboard(last_recipient)
     else:
-        await callback.message.edit_text(text, reply_markup=None)
+        markup = None
+
+    # Product buttons are attached to a photo catalog. A photo message cannot
+    # be edited into a text prompt, so send the next step as a text message.
+    if callback.message.photo or callback.message.animation or callback.message.video:
+        await callback.message.answer(text, reply_markup=markup)
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+    else:
+        await callback.message.edit_text(text, reply_markup=markup)
     await callback.answer()
 
 
