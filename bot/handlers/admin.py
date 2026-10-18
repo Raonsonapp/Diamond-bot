@@ -1646,3 +1646,53 @@ async def wallet_topup_reject_callback(callback: CallbackQuery) -> None:
         except Exception:
             pass
     await callback.answer("Дархост рад шуд.")
+
+
+@router.message(Command("setalmazonprices"))
+async def set_almaz_tj_prices(message: Message) -> None:
+    """Apply the requested ALMAZ TJ Free Fire price list to the live database."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    from bot.db.models import Product, ProductCategory
+
+    # Existing supplier mappings are preserved. Prices are updated by unit count.
+    price_list = [
+        (110, "110 алмаз", 9.00),
+        (341, "341 алмаз", 28.00),
+        (572, "572 алмаз", 47.50),
+        (1166, "1166 алмаз", 91.50),
+        (2398, "2398 алмаз", 184.00),
+        (6160, "6160 алмаз", 449.00),
+        (90, "Ваучер Lite 90 алмаз", 5.50),
+        (450, "Ваучери ҳафтагӣ 450 алмаз", 17.00),
+        (2600, "Ваучери моҳона 2600 алмаз", 62.00),
+    ]
+    changed = []
+    async with get_session() as session:
+        for units, name, price in price_list:
+            result = await session.execute(
+                select(Product).where(
+                    Product.diamonds == units,
+                    Product.category == ProductCategory.DIAMONDS,
+                ).order_by(Product.id.asc())
+            )
+            products = list(result.scalars().all())
+            if products:
+                product = products[0]
+                product.name = name
+                product.price_somoni = price
+                product.is_active = True
+                changed.append(f"{name}: {price:.2f} сомонӣ")
+            else:
+                session.add(Product(
+                    name=name, category=ProductCategory.DIAMONDS, diamonds=units,
+                    price_somoni=price, cost_somoni=price, is_active=True,
+                ))
+                changed.append(f"{name}: {price:.2f} сомонӣ (нав)")
+        await session.commit()
+    await message.answer(
+        "✅ <b>Нархномаи ALMAZ TJ нав шуд</b>\n\n"
+        + "\n".join(f"• {line}" for line in changed)
+        + "\n\nМаҳсулоти наве, ки ба таъминкунанда пайваст нест, таҳвили автоматӣ надорад."
+    )
