@@ -11,6 +11,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 
 from bot.config import config
+from bot.media_ids import DC_IMAGE_FILE_ID, ALIF_IMAGE_FILE_ID, FREE_FIRE_IMAGE_FILE_ID, PUBG_IMAGE_FILE_ID
 from bot.db.models import OrderStatus, Product, ProductCategory, User
 from bot.db.repo import (
     accept_terms,
@@ -381,7 +382,17 @@ async def reply_about(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "menu:games")
 async def menu_games(callback: CallbackQuery) -> None:
-    await callback.message.edit_text("🎮 Бозиро интихоб кунед:", reply_markup=games_menu_keyboard())
+    # Compact game artwork above the existing inline menu, similar to rival shops.
+    await callback.message.answer_photo(
+        photo=FREE_FIRE_IMAGE_FILE_ID,
+        caption="🎮 <b>Бозиро интихоб кунед:</b>",
+        parse_mode="HTML",
+        reply_markup=games_menu_keyboard(),
+    )
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.answer()
 
 
@@ -399,7 +410,21 @@ async def _open_catalog(
         await callback.answer()
         return
 
-    await callback.message.edit_text(title, reply_markup=products_keyboard(products, category, telegram_kind))
+    # Show a compact relevant image above the product buttons; Telegram does not
+    # support thumbnails inside ordinary inline keyboard buttons.
+    artwork = FREE_FIRE_IMAGE_FILE_ID if category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA) else None
+    if artwork:
+        await callback.message.answer_photo(
+            photo=artwork,
+            caption=title,
+            reply_markup=products_keyboard(products, category, telegram_kind),
+        )
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+    else:
+        await callback.message.edit_text(title, reply_markup=products_keyboard(products, category, telegram_kind))
     await state.set_state(OrderFlow.choosing_product)
     await callback.answer()
 
