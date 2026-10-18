@@ -187,10 +187,23 @@ def reuse_recipient_keyboard(recipient: str, label_suffix: str = "") -> InlineKe
     )
 
 
-def payment_link_keyboard(pay_url: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="💳 Пардохт", url=pay_url)]]
-    )
+def payment_link_keyboard(pay_url: str | None = None) -> InlineKeyboardMarkup:
+    rows = []
+    if pay_url:
+        rows.append([InlineKeyboardButton(text="💳 Кушодани пардохт", url=pay_url)])
+    rows.append([InlineKeyboardButton(text="🔄 Бонки дигарро интихоб кардан", callback_data="payment:change_bank")])
+    rows.append([InlineKeyboardButton(text="🏠 Ба меню", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def change_payment_method_keyboard() -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=label, callback_data=f"bankchange:{key}")]
+        for key, label in PAYMENT_METHODS
+    ]
+    rows.append([InlineKeyboardButton(text="⬅️ Бозгашт ба пардохт", callback_data="payment:back")])
+    rows.append([InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 # All four route to the exact same receiving card (config.receiving_card_number)
@@ -203,8 +216,10 @@ def payment_link_keyboard(pay_url: str) -> InlineKeyboardMarkup:
 # a "DC" card accepts a transfer from, say, their Eskhata app.
 PAYMENT_METHODS = [
     ("dc", "🏦 Душанбе Сити"),
-    ("amonat", "🏦 Амонатбонк"),
     ("alif", "🏦 Алиф Мобайл"),
+    ("humo", "💳 Ҳумо"),
+    ("eskhata", "🏦 Эсхата Бонк"),
+    ("spitamen", "🏦 Спитамен Бонк"),
 ]
 # Plain bank names (no emoji) for reuse outside the picker button labels —
 # e.g. the post-delivery receipt's "Усули пардохт" line (see
