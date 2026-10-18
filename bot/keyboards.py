@@ -215,11 +215,8 @@ def change_payment_method_keyboard() -> InlineKeyboardMarkup:
 # customer immediately recognizes their own bank instead of wondering whether
 # a "DC" card accepts a transfer from, say, their Eskhata app.
 PAYMENT_METHODS = [
-    ("dc", "🏦 Душанбе Сити"),
-    ("alif", "🏦 Алиф Мобайл"),
-    ("humo", "💳 Ҳумо"),
-    ("eskhata", "🏦 Эсхата Бонк"),
-    ("spitamen", "🏦 Спитамен Бонк"),
+    ("dc", "💙 Душанбе Сити"),
+    ("alif", "🟢 Алиф Мобайл"),
 ]
 # Plain bank names (no emoji) for reuse outside the picker button labels —
 # e.g. the post-delivery receipt's "Усули пардохт" line (see
