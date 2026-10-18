@@ -1002,8 +1002,13 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
     if await _blocked_for_maintenance(callback, state):
         return
     await callback.message.edit_text(
-        "Аз кадом бонк пардохт мекунед? (Ҳамаашон ба ҳамон рақами корт мерасанд — "
-        "танҳо барномаи худро интихоб кунед.)",
+        "💳 <b>Интихоби усули пардохт</b>\n\n"
+        "🏦 Бонки худро интихоб кунед:\n"
+        "• 💙 <b>Душанбе Сити</b> — пайванди пардохт, агар дастрас бошад\n"
+        "• 🟢 <b>Алиф Мобайл</b> — гузаронидан тавассути Алиф\n\n"
+        "📌 Баъд аз пардохт расидро (скриншот) ба ҳамин бот фиристед. "
+        "Фармоиш пас аз санҷиши пардохт тасдиқ мешавад.\n\n"
+        "⬅️ Агар мехоҳед баргардед, тугмаи поёнро пахш кунед.",
         reply_markup=payment_method_keyboard(),
     )
     await callback.answer()
@@ -1046,7 +1051,15 @@ async def choose_payment_method(callback: CallbackQuery, state: FSMContext) -> N
 
     await state.update_data(order_id=primary.id)
     await state.set_state(OrderFlow.awaiting_payment_proof)
-    text = f"Фармоиши #{primary.id} сабт шуд.\n\n{invoice.instructions}"
+    bank_label = {"dc": "💙 Душанбе Сити", "alif": "🟢 Алиф Мобайл"}.get(bank_hint, "🏦 Бонк")
+    text = (
+        f"🧾 <b>Фармоиш #{primary.id}</b>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"🏦 Усули пардохт: <b>{bank_label}</b>\n"
+        f"💰 Маблағ: <b>{total:.2f} сомонӣ</b>\n\n"
+        f"{invoice.instructions}\n\n"
+        "📷 Пас аз пардохт расиди воқеиро фиристед. Агар бонки дигарро истифода бурдан хоҳед, фармоишро бекор карда аз нав оғоз кунед."
+    )
     if invoice.pay_url:
         await callback.message.edit_text(text, reply_markup=payment_link_keyboard(invoice.pay_url))
     else:
