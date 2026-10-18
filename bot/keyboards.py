@@ -229,7 +229,7 @@ BANK_HINT_NAMES = {key: label.split(" ", 1)[1] for key, label in PAYMENT_METHODS
 
 def payment_method_keyboard() -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(text=label, callback_data=f"paymethod:{key}")] for key, label in PAYMENT_METHODS]
-    rows.append([InlineKeyboardButton(text="❌ Бекор", callback_data="order:cancel")])
+    rows.append([InlineKeyboardButton(text="⬅️ Бозгашт / бекор кардани фармоиш", callback_data="order:cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
