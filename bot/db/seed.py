@@ -14,7 +14,7 @@ DEFAULT_PRODUCTS = [
     ("572 алмаз", 572, 47),
     ("1166 алмаз", 1166, 91),
     ("2398 алмаз", 2398, 184),
-    ("6160 алмаз", 6160, 445),
+    ("6160 алмаз", 6160, 446),
     ("Ваучер Lite 90", 90, 5.50),
     ("Ваучер ҳафтагӣ 450", 450, 17),
     ("Ваучер моҳона 2600", 2600, 62),
@@ -42,9 +42,20 @@ async def seed_default_products(session) -> None:
     # unrelated products or products outside this requested price list.
     changed = False
     for name, diamonds, price in DEFAULT_PRODUCTS:
+        legacy_diamonds = {
+            110: {100, 110},
+            341: {310, 341},
+            572: {520, 572},
+            1166: {1060, 1166},
+            2398: {2180, 2398},
+            6160: {5600, 6160},
+            90: {90},
+            450: {450},
+            2600: {2600},
+        }[diamonds]
         candidates = [
             p for p in products
-            if p.category == ProductCategory.DIAMONDS and p.diamonds == diamonds
+            if p.category == ProductCategory.DIAMONDS and p.diamonds in legacy_diamonds
             and (
                 ("ваучер" in name.lower() and "ваучер" in p.name.lower())
                 or ("ваучер" not in name.lower() and "ваучер" not in p.name.lower())
