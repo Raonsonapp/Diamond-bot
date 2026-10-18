@@ -43,6 +43,8 @@ from bot.keyboards import (
     main_menu_keyboard,
     payment_link_keyboard,
     payment_method_keyboard,
+    PAYMENT_METHODS,
+    BANK_HINT_NAMES,
     products_keyboard,
     profile_menu_keyboard,
     referral_menu_keyboard,
