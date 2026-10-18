@@ -109,7 +109,14 @@ async def _show_main_menu(
     from bot.services.adsgram import maybe_send_ad
 
     await maybe_send_campaign_ad(message.bot, recipient_id)
-    await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
+    if config.welcome_animation_file_id:
+        await message.answer_animation(
+            animation=config.welcome_animation_file_id,
+            caption=WELCOME_TEXT,
+            reply_markup=main_menu_keyboard(),
+        )
+    else:
+        await message.answer(WELCOME_TEXT, reply_markup=main_menu_keyboard())
     await maybe_send_ad(message.bot, recipient_id, recipient_language)
 
 
