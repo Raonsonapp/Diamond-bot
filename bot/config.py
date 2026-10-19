@@ -122,6 +122,9 @@ class Config:
     # Optional Telegram GIF/MP4 animation file_id for the welcome screen.
     # Set WELCOME_ANIMATION_FILE_ID in Render after uploading the animation to the bot.
     welcome_animation_file_id: str = os.getenv("WELCOME_ANIMATION_FILE_ID", "")
+    # Optional Telegram animation IDs; invalid IDs are handled with text fallbacks.
+    shop_animation_file_id: str = os.getenv("SHOP_ANIMATION_FILE_ID", "")
+    loading_animation_file_id: str = os.getenv("LOADING_ANIMATION_FILE_ID", "")
     # Optional MP4 tutorial video shown by /tutorial.
     tutorial_video_file_id: str = os.getenv("TUTORIAL_VIDEO_FILE_ID", "").strip()
 
