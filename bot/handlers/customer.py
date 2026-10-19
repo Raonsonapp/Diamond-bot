@@ -202,7 +202,19 @@ async def _show_main_menu(
     # Telegram cannot combine a persistent reply keyboard and inline buttons
     # on one message. Keep the bottom Menu button persistent, then show the
     # inline shop navigation as a separate, editable message.
-    # Keep /start text-only: no optional media IDs can block the welcome flow.
+    # Send the configured 5-second MP4 welcome clip first. The media ID returned
+    # by admin_get_media_file_id comes from message.video, so use answer_video
+    # (not answer_animation); invalid/stale IDs must never block /start.
+    if config.welcome_animation_file_id:
+        try:
+            await message.answer_video(
+                video=config.welcome_animation_file_id,
+                caption="💎 FF MARGEDAR — хуш омадед!",
+                supports_streaming=True,
+            )
+        except Exception:
+            import logging
+            logging.exception("Could not send WELCOME_ANIMATION_FILE_ID; falling back to text")
     await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_keyboard())
     await message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
     await maybe_send_ad(message.bot, recipient_id, recipient_language)
