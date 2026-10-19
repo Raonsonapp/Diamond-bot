@@ -293,3 +293,12 @@ class ApiOrderRequest(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "idempotency_key", name="uq_api_order_idempotency"),
     )
+
+
+class ApiAccessPin(Base):
+    """Hashed four-digit PIN used to gate the personal API section in Telegram."""
+    __tablename__ = "bot_api_access_pins"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"), primary_key=True)
+    pin_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
