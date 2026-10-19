@@ -6,6 +6,7 @@ class OrderFlow(StatesGroup):
     choosing_cart = State()
     entering_custom_amount = State()
     entering_player_id = State()
+    choosing_region = State()
     confirming = State()
     awaiting_payment_proof = State()
     awaiting_admin_review = State()
