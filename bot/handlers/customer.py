@@ -2271,6 +2271,7 @@ async def api_set_pin_start(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(ApiAccessFlow.setting_pin, F.text)
 async def api_set_pin_message(message: Message, state: FSMContext) -> None:
     import hashlib
+    from datetime import datetime, timezone
     from bot.db.models import ApiAccessPin
     from bot.db.session import get_session
     pin_text = (message.text or "").strip()
