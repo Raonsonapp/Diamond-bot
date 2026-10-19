@@ -38,6 +38,7 @@ from bot.keyboards import (
     back_to_menu_keyboard,
     cart_select_keyboard,
     confirm_order_keyboard,
+    free_fire_region_keyboard,
     change_payment_method_keyboard,
     contact_keyboard,
     games_menu_keyboard,
@@ -869,6 +870,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     offer_balance = user is not None and user.referral_balance >= total_price > 0
     offer_wallet = user is not None and float(user.wallet_balance_somoni or 0) >= total_price > 0
     category = products[0].category
+    ff_region = data.get("ff_region")
 
     player_name = None
     if category == ProductCategory.DIAMONDS:
@@ -882,7 +884,10 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     confirm_lines = ["🧾 <b>Тафсилоти фармоиш</b>", f"{recipient_label}: <code>{html.escape(recipient)}</code>"]
     if player_name:
         confirm_lines.append(f"👤 Номи бозигар: <b>{html.escape(player_name)}</b>")
-    confirm_lines.append(f"🎮 Бозӣ: <b>{html.escape(category.value.replace('_', ' ').title())}</b>")
+    game_label = "Free Fire" if category == ProductCategory.DIAMONDS else category.value.replace("_", " ").title()
+    confirm_lines.append(f"🎮 Бозӣ: <b>{html.escape(game_label)}</b>")
+    if category == ProductCategory.DIAMONDS and ff_region:
+        confirm_lines.append(f"🌍 Регион: <b>{html.escape(ff_region)}</b>")
     confirm_lines.append("")
     for p in products:
         confirm_lines.append(f"💎 Баста: <b>{html.escape(p.display_name)}</b>")
@@ -915,14 +920,55 @@ async def enter_player_id(message: Message, state: FSMContext) -> None:
             await message.answer("Username-и нодуруст. Лутфан username-и дурусти Telegram-ро (бе @) нависед.")
             return
 
+    if product.category == ProductCategory.DIAMONDS:
+        await state.update_data(ff_player_id=recipient)
+        await state.set_state(OrderFlow.choosing_region)
+        await message.answer(
+            "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
+            "🇷🇺 СНГ — барои аккаунтҳои минтақаи СНГ\n"
+            "🇮🇩 Индонезия — барои аккаунтҳои Индонезия",
+            parse_mode="HTML",
+            reply_markup=free_fire_region_keyboard(),
+        )
+        return
+
     await _finalize_recipient(state, message.from_user.id, recipient, message)
 
 
 @router.callback_query(OrderFlow.entering_player_id, F.data.startswith("reuseid:"))
 async def reuse_saved_id(callback: CallbackQuery, state: FSMContext) -> None:
     recipient = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    cart_ids = data.get("cart_product_ids")
+    async with get_session() as session:
+        product = await get_product(session, cart_ids[0] if cart_ids else data["product_id"])
+    if product and product.category == ProductCategory.DIAMONDS:
+        await state.update_data(ff_player_id=recipient)
+        await state.set_state(OrderFlow.choosing_region)
+        await callback.message.answer(
+            "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
+            "🇷🇺 СНГ — барои аккаунтҳои минтақаи СНГ\n"
+            "🇮🇩 Индонезия — барои аккаунтҳои Индонезия",
+            parse_mode="HTML",
+            reply_markup=free_fire_region_keyboard(),
+        )
+        await callback.answer()
+        return
     await _finalize_recipient(state, callback.from_user.id, recipient, callback.message)
     await callback.answer()
+
+
+@router.callback_query(OrderFlow.choosing_region, F.data.in_({"region:ff_cis", "region:ff_indonesia"}))
+async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    recipient = data.get("ff_player_id")
+    if not recipient:
+        await callback.answer("ID ёфт нашуд. Аз нав оғоз кунед.", show_alert=True)
+        return
+    region = "СНГ" if callback.data == "region:ff_cis" else "Индонезия"
+    await state.update_data(ff_region=region)
+    await callback.answer()
+    await _finalize_recipient(state, callback.from_user.id, recipient, callback.message)
 
 
 async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str | None:
