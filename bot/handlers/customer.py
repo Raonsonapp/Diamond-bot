@@ -920,13 +920,14 @@ async def enter_player_id(message: Message, state: FSMContext) -> None:
             await message.answer("Username-и нодуруст. Лутфан username-и дурусти Telegram-ро (бе @) нависед.")
             return
 
-    if product.category == ProductCategory.DIAMONDS:
+    if product.category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA):
         await state.update_data(ff_player_id=recipient)
         await state.set_state(OrderFlow.choosing_region)
         await message.answer(
             "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
-            "🇷🇺 СНГ — барои аккаунтҳои минтақаи СНГ\n"
-            "🇮🇩 Индонезия — барои аккаунтҳои Индонезия",
+            "🌐 СНГ — танҳо барои бастаҳои Free Fire (СНГ)\n"
+            "🇮🇩 Индонезия — танҳо барои бастаҳои Free Fire Indonesia\n\n"
+            "⚠️ Регион бояд ба баста мувофиқат кунад.",
             parse_mode="HTML",
             reply_markup=free_fire_region_keyboard(),
         )
@@ -942,13 +943,14 @@ async def reuse_saved_id(callback: CallbackQuery, state: FSMContext) -> None:
     cart_ids = data.get("cart_product_ids")
     async with get_session() as session:
         product = await get_product(session, cart_ids[0] if cart_ids else data["product_id"])
-    if product and product.category == ProductCategory.DIAMONDS:
+    if product and product.category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA):
         await state.update_data(ff_player_id=recipient)
         await state.set_state(OrderFlow.choosing_region)
         await callback.message.answer(
             "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
-            "🇷🇺 СНГ — барои аккаунтҳои минтақаи СНГ\n"
-            "🇮🇩 Индонезия — барои аккаунтҳои Индонезия",
+            "🌐 СНГ — танҳо барои бастаҳои Free Fire (СНГ)\n"
+            "🇮🇩 Индонезия — танҳо барои бастаҳои Free Fire Indonesia\n\n"
+            "⚠️ Регион бояд ба баста мувофиқат кунад.",
             parse_mode="HTML",
             reply_markup=free_fire_region_keyboard(),
         )
@@ -966,6 +968,28 @@ async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) ->
         await callback.answer("ID ёфт нашуд. Аз нав оғоз кунед.", show_alert=True)
         return
     region = "СНГ" if callback.data == "region:ff_cis" else "Индонезия"
+    cart_ids = data.get("cart_product_ids")
+    async with get_session() as session:
+        product = await get_product(session, cart_ids[0] if cart_ids else data.get("product_id"))
+    if product is None:
+        await callback.answer("Баста ёфт нашуд. Аз нав интихоб кунед.", show_alert=True)
+        await state.clear()
+        return
+
+    expected_category = (
+        ProductCategory.DIAMONDS if region == "СНГ" else ProductCategory.FF_INDONESIA
+    )
+    if product.category != expected_category:
+        await callback.answer(
+            "⛔ Регион бо баста мувофиқат намекунад. "
+            "Барои СНГ бастаи СНГ ва барои Индонезия бастаи Indonesia-ро интихоб кунед.",
+            show_alert=True,
+        )
+        return
+
+    # Lock the selected region into the order state. The selected product's
+    # category remains authoritative for provider delivery; a region tap can
+    # never silently switch the product to another region.
     await state.update_data(ff_region=region)
     await callback.answer()
     await _finalize_recipient(state, callback.from_user.id, recipient, callback.message)
