@@ -63,7 +63,7 @@ from bot.services.payments import get_payment_provider
 from bot.services.pricing import quote_custom_price
 from bot.services.referral_rewards import maybe_credit_referral_milestone
 from bot.services.sponsor import is_subscribed_to_sponsor_channel
-from bot.states import OrderFlow, WalletTopupFlow
+from bot.states import ApiAccessFlow, OrderFlow, WalletTopupFlow
 from bot.texts import FAQ_TEXT, TERMS_TEXT
 
 # Custom-amount ("Миқдори дигар") is only ever shown on the Telegram
@@ -2180,44 +2180,156 @@ async def wallet_topup_menu(callback: CallbackQuery) -> None:
     )
 
 
-@router.callback_query(F.data == "api:open")
-async def api_open_button(callback: CallbackQuery) -> None:
-    """Show concise API status; the user explicitly taps refresh to check again."""
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+async def _api_status_data(user_id: int):
     from bot.db.models import CustomerApiKey
     from bot.db.session import get_session
-
-    await callback.answer()
     async with get_session() as session:
         result = await session.execute(
-            select(CustomerApiKey).where(CustomerApiKey.user_id == callback.from_user.id)
+            select(CustomerApiKey).where(CustomerApiKey.user_id == user_id)
         )
         row = result.scalar_one_or_none()
-
     if row and not row.revoked_at:
         status = (
             "🔑 <b>API-и шахсии шумо</b>\n\n"
             "🟢 <b>Ҳолат:</b> Фаъол\n"
             f"🏷 <b>Калид:</b> <code>{html.escape(row.key_prefix)}…</code>\n"
             f"📅 <b>Сохта шуд:</b> {row.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
-            "🔄 Барои аз нав санҷидани ҳолат «Навсозӣ»-ро зер кунед.\n"
+            "🔄 Барои санҷидани ҳолат тугмаи «Навсозӣ»-ро зер кунед.\n"
             "⚠️ Калиди пурра танҳо ҳангоми сохтан нишон дода мешавад."
         )
         create_label = "♻️ Сохтани калиди нав"
     else:
         status = (
             "🔑 <b>API-и шахсӣ</b>\n\n"
-            "⚪ <b>Ҳолат:</b> Ҳоло калид сохта нашудааст.\n"
+            "⚪ <b>Ҳолат:</b> Калид ҳоло сохта нашудааст.\n"
             "Барои истифодаи API калид созед; калиди пурра танҳо як бор нишон дода мешавад."
         )
         create_label = "➕ Сохтани API-ключ"
+    return status, create_label
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+
+def _api_keyboard(create_label: str, pin_set: bool = False):
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    rows = [
         [InlineKeyboardButton(text="🔄 Навсозии ҳолат", callback_data="api:refresh")],
         [InlineKeyboardButton(text=create_label, callback_data="api:create")],
-        [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
-    ])
-    await _edit_navigation_message(callback, status, keyboard)
+    ]
+    rows.append([InlineKeyboardButton(
+        text="🔢 Иваз кардани рамзи 4-рақама" if pin_set else "🔢 Гузоштани рамзи 4-рақама",
+        callback_data="api:set_pin",
+    )])
+    rows.append([InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(F.data == "api:open")
+async def api_open_button(callback: CallbackQuery, state: FSMContext) -> None:
+    from bot.db.models import ApiAccessPin
+    from bot.db.session import get_session
+    await callback.answer()
+    async with get_session() as session:
+        pin = await session.get(ApiAccessPin, callback.from_user.id)
+    if pin:
+        await state.set_state(ApiAccessFlow.checking_pin)
+        await state.update_data(api_pin_prompt_message_id=callback.message.message_id)
+        await _edit_navigation_message(
+            callback,
+            "🔐 <b>API-и шахсӣ муҳофизат шудааст</b>\n\n"
+            "🔢 Рамзи 4-рақамаи худро ворид кунед:",
+            None,
+        )
+        return
+
+    status, create_label = await _api_status_data(callback.from_user.id)
+    await _edit_navigation_message(
+        callback,
+        status,
+        _api_keyboard(create_label, pin_set=False),
+    )
+
+
+@router.callback_query(F.data == "api:set_pin")
+async def api_set_pin_start(callback: CallbackQuery, state: FSMContext) -> None:
+    from bot.db.models import ApiAccessPin
+    from bot.db.session import get_session
+    await callback.answer()
+    async with get_session() as session:
+        pin = await session.get(ApiAccessPin, callback.from_user.id)
+    await state.set_state(ApiAccessFlow.setting_pin)
+    await state.update_data(api_pin_prompt_message_id=callback.message.message_id)
+    await _edit_navigation_message(
+        callback,
+        ("🔢 <b>Рамзи нави 4-рақама гузоред</b>\n\n"
+         "📌 Танҳо рақамҳо истифода баред. Ин рамз барои кушодани бахши API аст.")
+        if not pin else
+        "🔢 <b>Рамзи нави 4-рақама гузоред</b>\n\n"
+        "⚠️ Рамзи пешина иваз мешавад. Танҳо рақамҳо ворид кунед.",
+        None,
+    )
+
+
+@router.message(ApiAccessFlow.setting_pin, F.text)
+async def api_set_pin_message(message: Message, state: FSMContext) -> None:
+    import hashlib
+    from bot.db.models import ApiAccessPin
+    from bot.db.session import get_session
+    pin_text = (message.text or "").strip()
+    if len(pin_text) != 4 or not pin_text.isdigit():
+        await message.answer("⚠️ Рамз бояд маҳз 4 рақам бошад. Масалан: 2580")
+        return
+    digest = hashlib.sha256(f"{message.from_user.id}:{pin_text}".encode()).hexdigest()
+    async with get_session() as session:
+        row = await session.get(ApiAccessPin, message.from_user.id)
+        if row is None:
+            row = ApiAccessPin(user_id=message.from_user.id, pin_hash=digest)
+            session.add(row)
+        else:
+            row.pin_hash = digest
+            row.created_at = datetime.now(timezone.utc)
+        await session.commit()
+    await state.clear()
+    await message.answer(
+        "✅ Рамзи 4-рақама сабт шуд. Акнун барои кушодани API ин рамзро ворид кунед.\n"
+        "⚠️ Рамзро фаромӯш накунед."
+    )
+    status, create_label = await _api_status_data(message.from_user.id)
+    await message.answer(status, reply_markup=_api_keyboard(create_label, pin_set=True), parse_mode="HTML")
+
+
+@router.message(ApiAccessFlow.checking_pin, F.text)
+async def api_check_pin_message(message: Message, state: FSMContext) -> None:
+    import hashlib
+    from bot.db.models import ApiAccessPin
+    from bot.db.session import get_session
+    pin_text = (message.text or "").strip()
+    async with get_session() as session:
+        row = await session.get(ApiAccessPin, message.from_user.id)
+    if len(pin_text) != 4 or not pin_text.isdigit() or row is None:
+        await message.answer("❌ Рамз нодуруст аст. Рамзи 4-рақамаро аз нав ворид кунед.")
+        return
+    digest = hashlib.sha256(f"{message.from_user.id}:{pin_text}".encode()).hexdigest()
+    if digest != row.pin_hash:
+        await message.answer("❌ Рамз нодуруст аст. Кӯшиш кунед.")
+        return
+    await state.clear()
+    status, create_label = await _api_status_data(message.from_user.id)
+    await message.answer("✅ Рамз дуруст аст.")
+    await message.answer(status, reply_markup=_api_keyboard(create_label, pin_set=True), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "api:refresh")
+async def api_refresh_button(callback: CallbackQuery) -> None:
+    from bot.db.models import ApiAccessPin
+    from bot.db.session import get_session
+    async with get_session() as session:
+        pin = await session.get(ApiAccessPin, callback.from_user.id)
+    status, create_label = await _api_status_data(callback.from_user.id)
+    try:
+        await callback.message.edit_text(status, reply_markup=_api_keyboard(create_label, pin_set=bool(pin)), parse_mode="HTML")
+        await callback.answer("Ҳолат нав шуд.")
+    except Exception:
+        # A refresh never creates a new message.
+        await callback.answer("Навсозӣ нашуд. Лутфан дубора кӯшиш кунед.", show_alert=True)
 
 
 @router.callback_query(F.data == "api:refresh")
