@@ -63,7 +63,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
 def review_channel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📢 Кушодани канал", url=config.shop_channel_url)],
+            [InlineKeyboardButton(text="⭐ Канали отзивҳо", url=config.review_channel_url)],
             [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
         ]
     )
