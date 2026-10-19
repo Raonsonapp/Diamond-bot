@@ -1,0 +1,31 @@
+name: Render Keepalive
+
+on:
+  schedule:
+    # Render free web services sleep after inactivity; send a lightweight
+    # health request periodically. GitHub scheduled jobs can be delayed.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check configured Render health URL
+        env:
+          RENDER_SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
+        run: |
+          set -eu
+          if [ -z "${RENDER_SERVICE_URL:-}" ]; then
+            echo "::error::Set the repository variable RENDER_SERVICE_URL to your Render service URL (for example https://your-service.onrender.com)."
+            exit 1
+          fi
+          URL="${RENDER_SERVICE_URL%/}/"
+          echo "Pinging Render health endpoint: $URL"
+          curl --fail --silent --show-error --max-time 25 "$URL"
+          echo
+          echo "Render health endpoint responded successfully."
