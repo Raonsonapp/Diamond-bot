@@ -1571,24 +1571,58 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
                 )
         order = await set_proof_submitted(session, order)
 
+    # Deliver the proof to a configured admin destination. If the group/chat
+    # ID is missing or no longer accessible, fall back to individual admin IDs.
+    # Never tell the customer it was sent unless Telegram confirms delivery.
+    admin_targets: list[int] = []
     if config.admin_chat_id:
-        if message.photo:
-            await message.bot.send_photo(
-                config.admin_chat_id,
-                photo=message.photo[-1].file_id,
-                caption=caption,
-                reply_markup=admin_order_keyboard(order),
+        admin_targets.append(config.admin_chat_id)
+    admin_targets.extend(uid for uid in config.admin_user_ids if uid not in admin_targets)
+
+    delivered_to_admin = False
+    last_admin_error: Exception | None = None
+    for admin_target in admin_targets:
+        try:
+            if message.photo:
+                await message.bot.send_photo(
+                    admin_target,
+                    photo=message.photo[-1].file_id,
+                    caption=caption,
+                    reply_markup=admin_order_keyboard(order),
+                )
+            else:
+                await message.bot.send_document(
+                    admin_target,
+                    document=message.document.file_id,
+                    caption=caption,
+                    reply_markup=admin_order_keyboard(order),
+                )
+            delivered_to_admin = True
+            break
+        except Exception as exc:
+            last_admin_error = exc
+            logging.exception("Could not forward payment proof for order #%s to admin %s", order_id, admin_target)
+
+    if not delivered_to_admin:
+        # Keep the FSM on awaiting_payment_proof so the customer can retry after
+        # the admin destination/configuration is fixed.
+        if not admin_targets:
+            logging.error("Cannot forward payment proof for order #%s: ADMIN_CHAT_ID and ADMIN_USER_IDS are empty", order_id)
+            await message.answer(
+                "⚠️ Чек қабул шуд, аммо фиристодан ба админ ҳоло имкон надорад. "
+                "Админ бояд ADMIN_CHAT_ID ё ADMIN_USER_IDS-ро дар Render танзим кунад. "
+                "Лутфан чекро ҳоло нигоҳ доред ва баъд аз хабар гирифтани админ аз нав фиристед."
             )
         else:
-            await message.bot.send_document(
-                config.admin_chat_id,
-                document=message.document.file_id,
-                caption=caption,
-                reply_markup=admin_order_keyboard(order),
+            await message.answer(
+                "⚠️ Чек қабул шуд, аммо Telegram фиристодани онро ба админ иҷозат надод. "
+                "Эҳтимол админ ботро дар чат оғоз накардааст ё ADMIN_CHAT_ID нодуруст аст. "
+                "Лутфан ба дастгирӣ хабар диҳед; чек ҳанӯз тасдиқ нашудааст."
             )
+        return
 
     await message.answer(
-        "Ташаккур! Расиди шумо ба админ фиристода шуд. Пас аз тасдиқ маҳсулоти шумо ирсол мешавад."
+        "✅ Чеки шумо ба админ фиристода шуд. Пас аз санҷиш ва тасдиқи пардохт маҳсулот ирсол мешавад."
     )
     # Don't clear the state yet — stay in "awaiting admin review" so that if
     # the customer writes back in the meantime (e.g. "паём наомад?"), the
