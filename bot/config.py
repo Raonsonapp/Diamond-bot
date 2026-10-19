@@ -121,7 +121,9 @@ class Config:
 
     # Optional Telegram GIF/MP4 animation file_id for the welcome screen.
     # Set WELCOME_ANIMATION_FILE_ID in Render after uploading the animation to the bot.
-    welcome_animation_file_id: str = os.getenv("WELCOME_ANIMATION_FILE_ID", "").strip()
+    welcome_animation_file_id: str = os.getenv("WELCOME_ANIMATION_FILE_ID", "")
+    # Optional MP4 tutorial video shown by /tutorial.
+    tutorial_video_file_id: str = os.getenv("TUTORIAL_VIDEO_FILE_ID", "").strip()
 
     # Public shop channel: bot must be added there as admin with "Post
     # Messages" permission, otherwise announcements silently fail.
