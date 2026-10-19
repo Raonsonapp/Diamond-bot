@@ -388,11 +388,49 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "menu:main")
 async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
-    # Return navigation to a clean menu message; if the originating message
-    # is media, remove its old inline buttons before sending the text menu.
+    # Whenever the customer returns to the home screen, show the diamond video
+    # with main-menu buttons attached directly to it. Reuse the current video
+    # message where possible; otherwise remove the old menu message first.
     await state.clear()
     await callback.answer()
-    await _edit_navigation_message(callback, "📋 Менюи асосӣ — бахшро интихоб кунед:", main_menu_keyboard())
+    caption = "💎 FF MARGEDAR — хуш омадед!\n\n📋 Менюи асосӣ — бахшро интихоб кунед:"
+
+    if callback.message.video or callback.message.animation:
+        try:
+            await callback.message.edit_caption(
+                caption=caption,
+                reply_markup=main_menu_keyboard(),
+                parse_mode="HTML",
+            )
+            return
+        except Exception:
+            pass
+
+    try:
+        await callback.message.delete()
+    except Exception:
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+
+    if config.welcome_animation_file_id:
+        try:
+            await callback.message.answer_video(
+                video=config.welcome_animation_file_id,
+                caption=caption,
+                supports_streaming=True,
+                reply_markup=main_menu_keyboard(),
+            )
+            return
+        except Exception:
+            import logging
+            logging.exception("Could not show welcome video when returning to main menu")
+
+    await callback.message.answer(
+        "📋 Менюи асосӣ — бахшро интихоб кунед:",
+        reply_markup=main_menu_keyboard(),
+    )
 
 
 @router.callback_query(F.data == "menu:reviews")
