@@ -823,7 +823,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         prompt = await _recipient_prompt(product.category)
         text = (
             "✅ <b>Фармоиши шумо</b>\n"
-            f"🎮 Бозӣ: <b>{html.escape(product.category.value.replace('_', ' ').title())}</b>\n"
+            f"🎮 Бозӣ: <b>{html.escape('Free Fire' if product.category == ProductCategory.DIAMONDS else product.category.value.replace('_', ' ').title())}</b>\n"
             f"💎 Баста: <b>{html.escape(product.display_name)}</b>\n"
             f"💰 Нарх: <b>{format_price(product.price_somoni)} сомонӣ</b>\n\n"
             f"🆔 Лутфан {prompt} худро фиристед:"
