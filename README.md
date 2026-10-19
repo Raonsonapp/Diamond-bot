@@ -216,3 +216,24 @@ curl -X POST https://YOUR_RENDER_HOST/api/v1/orders \
 ```
 
 Treat API keys as passwords. Do not embed a server-side key in public browser JavaScript or a mobile app. Give each site/bot its own customer's key and keep it in server-side environment secrets. The API currently has no automated payment gateway, per-key rate limiting, or full refund endpoint; test with small values/staging before live sales.
+
+
+## Дизайни ҷолиб ва аниматсияи истиқбол
+
+- Бот аниматсияи истиқболро аз `WELCOME_ANIMATION_FILE_ID` мефиристад.
+- Барои гирифтани `file_id`, аз аккаунти админ ба бот видеои MP4/GIF фиристед.
+  Бот `file_id`-ро бармегардонад; онро дар Environment-и хостинг ҳамчун
+  `WELCOME_ANIMATION_FILE_ID` гузоред. Файли видео ё токенҳоро ба Git commit накунед.
+- Барои таҷрибаи фарқкунанда аз ботҳои дигар, менюи мавҷудаи FF MARGEDAR,
+  матнҳои тоҷикӣ, нишонаҳои 💎/🎁 ва ҷараёни фармоиши худро нигоҳ доред.
+  Ҳаракатҳои видео барои сохтани аниматсияи истиқбол ҳамчун илҳоми умумӣ истифода
+  мешаванд; тарҳи рақиб айнан нусхабардорӣ намешавад.
+
+## Uptime ва хостинг
+
+`KEEPALIVE_PING_SECONDS` бо нобаёнӣ `0` аст. Self-ping танҳо метавонад
+фаъол будани хидматро санҷад, аммо кафолати бедор мондан намедиҳад ва
+маҳдудияти нақшаи ройгони провайдерро аз байн намебарад. Барои uptime-и воқеии
+24/7 нақшаи always-on-и пулакӣ ё VPS истифода кунед. Танзимоти хостингро
+дар панели провайдер иҷро кунед; токенҳо ва `DATABASE_URL` танҳо дар
+Environment Secrets нигоҳ дошта шаванд.
