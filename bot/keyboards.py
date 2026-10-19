@@ -18,7 +18,7 @@ def persistent_menu_keyboard() -> ReplyKeyboardMarkup:
 def sponsor_gate_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📢 Ба канал ҳамроҳ шудан", url=config.shop_channel_url)],
+            [InlineKeyboardButton(text="📢 Ба канали отзивҳо ҳамроҳ шудан", url=config.review_channel_url)],
             [InlineKeyboardButton(text="✅ Санҷидан", callback_data="sponsor:check")],
         ]
     )
