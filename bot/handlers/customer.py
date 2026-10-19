@@ -954,10 +954,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, answer_target) -> None:
-    """Shared by both the free-text ID/username entry and the "use my
-    previous one" quick button — builds the confirmation screen. Handles
-    both a single product (data["product_id"]) and a multi-pack cart
-    checkout (data["cart_product_ids"])."""
+    """Validate a Free Fire ID against the selected region before showing payment."""
     data = await state.get_data()
     cart_ids = data.get("cart_product_ids")
 
@@ -968,38 +965,88 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
         else:
             products = [await get_product(session, data["product_id"])]
 
+    if not products or any(p is None for p in products):
+        await answer_target.answer("⚠️ Баста ёфт нашуд. Лутфан каталогро аз нав кушоед: /start")
+        await state.clear()
+        return
+
+    category = products[0].category
+    ff_region = data.get("ff_region")
+    player_name = None
+
+    # Region-specific SKUs must never be mixed in one cart or paid against the
+    # other region. The category selection is the source of truth for the offer.
+    if category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA):
+        expected_region = "СНГ" if category == ProductCategory.DIAMONDS else "Индонезия"
+        if ff_region != expected_region:
+            await answer_target.answer(
+                "⚠️ Минтақаи фармоиш номувофиқ аст. Лутфан /start → 🎮 Бозиҳо ва минтақаро аз нав интихоб кунед."
+            )
+            await state.clear()
+            return
+        if any(p.category != category for p in products):
+            await answer_target.answer("⛔ Дар як фармоиш бастаҳои минтақаҳои гуногунро якҷоя харидан мумкин нест.")
+            await state.clear()
+            return
+
+        for product in products:
+            if not product.fzr_category_id or not product.fzr_offer_id:
+                await answer_target.answer(
+                    "⛔ Ин баста ҳоло барои таҳвили худкор дуруст танзим нашудааст. "
+                    "Фармоиш қатъ шуд, то алмос ба минтақаи нодуруст наравад."
+                )
+                return
+            sku = product.fzr_category_id.lower()
+            if category == ProductCategory.DIAMONDS and not any(tag in sku for tag in ("cis", "ru", "russia")):
+                await answer_target.answer(
+                    "⛔ Танзими таъминкунанда барои бастаи СНГ тасдиқ нашуд. Пардохт қатъ шуд; админ бояд mapping-и СНГ-ро ислоҳ кунад."
+                )
+                return
+            if category == ProductCategory.FF_INDONESIA and not any(tag in sku for tag in ("indonesia", "ind", "id_")):
+                await answer_target.answer(
+                    "⛔ Танзими таъминкунанда барои бастаи Индонезия тасдиқ нашуд. Пардохт қатъ шуд; админ бояд mapping-и Индонезияро ислоҳ кунад."
+                )
+                return
+
+        # The supplier's ID-validation endpoint must explicitly identify the
+        # account region. A valid player name alone is not proof of region.
+        region_check = await _try_validate_player_id(products[0].fzr_category_id, recipient)
+        if not region_check or not region_check.get("player_name") or not region_check.get("region"):
+            await answer_target.answer(
+                "⚠️ Минтақаи ID-ро ҳоло тасдиқ карда натавонистем. Барои пешгирии донати хато пардохт баста шуд. "
+                "ID-ро санҷед ё баъдтар кӯшиш кунед."
+            )
+            return
+        detected = region_check["region"]
+        if detected != expected_region:
+            await answer_target.answer(
+                f"⛔ ID-и шумо ба минтақаи <b>{html.escape(detected)}</b> тааллуқ дорад, "
+                f"аммо шумо <b>{html.escape(expected_region)}</b>-ро интихоб кардед. "
+                "Минтақаро иваз кунед; пардохт иҷозат дода нашуд."
+            )
+            return
+        player_name = region_check["player_name"]
+
     await state.update_data(ff_player_id=recipient)
     await state.set_state(OrderFlow.confirming)
-
     total_price = sum(p.price_somoni for p in products)
     offer_balance = user is not None and user.referral_balance >= total_price > 0
     offer_wallet = user is not None and float(user.wallet_balance_somoni or 0) >= total_price > 0
-    category = products[0].category
-    ff_region = data.get("ff_region")
 
-    player_name = None
-    if category == ProductCategory.DIAMONDS:
-        mapped = next((p for p in products if p.fzr_category_id), None)
-        if mapped:
-            player_name = await _try_validate_player_id(mapped.fzr_category_id, recipient)
-
-    recipient_label = (
-        "📱 Username" if category == ProductCategory.TELEGRAM else "🆔 ID"
-    )
+    recipient_label = "📱 Username" if category == ProductCategory.TELEGRAM else "🆔 ID"
     confirm_lines = ["🧾 <b>Тафсилоти фармоиш</b>", f"{recipient_label}: <code>{html.escape(recipient)}</code>"]
     if player_name:
         confirm_lines.append(f"👤 Номи бозигар: <b>{html.escape(player_name)}</b>")
-    game_label = ("Free Fire Indonesia" if category == ProductCategory.FF_INDONESIA else "Free Fire" if category == ProductCategory.DIAMONDS else category.value.replace("_", " ").title())
+    game_label = ("🇮🇩 Free Fire Indonesia" if category == ProductCategory.FF_INDONESIA else "💎 Free Fire" if category == ProductCategory.DIAMONDS else category.value.replace("_", " ").title())
     confirm_lines.append(f"🎮 Бозӣ: <b>{html.escape(game_label)}</b>")
-    if category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA) and ff_region:
-        confirm_lines.append(f"🌍 Регион: <b>{html.escape(ff_region)}</b>")
+    if category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA):
+        confirm_lines.append(f"🌍 Регион: <b>{html.escape(ff_region)}</b> · ✅ ID тасдиқ шуд")
     confirm_lines.append("")
     for p in products:
         confirm_lines.append(f"💎 Баста: <b>{html.escape(p.display_name)}</b>")
     confirm_lines.append(f"📦 Теъдод: <b>{len(products)}</b>")
     confirm_lines.append(f"💰 Ҳамагӣ: <b>{format_price(total_price)} сомонӣ</b>")
-    confirm_lines.append("")
-    confirm_lines.append("☑️ Маълумот дуруст аст?")
+    confirm_lines.extend(["", "☑️ Маълумот дуруст аст?"])
     await answer_target.answer(
         "\n".join(confirm_lines),
         reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance, offer_wallet_payment=offer_wallet),
@@ -1067,21 +1114,13 @@ async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) ->
     await state.update_data(ff_region=region)
 
 
-async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str | None:
-    """Best-effort player-ID check via FazerCards. Returns the confirmed
-    in-game name, or None if unsupported/unavailable/couldn't confirm —
-    callers must treat None as "couldn't verify", never as "definitely
-    wrong", since this must not block a purchase on its own.
+async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> dict | None:
+    """Validate a Free Fire ID and extract an explicit region when supplier provides one.
 
-    /api/v2/topups/validate-id uses its own category namespace, separate
-    from the /api/v2/topups (offers/order) one — it lists one entry per
-    *game* ("free_fire"), not per regional top-up SKU ("free_fire_cis",
-    "free_fire_bd", ...). Player-ID validation is the same Garena lookup
-    regardless of which regional SKU is used to actually deliver the
-    diamonds, so match by game family (prefix) and call validate-id with
-    *its own* category_id — never the product's fzr_category_id, which
-    that endpoint doesn't recognise (confirmed: it 404s as "unknown
-    category_id" there)."""
+    The validator has a separate game-level category namespace. A player name
+    alone is not sufficient to prove CIS vs Indonesia, so callers must fail
+    closed if the response does not explicitly expose region/server metadata.
+    """
     from bot.services.delivery import guess_id_field_key
     from bot.services.fazercards import FazerCardsError, list_validate_id_categories, validate_player_id
 
@@ -1092,8 +1131,7 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str |
 
     item = next(
         (
-            i
-            for i in supported.get("items", [])
+            i for i in supported.get("items", [])
             if i.get("category_id")
             and (
                 fzr_category_id == i["category_id"]
@@ -1104,17 +1142,44 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str |
     )
     if item is None:
         return None
-
     field_key = guess_id_field_key(item.get("fields", []))
     if field_key is None:
         return None
-
     try:
         result = await validate_player_id(item["category_id"], {field_key: player_id})
     except FazerCardsError:
         return None
+    if not isinstance(result, dict) or not result.get("valid"):
+        return None
 
-    return result.get("player_name") if result.get("valid") else None
+    def find_region(value, depth=0):
+        if depth > 4:
+            return None
+        if isinstance(value, dict):
+            for key, item_value in value.items():
+                key_norm = str(key).lower()
+                if key_norm in {"region", "server", "server_region", "account_region", "country", "country_code", "zone"}:
+                    if isinstance(item_value, (str, int)):
+                        text = str(item_value).strip().lower()
+                        if any(word in text for word in ("indonesia", "indonesian", "indo", "id-server", "id server")) or text in {"id", "idn"}:
+                            return "Индонезия"
+                        if any(word in text for word in ("cis", "russia", "russian", "ru-server", "ru server", "europe")) or text in {"ru", "cis"}:
+                            return "СНГ"
+                nested = find_region(item_value, depth + 1)
+                if nested:
+                    return nested
+        elif isinstance(value, list):
+            for entry in value:
+                nested = find_region(entry, depth + 1)
+                if nested:
+                    return nested
+        return None
+
+    player_name = result.get("player_name") or result.get("name")
+    return {
+        "player_name": str(player_name) if player_name else None,
+        "region": find_region(result),
+    }
 
 
 @router.callback_query(OrderFlow.confirming, F.data == "order:cancel")
