@@ -15,3 +15,8 @@ class OrderFlow(StatesGroup):
 
 class WalletTopupFlow(StatesGroup):
     awaiting_proof = State()
+
+
+class ApiAccessFlow(StatesGroup):
+    setting_pin = State()
+    checking_pin = State()
