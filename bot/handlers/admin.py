@@ -1,14 +1,14 @@
 import asyncio
 import re
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import config
-from bot.db.models import Order, OrderStatus, Product, ProductCategory, User
+from bot.db.models import Base, BotSetting, Order, OrderStatus, Product, ProductCategory, User
 from bot.db.repo import (
     adjust_fazercards_balance,
     contest_leaderboard,
@@ -393,6 +393,46 @@ async def contest_status(message: Message) -> None:
             bought = "✅ харид кард" if purchase_flags.get(user.id) else "❌ ҳанӯз харид накард"
             lines.append(f"{icon} {name} — {count}/{contest.target_referrals} (боқӣ {left}) — {bought}")
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("resetbot"))
+async def reset_bot_data_command(message: Message) -> None:
+    """Reset customer/order activity while preserving products and bot settings.
+    Requires an explicit confirmation argument to avoid accidental data loss."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) != 2 or parts[1].strip().upper() != "CONFIRM":
+        await message.answer(
+            "⚠️ Ин фармон маълумоти корбарон, фармоишҳо, ҳамёнҳо, чекҳо ва омори вобастаро тоза мекунад.\n"
+            "Маҳсулот, нархҳо ва танзимоти бот нигоҳ дошта мешаванд.\n\n"
+            "Пеш аз иҷро backup гиред. Барои тасдиқ нависед:\n"
+            "/resetbot CONFIRM"
+        )
+        return
+
+    # Delete rows in reverse FK order. Keep the product catalog and runtime
+    # settings, so prices, supplier mappings and payment/admin settings survive.
+    preserved_tables = {Product.__table__.name, BotSetting.__table__.name}
+    deleted_counts: dict[str, int] = {}
+    async with get_session() as session:
+        for table in reversed(Base.metadata.sorted_tables):
+            if table.name in preserved_tables:
+                continue
+            result = await session.execute(delete(table))
+            deleted_counts[table.name] = max(result.rowcount or 0, 0)
+        await session.commit()
+
+    total_deleted = sum(deleted_counts.values())
+    await message.answer(
+        "✅ Маълумоти кӯҳна тоза шуд. Бот аз сифр оғоз мекунад.\n\n"
+        f"🧹 Сабтҳои тозашуда: {total_deleted}\n"
+        "💎 Маҳсулот ва нархҳо: нигоҳ дошта шуданд\n"
+        "⚙️ Танзимоти бот: нигоҳ дошта шуданд\n\n"
+        "Корбарон ҳангоми /start аз нав сабт мешаванд."
+    )
 
 
 @router.message(Command("userstats"))
