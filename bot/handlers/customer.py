@@ -497,8 +497,14 @@ async def menu_buy_bigo(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "menu:buy_ff_id")
 async def menu_buy_ff_indonesia(callback: CallbackQuery, state: FSMContext) -> None:
-    await _open_catalog(
-        callback, state, ProductCategory.FF_INDONESIA, "🇮🇩 Бастаи Free Fire Indonesia-ро интихоб кунед:"
+    # Legacy menu callback now follows the same one-time region selection.
+    await callback.answer()
+    await state.clear()
+    await callback.message.answer(
+        "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
+        "🌐 СНГ — нархҳои СНГ\n"
+        "🇮🇩 Индонезия — нархҳои Индонезия",
+        reply_markup=free_fire_region_keyboard(),
     )
 
 
@@ -963,7 +969,6 @@ async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) ->
         else ProductCategory.FF_INDONESIA
     )
     await state.clear()
-    await callback.answer()
     await _open_catalog(
         callback, state, category,
         f"{'🌐' if region == 'СНГ' else '🇮🇩'} Бастаҳои Free Fire — {region}:",
