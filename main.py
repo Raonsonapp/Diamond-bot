@@ -53,6 +53,8 @@ async def _set_bot_commands(bot: Bot) -> None:
             BotCommand(command="myorders", description="📦 Фармоишҳои ман"),
             BotCommand(command="wallet", description="👛 Ҳамён ва пур кардани баланс"),
             BotCommand(command="apikey", description="🔑 API-и шахсӣ"),
+            BotCommand(command="help", description="❓ Дастури истифодаи бот"),
+            BotCommand(command="tutorial", description="🎬 Видео ва дастури харид"),
         ]
     )
 
