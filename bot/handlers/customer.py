@@ -227,18 +227,19 @@ async def _show_main_menu(
 
 
 async def _edit_navigation_message(
-    callback: CallbackQuery, text: str, reply_markup=None
+    callback: CallbackQuery, text: str, reply_markup=None, **kwargs
 ) -> None:
-    """Update the existing menu/media message instead of stacking new menus below it."""
+    """Edit the clicked message (including its media caption) to avoid stacking screens."""
     msg = callback.message
+    kwargs.setdefault("parse_mode", "HTML")
     try:
         if msg.video or msg.animation or msg.photo:
-            await msg.edit_caption(caption=text, reply_markup=reply_markup, parse_mode="HTML")
+            await msg.edit_caption(caption=text, reply_markup=reply_markup, **kwargs)
         else:
-            await msg.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
+            await msg.edit_text(text, reply_markup=reply_markup, **kwargs)
     except Exception:
         # Only create a new message when Telegram cannot edit the existing one.
-        await msg.answer(text, reply_markup=reply_markup, parse_mode="HTML")
+        await msg.answer(text, reply_markup=reply_markup, **kwargs)
 
 
 async def _format_orders_text(user_id: int) -> str:
@@ -364,7 +365,7 @@ async def sponsor_check(callback: CallbackQuery, state: FSMContext) -> None:
 
     data = await state.get_data()
     referred_by = data.get("pending_referred_by")
-    await callback.message.edit_text("✅ Ташаккур! Шумо ба канал ҳамроҳ шудед.", reply_markup=None)
+    await _edit_navigation_message(callback, "✅ Ташаккур! Шумо ба канал ҳамроҳ шудед.", reply_markup=None)
     await _register_and_continue(callback.message, state, callback.from_user, referred_by)
     await callback.answer()
 
@@ -375,7 +376,7 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
         user = await get_user(session, callback.from_user.id)
         await accept_terms(session, user)
 
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         f"✅ Ташаккур! Шартнома қабул шуд.\n\n"
         f"👋 Хуш омадед, {callback.from_user.full_name}!\n"
         f"🆔 ID-и шумо: {callback.from_user.id}",
@@ -396,7 +397,7 @@ async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "menu:reviews")
 async def menu_reviews(callback: CallbackQuery) -> None:
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         "Шарҳҳои мизоҷони моро дар канал бинед:", reply_markup=review_channel_keyboard()
     )
     await callback.answer()
@@ -663,7 +664,7 @@ async def enter_cart_mode(callback: CallbackQuery, state: FSMContext) -> None:
         except Exception:
             pass
     else:
-        await callback.message.edit_text(cart_text, reply_markup=cart_markup)
+        await _edit_navigation_message(callback, cart_text, reply_markup=cart_markup)
     await callback.answer()
 
 
@@ -734,13 +735,13 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
         except Exception:
             pass
     else:
-        await callback.message.edit_text(text, reply_markup=markup)
+        await _edit_navigation_message(callback, text, reply_markup=markup)
     await callback.answer()
 
 
 @router.callback_query(F.data == "menu:contact")
 async def menu_contact(callback: CallbackQuery) -> None:
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         "📞 Тамос бо мо — тугмаро зер кунед, мустақим кушода мешавад:\n\n"
         "🛡 Бехатар · 🎧 Дастгирии 24/7 · ⏱ Дар 1-5 дақиқа",
         reply_markup=contact_keyboard(),
@@ -750,7 +751,7 @@ async def menu_contact(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "menu:faq")
 async def menu_faq(callback: CallbackQuery) -> None:
-    await callback.message.edit_text(FAQ_TEXT, reply_markup=back_to_menu_keyboard())
+    await _edit_navigation_message(callback, FAQ_TEXT, reply_markup=back_to_menu_keyboard())
     await callback.answer()
 
 
@@ -768,7 +769,7 @@ async def menu_about(callback: CallbackQuery) -> None:
         f"📊 Корбарон: {users_count} | Фармоишҳои иҷрошуда: {orders_count}\n\n"
         f"📢 Канал: {config.shop_channel_url}"
     )
-    await callback.message.edit_text(text, reply_markup=back_to_menu_keyboard())
+    await _edit_navigation_message(callback, text, reply_markup=back_to_menu_keyboard())
     await callback.answer()
 
 
@@ -788,7 +789,7 @@ async def menu_profile(callback: CallbackQuery) -> None:
         f"💰 Маблағи умумии харид: {total:.2f} сомонӣ\n"
         f"🤝 Баланси реферал: {user.referral_balance:.2f} сомонӣ"
     )
-    await callback.message.edit_text(text, reply_markup=profile_menu_keyboard())
+    await _edit_navigation_message(callback, text, reply_markup=profile_menu_keyboard())
     await callback.answer()
 
 
@@ -811,7 +812,7 @@ async def menu_referral(callback: CallbackQuery) -> None:
         "💳 Бонуси ҷамъшуда ба балансии шумо илова мешавад ва метавонед онро барои пардохти "
         "харидҳо дар бот истифода баред."
     )
-    await callback.message.edit_text(text, reply_markup=referral_menu_keyboard())
+    await _edit_navigation_message(callback, text, reply_markup=referral_menu_keyboard())
     await callback.answer()
 
 
@@ -831,7 +832,7 @@ async def menu_top_buyers(callback: CallbackQuery) -> None:
     if rank:
         lines.append(f"\n👤 Шумо: {rank}-ҷой")
 
-    await callback.message.edit_text("\n".join(lines), reply_markup=back_to_menu_keyboard())
+    await _edit_navigation_message(callback, "\n".join(lines), reply_markup=back_to_menu_keyboard())
     await callback.answer()
 
 
@@ -849,14 +850,14 @@ async def menu_top_referrers(callback: CallbackQuery) -> None:
         name = f"@{user.username}" if user.username else (user.full_name or f"ID{user.id}")
         lines.append(f"{icon} {name} — {count} даъват")
 
-    await callback.message.edit_text("\n".join(lines), reply_markup=back_to_menu_keyboard())
+    await _edit_navigation_message(callback, "\n".join(lines), reply_markup=back_to_menu_keyboard())
     await callback.answer()
 
 
 @router.callback_query(F.data == "menu:myorders")
 async def menu_myorders(callback: CallbackQuery) -> None:
     text = await _format_orders_text(callback.from_user.id)
-    await callback.message.edit_text(text, reply_markup=back_to_menu_keyboard())
+    await _edit_navigation_message(callback, text, reply_markup=back_to_menu_keyboard())
     await callback.answer()
 
 
@@ -874,7 +875,7 @@ async def choose_custom_amount(callback: CallbackQuery, state: FSMContext) -> No
         except Exception:
             pass
     else:
-        await callback.message.edit_text(prompt_text, reply_markup=None)
+        await _edit_navigation_message(callback, prompt_text, reply_markup=None)
     await callback.answer()
 
 
@@ -1231,7 +1232,7 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> dict 
 @router.callback_query(OrderFlow.confirming, F.data == "order:cancel")
 async def cancel_order(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("Фармоиш бекор карда шуд.", reply_markup=None)
+    await _edit_navigation_message(callback, "Фармоиш бекор карда шуд.", reply_markup=None)
     await callback.answer()
 
 
@@ -1286,7 +1287,7 @@ async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
         )
 
     await state.clear()
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         f"✅ Фармоиши #{primary.id} бо баланси реферал пардохт шуд!\n"
         f"{summary}\n\nДар 1-5 дақиқа ба шумо мерасад.",
         reply_markup=None,
@@ -1306,7 +1307,7 @@ async def _blocked_for_maintenance(callback: CallbackQuery, state: FSMContext) -
         return False
 
     await state.clear()
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         "🛠 Мутаассифона, ҳоло бот муваққатан дар ҳоли таъмирот аст (мушкили техникӣ бо провайдер). "
         "Лутфан баъд аз чанд соат аз нав кӯшиш кунед.\n\n"
         "ℹ️ Агар шумо АЛЛАКАЙ пардохта бошед — нигарон нашавед: фармоишатон дар навбат аст, "
@@ -1384,7 +1385,7 @@ async def pay_with_wallet(callback: CallbackQuery, state: FSMContext) -> None:
             )
         except Exception:
             pass
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         f"✅ Фармоиш #{primary.id} қабул шуд. Аз баланс {total:.2f} сомонӣ кам шуд.\n"
         "Таҳвил пас аз иҷрои фармоиш тасдиқ мешавад."
     )
@@ -1395,7 +1396,7 @@ async def pay_with_wallet(callback: CallbackQuery, state: FSMContext) -> None:
 async def confirm_order(callback: CallbackQuery, state: FSMContext) -> None:
     if await _blocked_for_maintenance(callback, state):
         return
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         "💳 <b>Интихоби усули пардохт</b>\n\n"
         "🏦 Бонки худро интихоб кунед:\n"
         "• 💙 <b>Душанбе Сити</b> — пайванди пардохт, агар дастрас бошад\n"
@@ -1455,9 +1456,9 @@ async def choose_payment_method(callback: CallbackQuery, state: FSMContext) -> N
         "📷 Пас аз пардохт расиди воқеиро фиристед. Агар бонки дигарро истифода бурдан хоҳед, фармоишро бекор карда аз нав оғоз кунед."
     )
     if invoice.pay_url:
-        await callback.message.edit_text(text, reply_markup=payment_link_keyboard(invoice.pay_url))
+        await _edit_navigation_message(callback, text, reply_markup=payment_link_keyboard(invoice.pay_url))
     else:
-        await callback.message.edit_text(text, reply_markup=None)
+        await _edit_navigation_message(callback, text, reply_markup=None)
     await callback.answer()
 
 
@@ -1732,7 +1733,7 @@ async def skip_review(callback: CallbackQuery, state: FSMContext) -> None:
         product = await get_product(session, order.product_id)
         await post_review_announcement(callback.bot, session, order, product, None)
 
-    await callback.message.edit_text("Хуб, ташаккур барои харид! 🙏", reply_markup=None)
+    await _edit_navigation_message(callback, "Хуб, ташаккур барои харид! 🙏", reply_markup=None)
     await callback.answer()
 
 
@@ -2048,7 +2049,7 @@ async def payment_change_bank(callback: CallbackQuery, state: FSMContext) -> Non
     if not order_id:
         await callback.answer("Фармоиш ёфт нашуд. Аз нав оғоз кунед.", show_alert=True)
         return
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         "🔄 <b>Иваз кардани бонк</b>\n\n"
         "🏦 Бонки дигарро интихоб кунед. Фармоиши шумо ҳамон мемонад — "
         "фармоиши нав сохта намешавад.\n\n"
@@ -2091,7 +2092,7 @@ async def payment_change_bank_selected(callback: CallbackQuery, state: FSMContex
         f"{invoice.instructions}\n\n"
         "📷 Пас аз пардохт расиди воқеиро фиристед."
     )
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         text,
         reply_markup=payment_link_keyboard(invoice.pay_url) if invoice.pay_url else payment_link_keyboard(),
     )
@@ -2124,7 +2125,7 @@ async def payment_change_bank_back(callback: CallbackQuery, state: FSMContext) -
         f"{invoice.instructions}\n\n"
         "📷 Пас аз пардохт расиди воқеиро фиристед."
     )
-    await callback.message.edit_text(
+    await _edit_navigation_message(callback, 
         text,
         reply_markup=payment_link_keyboard(invoice.pay_url) if invoice.pay_url else payment_link_keyboard(),
     )
