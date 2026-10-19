@@ -2065,11 +2065,11 @@ async def wallet_open_button(callback: CallbackQuery) -> None:
         if last_topup else "Ҳоло пур карда нашудааст"
     )
     text = (
-        "👛 <b>Ҳамёни шумо</b>\\n"
-        f"💰 <b>Баланс:</b> {balance:.2f} сомонӣ\\n"
-        f"📥 <b>Ҳамагӣ пур карда шуд:</b> {total_credited:.2f} сомонӣ ({len(credits)} бор)\\n"
-        f"📤 <b>Ҳамагӣ аз ҳамён сарф шуд:</b> {total_spent:.2f} сомонӣ ({len(debits)} амалиёт)\\n"
-        f"🕒 <b>Пуркунии охирин:</b> {last_topup_text}\\n\\n"
+        "👛 <b>Ҳамёни шумо</b>\n"
+        f"💰 <b>Баланс:</b> {balance:.2f} сомонӣ\n"
+        f"📥 <b>Ҳамагӣ пур карда шуд:</b> {total_credited:.2f} сомонӣ ({len(credits)} бор)\n"
+        f"📤 <b>Ҳамагӣ аз ҳамён сарф шуд:</b> {total_spent:.2f} сомонӣ ({len(debits)} амалиёт)\n"
+        f"🕒 <b>Пуркунии охирин:</b> {last_topup_text}\n\n"
         "ℹ️ Баланс баъди тасдиқи чек аз ҷониби админ зиёд мешавад."
     )
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -2099,12 +2099,12 @@ async def wallet_history_button(callback: CallbackQuery) -> None:
         sign = "+" if tx.amount_somoni > 0 else ""
         label = "Пур кардани баланс" if tx.amount_somoni > 0 else "Харид аз ҳамён"
         lines.append(f"• {sign}{tx.amount_somoni:.2f} сомонӣ — {label} · {tx.created_at.strftime('%d.%m.%Y %H:%M')}")
-    history_text = "\\n".join(lines) or "Ҳоло амалиёт нест."
+    history_text = "\n".join(lines) or "Ҳоло амалиёт нест."
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⬅️ Ба ҳамён", callback_data="wallet:open")],
         [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
     ])
-    await _edit_navigation_message(callback, "📜 <b>Таърихи ҳамён</b>\\n" + history_text, keyboard)
+    await _edit_navigation_message(callback, "📜 <b>Таърихи ҳамён</b>\n" + history_text, keyboard)
 
 
 @router.callback_query(F.data == "wallet:topup_menu")
@@ -2121,9 +2121,9 @@ async def wallet_topup_menu(callback: CallbackQuery) -> None:
     ])
     await _edit_navigation_message(
         callback,
-        "➕ <b>Пур кардани баланс</b>\\n\\n"
-        "💵 Маблағро интихоб кунед.\\n"
-        "📷 Баъд аз пардохт чекро фиристед.\\n"
+        "➕ <b>Пур кардани баланс</b>\n\n"
+        "💵 Маблағро интихоб кунед.\n"
+        "📷 Баъд аз пардохт чекро фиристед.\n"
         "✅ Админ онро месанҷад ва танҳо баъд балансро пур мекунад.",
         keyboard,
     )
