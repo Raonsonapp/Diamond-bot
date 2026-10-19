@@ -5,6 +5,7 @@ from datetime import timezone
 from zoneinfo import ZoneInfo
 
 from aiogram import F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -115,11 +116,15 @@ async def admin_get_media_file_id(message: Message, state: FSMContext) -> None:
         OrderFlow.awaiting_payment_proof.state,
         WalletTopupFlow.awaiting_proof.state,
     }:
-        return
+        # Let the actual payment-proof handler receive customer photos/documents.
+        raise SkipHandler
 
     sender_id = message.from_user.id if message.from_user else 0
     if sender_id not in config.admin_user_ids and sender_id != config.admin_chat_id:
-        return
+        # This catch-all media handler is registered before customer handlers.
+        # Returning here consumes the update in aiogram; SkipHandler is needed
+        # so a customer's receipt photo can reach receive_payment_proof.
+        raise SkipHandler
 
     caption_check = (message.caption or "").strip().lower()
     if any(word in caption_check for word in ("чек", "расид", "receipt", "пардохт", "payment")):
