@@ -92,19 +92,10 @@ class Config:
     webhook_server_host: str = os.getenv("WEBHOOK_SERVER_HOST", "0.0.0.0")
     webhook_server_port: int = int(os.getenv("WEBHOOK_SERVER_PORT", "8080"))
 
-    # Render's free tier spins the service down after ~15 minutes with no
-    # incoming HTTP traffic. Pinging it every few minutes (what this used
-    # to default to) keeps it awake 24/7 instead — which is exactly what
-    # burned through Render's free-tier monthly usage allowance and got
-    # the whole service suspended ("Free usage limit reached") days before
-    # the billing period reset. There is no genuinely free host anywhere
-    # that both never sleeps AND has generous limits — that combination
-    # always costs money somewhere. Defaulting this to disabled (0) now:
-    # the service sleeps when idle (the free tier's actual intended usage
-    # pattern) and wakes with a real but survivable ~30-60s cold start on
-    # the first request after a quiet period, instead of staying always-on
-    # and running out of quota again. Set a positive value only on a paid
-    # plan that doesn't meter uptime.
+    # Optional application-level self-ping. This is NOT a substitute for an
+    # always-on host: Render free-tier usage limits may still suspend the
+    # service, and external pings cannot override provider policies.
+    # Keep disabled by default. Enable only if your paid hosting plan allows it.
     keepalive_ping_seconds: int = int(os.getenv("KEEPALIVE_PING_SECONDS", "0"))
 
     # AdsGram monetization. Keep the token in the host secret store, never in git.
