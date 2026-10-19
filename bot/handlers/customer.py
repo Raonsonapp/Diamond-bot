@@ -101,10 +101,23 @@ WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фур
 
 
 @router.message(F.video | F.animation | F.photo)
-async def admin_get_media_file_id(message: Message) -> None:
-    """Let configured admins retrieve Telegram media IDs for shop branding."""
+async def admin_get_media_file_id(message: Message, state: FSMContext) -> None:
+    """Return file IDs for admin-uploaded design media, but never intercept payment proofs."""
+    # Payment screenshots must continue to the order/wallet proof handlers.
+    # Otherwise the admin sees SHOP_IMAGE_FILE_ID instead of the actual receipt workflow.
+    current_state = await state.get_state()
+    if current_state in {
+        OrderFlow.awaiting_payment_proof.state,
+        WalletTopupFlow.awaiting_proof.state,
+    }:
+        return
+
     sender_id = message.from_user.id if message.from_user else 0
     if sender_id not in config.admin_user_ids and sender_id != config.admin_chat_id:
+        return
+
+    caption_check = (message.caption or "").strip().lower()
+    if any(word in caption_check for word in ("чек", "расид", "receipt", "пардохт", "payment")):
         return
 
     if message.photo:
