@@ -900,7 +900,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
         confirm_lines.append(f"👤 Номи бозигар: <b>{html.escape(player_name)}</b>")
     game_label = ("Free Fire Indonesia" if category == ProductCategory.FF_INDONESIA else "Free Fire" if category == ProductCategory.DIAMONDS else category.value.replace("_", " ").title())
     confirm_lines.append(f"🎮 Бозӣ: <b>{html.escape(game_label)}</b>")
-    if category == ProductCategory.DIAMONDS and ff_region:
+    if category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA) and ff_region:
         confirm_lines.append(f"🌍 Регион: <b>{html.escape(ff_region)}</b>")
     confirm_lines.append("")
     for p in products:
