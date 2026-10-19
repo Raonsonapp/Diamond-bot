@@ -458,7 +458,15 @@ async def _open_catalog(
 
 @router.callback_query(F.data == "menu:buy_diamonds")
 async def menu_buy_diamonds(callback: CallbackQuery, state: FSMContext) -> None:
-    await _open_catalog(callback, state, ProductCategory.DIAMONDS, "💎 Бастаи алмази Free Fire-ро интихоб кунед:")
+    # Region must be chosen before showing prices; each region has its own SKU catalog.
+    await callback.answer()
+    await state.clear()
+    await callback.message.answer(
+        "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
+        "🌐 СНГ — нархҳои СНГ\n"
+        "🇮🇩 Индонезия — нархҳои Индонезия",
+        reply_markup=free_fire_region_keyboard(),
+    )
 
 
 @router.callback_query(F.data == "menu:telegram")
@@ -823,7 +831,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         prompt = await _recipient_prompt(product.category)
         text = (
             "✅ <b>Фармоиши шумо</b>\n"
-            f"🎮 Бозӣ: <b>{html.escape('Free Fire' if product.category == ProductCategory.DIAMONDS else product.category.value.replace('_', ' ').title())}</b>\n"
+            f"🎮 Бозӣ: <b>{html.escape('Free Fire Indonesia' if product.category == ProductCategory.FF_INDONESIA else 'Free Fire' if product.category == ProductCategory.DIAMONDS else product.category.value.replace('_', ' ').title())}</b>\n"
             f"💎 Баста: <b>{html.escape(product.display_name)}</b>\n"
             f"💰 Нарх: <b>{format_price(product.price_somoni)} сомонӣ</b>\n\n"
             f"🆔 Лутфан {prompt} худро фиристед:"
@@ -884,7 +892,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     confirm_lines = ["🧾 <b>Тафсилоти фармоиш</b>", f"{recipient_label}: <code>{html.escape(recipient)}</code>"]
     if player_name:
         confirm_lines.append(f"👤 Номи бозигар: <b>{html.escape(player_name)}</b>")
-    game_label = "Free Fire" if category == ProductCategory.DIAMONDS else category.value.replace("_", " ").title()
+    game_label = ("Free Fire Indonesia" if category == ProductCategory.FF_INDONESIA else "Free Fire" if category == ProductCategory.DIAMONDS else category.value.replace("_", " ").title())
     confirm_lines.append(f"🎮 Бозӣ: <b>{html.escape(game_label)}</b>")
     if category == ProductCategory.DIAMONDS and ff_region:
         confirm_lines.append(f"🌍 Регион: <b>{html.escape(ff_region)}</b>")
@@ -946,39 +954,21 @@ async def reuse_saved_id(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.callback_query(OrderFlow.choosing_region, F.data.in_({"region:ff_cis", "region:ff_indonesia"}))
+@router.callback_query(F.data.in_({"region:ff_cis", "region:ff_indonesia"}))
 async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    recipient = data.get("ff_player_id")
-    if not recipient:
-        await callback.answer("ID ёфт нашуд. Аз нав оғоз кунед.", show_alert=True)
-        return
+    # Region is selected once, before package selection and player ID entry.
     region = "СНГ" if callback.data == "region:ff_cis" else "Индонезия"
-    cart_ids = data.get("cart_product_ids")
-    async with get_session() as session:
-        product = await get_product(session, cart_ids[0] if cart_ids else data.get("product_id"))
-    if product is None:
-        await callback.answer("Баста ёфт нашуд. Аз нав интихоб кунед.", show_alert=True)
-        await state.clear()
-        return
-
-    expected_category = (
-        ProductCategory.DIAMONDS if region == "СНГ" else ProductCategory.FF_INDONESIA
+    category = (
+        ProductCategory.DIAMONDS if region == "СНГ"
+        else ProductCategory.FF_INDONESIA
     )
-    if product.category != expected_category:
-        await callback.answer(
-            "⛔ Регион бо баста мувофиқат намекунад. "
-            "Барои СНГ бастаи СНГ ва барои Индонезия бастаи Indonesia-ро интихоб кунед.",
-            show_alert=True,
-        )
-        return
-
-    # Lock the selected region into the order state. The selected product's
-    # category remains authoritative for provider delivery; a region tap can
-    # never silently switch the product to another region.
-    await state.update_data(ff_region=region)
+    await state.clear()
     await callback.answer()
-    await _finalize_recipient(state, callback.from_user.id, recipient, callback.message)
+    await _open_catalog(
+        callback, state, category,
+        f"{'🌐' if region == 'СНГ' else '🇮🇩'} Бастаҳои Free Fire — {region}:",
+    )
+    await state.update_data(ff_region=region)
 
 
 async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> str | None:
