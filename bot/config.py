@@ -132,6 +132,7 @@ class Config:
     # Messages" permission, otherwise announcements silently fail.
     shop_channel_url: str = os.getenv("SHOP_CHANNEL_URL", "https://t.me/FF_MARGEDAR_SHOP")
     review_channel_id: str = os.getenv("REVIEW_CHANNEL_ID", "@FF_MARGEDAR_SHOP")
+    review_channel_url: str = os.getenv("REVIEW_CHANNEL_URL", "https://t.me/OTZIV_FF_MARGEDAR")
 
     # Customer support is Telegram-only. Set this to the owner's public
     # Telegram username, e.g. https://t.me/your_support_account.
