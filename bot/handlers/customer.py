@@ -204,24 +204,25 @@ async def _show_main_menu(
     from bot.services.adsgram import maybe_send_ad
 
     await maybe_send_campaign_ad(message.bot, recipient_id)
-    # Telegram cannot combine a persistent reply keyboard and inline buttons
-    # on one message. Keep the bottom Menu button persistent, then show the
-    # inline shop navigation as a separate, editable message.
-    # Send the configured 5-second MP4 welcome clip first. The media ID returned
-    # by admin_get_media_file_id comes from message.video, so use answer_video
-    # (not answer_animation); invalid/stale IDs must never block /start.
+    # Telegram supports inline buttons directly under a video, but the
+    # persistent reply keyboard must be attached to a separate message.
+    # Send the welcome text first to keep the bottom Menu button available,
+    # then attach the shop's inline menu directly to the 5-second diamond video.
+    await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_keyboard())
     if config.welcome_animation_file_id:
         try:
             await message.answer_video(
                 video=config.welcome_animation_file_id,
-                caption="💎 FF MARGEDAR — хуш омадед!",
+                caption="💎 FF MARGEDAR — хуш омадед!\n\n📋 Бахшро интихоб кунед:",
                 supports_streaming=True,
+                reply_markup=main_menu_keyboard(),
             )
         except Exception:
             import logging
-            logging.exception("Could not send WELCOME_ANIMATION_FILE_ID; falling back to text")
-    await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_keyboard())
-    await message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
+            logging.exception("Could not send WELCOME_ANIMATION_FILE_ID; falling back to text menu")
+            await message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
+    else:
+        await message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
     await maybe_send_ad(message.bot, recipient_id, recipient_language)
 
 
@@ -371,13 +372,17 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "menu:main")
 async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
-    # Inline "Ба меню" buttons navigate only. The welcome clip is reserved
-    # for /start and the persistent bottom Menu button.
+    # Return navigation to a clean menu message; if the originating message
+    # is media, remove its old inline buttons before sending the text menu.
     await state.clear()
     await callback.answer()
     try:
         await callback.message.edit_text("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
     except Exception:
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
         await callback.message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
 
 
@@ -394,15 +399,17 @@ async def menu_reviews(callback: CallbackQuery) -> None:
 @router.message(F.text == "📋 Меню")
 async def persistent_menu_button(message: Message, state: FSMContext) -> None:
     await state.clear()
-    # The persistent reply-keyboard Menu button is a separate route from the
-    # inline menu callback. Play the configured welcome clip here too.
+    # Attach inline shop buttons to the video itself, rather than sending a
+    # second menu message below it.
     if config.welcome_animation_file_id:
         try:
             await message.answer_video(
                 video=config.welcome_animation_file_id,
-                caption="💎 FF MARGEDAR — хуш омадед!",
+                caption="💎 FF MARGEDAR — хуш омадед!\n\n📋 Бахшро интихоб кунед:",
                 supports_streaming=True,
+                reply_markup=main_menu_keyboard(),
             )
+            return
         except Exception:
             import logging
             logging.exception("Could not send WELCOME_ANIMATION_FILE_ID from persistent Menu")
