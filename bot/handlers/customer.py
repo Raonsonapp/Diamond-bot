@@ -371,20 +371,10 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "menu:main")
 async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
+    # Inline "Ба меню" buttons navigate only. The welcome clip is reserved
+    # for /start and the persistent bottom Menu button.
     await state.clear()
-    # Play the same configured 5-second welcome clip whenever the user opens
-    # the main menu, not only on /start. A bad file_id must not break navigation.
     await callback.answer()
-    if config.welcome_animation_file_id:
-        try:
-            await callback.message.answer_video(
-                video=config.welcome_animation_file_id,
-                caption="💎 FF MARGEDAR — хуш омадед!",
-                supports_streaming=True,
-            )
-        except Exception:
-            import logging
-            logging.exception("Could not send WELCOME_ANIMATION_FILE_ID from main menu")
     try:
         await callback.message.edit_text("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
     except Exception:
@@ -560,6 +550,8 @@ async def _open_catalog(
             )
             return
 
+        # Remember the parent section for the Back button on package/product screens.
+        await state.update_data(catalog_category=category.value, catalog_telegram_kind=telegram_kind)
         # Keep the catalog compact: product icons and prices are shown on buttons.
         try:
             await callback.message.edit_text(
@@ -591,6 +583,29 @@ async def menu_buy_diamonds(callback: CallbackQuery, state: FSMContext) -> None:
         "🔎 Пеш аз пардохт ID ва минтақа санҷида мешаванд.",
         reply_markup=free_fire_region_keyboard(),
     )
+
+
+@router.callback_query(F.data == "catalog:back")
+async def catalog_back(callback: CallbackQuery, state: FSMContext) -> None:
+    """Return from package/product selection to its parent section."""
+    data = await state.get_data()
+    category_value = data.get("catalog_category")
+    await callback.answer()
+    await state.clear()
+
+    if category_value in {ProductCategory.DIAMONDS.value, ProductCategory.FF_INDONESIA.value}:
+        await callback.message.answer(
+            "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
+            "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
+            "🇮🇩 <b>Индонезия</b> — ID Server",
+            reply_markup=free_fire_region_keyboard(),
+        )
+    elif category_value == ProductCategory.TELEGRAM.value:
+        await callback.message.answer("✈️ Хизматро интихоб кунед:", reply_markup=telegram_menu_keyboard())
+    elif category_value == ProductCategory.BIGO_LIVE.value:
+        await callback.message.answer("🎮 Бозиро интихоб кунед:", reply_markup=games_menu_keyboard())
+    else:
+        await callback.message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
 
 
 @router.callback_query(F.data == "menu:telegram")
