@@ -263,6 +263,16 @@ def receipt_keyboard(order_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def free_fire_region_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🌍 СНГ (Россия / Тоҷикистон)", callback_data="region:ff_cis")],
+            [InlineKeyboardButton(text="🇮🇩 Индонезия", callback_data="region:ff_indonesia")],
+            [InlineKeyboardButton(text="❌ Бекор кардан", callback_data="order:cancel")],
+        ]
+    )
+
+
 def confirm_order_keyboard(offer_balance_payment: bool = False, offer_wallet_payment: bool = False) -> InlineKeyboardMarkup:
     rows = []
     if offer_balance_payment:
