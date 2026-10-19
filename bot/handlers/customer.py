@@ -2232,12 +2232,12 @@ async def api_open_button(callback: CallbackQuery, state: FSMContext) -> None:
     if pin:
         await state.set_state(ApiAccessFlow.checking_pin)
         await state.update_data(api_pin_buffer="")
-        await callback.message.edit_text(
+        await _edit_navigation_message(
+            callback,
             "🔐 <b>API-и шахсӣ муҳофизат шудааст</b>\n\n"
             "🔢 Рамзи 4-рақамаи худро аз тугмаҳои поён ворид кунед:\n"
             "🔒 Рамз: <code>○ ○ ○ ○</code>",
             reply_markup=_api_pin_keyboard(""),
-            parse_mode="HTML",
         )
         return
 
@@ -2258,13 +2258,13 @@ async def api_set_pin_start(callback: CallbackQuery, state: FSMContext) -> None:
         pin = await session.get(ApiAccessPin, callback.from_user.id)
     await state.set_state(ApiAccessFlow.setting_pin)
     await state.update_data(api_pin_buffer="")
-    await callback.message.edit_text(
+    await _edit_navigation_message(
+        callback,
         "🔢 <b>Рамзи нави 4-рақама гузоред</b>\n\n"
         + ("⚠️ Рамзи пешина иваз мешавад.\n" if pin else "")
         + "👇 Рақамҳоро аз клавиатура зер кунед:\n"
         + "🔒 Рамз: <code>○ ○ ○ ○</code>",
         reply_markup=_api_pin_keyboard(""),
-        parse_mode="HTML",
     )
 
 
@@ -2299,7 +2299,7 @@ async def _render_api_pin_prompt(callback: CallbackQuery, state: FSMContext, not
     if await state.get_state() == ApiAccessFlow.setting_pin.state:
         title = "🔢 <b>Рамзи нави 4-рақама гузоред</b>"
     body = f"{title}\n\n{note + chr(10) if note else ''}👇 Рақамҳоро зер кунед:\n🔒 Рамз: <code>{dots}</code>"
-    await callback.message.edit_text(body, reply_markup=_api_pin_keyboard(pin_buffer), parse_mode="HTML")
+    await _edit_navigation_message(callback, body, reply_markup=_api_pin_keyboard(pin_buffer))
 
 
 @router.callback_query(F.data.startswith("api:pin:digit:"))
@@ -2338,8 +2338,8 @@ async def api_pin_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.answer("Бекор шуд.")
     status, create_label = await _api_status_data(callback.from_user.id)
-    await callback.message.edit_text(
-        status, reply_markup=_api_keyboard(create_label, pin_set=True), parse_mode="HTML"
+    await _edit_navigation_message(
+        callback, status, reply_markup=_api_keyboard(create_label, pin_set=True)
     )
 
 
@@ -2383,10 +2383,9 @@ async def api_pin_submit(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.clear()
     status, create_label = await _api_status_data(callback.from_user.id)
-    await callback.message.edit_text(
-        result + "\n\n" + status,
+    await _edit_navigation_message(
+        callback, result + "\n\n" + status,
         reply_markup=_api_keyboard(create_label, pin_set=True),
-        parse_mode="HTML",
     )
     await callback.answer("Тасдиқ шуд.")
 
@@ -2406,50 +2405,6 @@ async def api_refresh_button(callback: CallbackQuery) -> None:
         await callback.answer("Ҳолат нав шуд.")
     except Exception:
         # A refresh never creates a new message.
-        await callback.answer("Навсозӣ нашуд. Лутфан дубора кӯшиш кунед.", show_alert=True)
-
-
-@router.callback_query(F.data == "api:refresh")
-async def api_refresh_button(callback: CallbackQuery) -> None:
-    # Refresh only updates the existing API message; never send a duplicate below it.
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-    from bot.db.models import CustomerApiKey
-    from bot.db.session import get_session
-
-    async with get_session() as session:
-        result = await session.execute(
-            select(CustomerApiKey).where(CustomerApiKey.user_id == callback.from_user.id)
-        )
-        row = result.scalar_one_or_none()
-
-    if row and not row.revoked_at:
-        status = (
-            "🔑 <b>API-и шахсии шумо</b>\n\n"
-            "🟢 <b>Ҳолат:</b> Фаъол\n"
-            f"🏷 <b>Калид:</b> <code>{html.escape(row.key_prefix)}…</code>\n"
-            f"📅 <b>Сохта шуд:</b> {row.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
-            "🔄 Ҳолат нав шуд. Барои санҷиши дубора ин тугмаро пахш кунед.\n"
-            "⚠️ Калиди пурра танҳо ҳангоми сохтан нишон дода мешавад."
-        )
-        create_label = "♻️ Сохтани калиди нав"
-    else:
-        status = (
-            "🔑 <b>API-и шахсӣ</b>\n\n"
-            "⚪ <b>Ҳолат:</b> Калид сохта нашудааст.\n"
-            "Барои истифодаи API калид созед; калиди пурра танҳо як бор нишон дода мешавад."
-        )
-        create_label = "➕ Сохтани API-ключ"
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 Навсозии ҳолат", callback_data="api:refresh")],
-        [InlineKeyboardButton(text=create_label, callback_data="api:create")],
-        [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
-    ])
-    try:
-        await callback.message.edit_text(status, reply_markup=keyboard, parse_mode="HTML")
-        await callback.answer("Ҳолат нав шуд.")
-    except Exception:
-        # Do not create another message on refresh. Report failure instead.
         await callback.answer("Навсозӣ нашуд. Лутфан дубора кӯшиш кунед.", show_alert=True)
 
 
