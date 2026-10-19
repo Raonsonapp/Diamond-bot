@@ -164,7 +164,10 @@ def products_keyboard(
             [InlineKeyboardButton(text="🛒 Якчанд бастаро якҷоя харидан", callback_data=f"cartmode:{category.value}")]
         )
     rows.append(
-        [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")]
+        [InlineKeyboardButton(text="⬅️ Бозгашт", callback_data="catalog:back")]
+    )
+    rows.append(
+        [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -198,7 +201,9 @@ def reuse_recipient_keyboard(recipient: str, label_suffix: str = "") -> InlineKe
                     text=f"✅ Истифодаи: {recipient}{label_suffix}",
                     callback_data=f"reuseid:{recipient}",
                 )
-            ]
+            ],
+            [InlineKeyboardButton(text="⬅️ Бозгашт ба бастаҳо", callback_data="catalog:back")],
+            [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
         ]
     )
 
@@ -288,6 +293,8 @@ def confirm_order_keyboard(offer_balance_payment: bool = False, offer_wallet_pay
             InlineKeyboardButton(text="❌ Бекор", callback_data="order:cancel"),
         ]
     )
+    rows.append([InlineKeyboardButton(text="⬅️ Бозгашт ба бастаҳо", callback_data="catalog:back")])
+    rows.append([InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
