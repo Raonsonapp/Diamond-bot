@@ -125,11 +125,33 @@ async def admin_get_media_file_id(message: Message, state: FSMContext) -> None:
     if any(word in caption_check for word in ("чек", "расид", "receipt", "пардохт", "payment")):
         return
 
-    if message.video and "tutorial" in (message.caption or "").lower():
-        env_key = "TUTORIAL_VIDEO_FILE_ID"
+    if message.video and any(word in caption_check for word in ("tutorial", "welcome", "start", "shop", "menu", "loading", "wait")):
+        if "tutorial" in caption_check:
+            env_key, media_kind = "TUTORIAL_VIDEO_FILE_ID", "Видеои омӯзишӣ"
+        elif "shop" in caption_check or "menu" in caption_check:
+            env_key, media_kind = "SHOP_ANIMATION_FILE_ID", "Аниматсияи магазин"
+        elif "loading" in caption_check or "wait" in caption_check:
+            env_key, media_kind = "LOADING_ANIMATION_FILE_ID", "Аниматсияи интизорӣ"
+        else:
+            env_key, media_kind = "WELCOME_ANIMATION_FILE_ID", "Аниматсияи истиқбол"
         media = message.video
         await message.reply(
-            f"✅ Видеои омӯзишӣ қабул шуд. Дар Render → Environment тағйирёбандаи "
+            f"✅ {media_kind} қабул шуд. Дар Render → Environment тағйирёбандаи "
+            f"<code>{env_key}</code>-ро ба ин file_id гузоред:\n\n<code>{media.file_id}</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    if message.animation and any(word in caption_check for word in ("welcome", "start", "shop", "menu", "loading", "wait")):
+        if "shop" in caption_check or "menu" in caption_check:
+            env_key, media_kind = "SHOP_ANIMATION_FILE_ID", "Аниматсияи магазин"
+        elif "loading" in caption_check or "wait" in caption_check:
+            env_key, media_kind = "LOADING_ANIMATION_FILE_ID", "Аниматсияи интизорӣ"
+        else:
+            env_key, media_kind = "WELCOME_ANIMATION_FILE_ID", "Аниматсияи истиқбол"
+        media = message.animation
+        await message.reply(
+            f"✅ {media_kind} қабул шуд. Дар Render → Environment тағйирёбандаи "
             f"<code>{env_key}</code>-ро ба ин file_id гузоред:\n\n<code>{media.file_id}</code>",
             parse_mode="HTML",
         )
@@ -371,6 +393,15 @@ async def persistent_menu_button(message: Message, state: FSMContext) -> None:
 @router.message(F.text == "🎮 Бозиҳо")
 async def reply_games(message: Message, state: FSMContext) -> None:
     await state.clear()
+    if config.shop_animation_file_id:
+        try:
+            await message.answer_animation(
+                animation=config.shop_animation_file_id,
+                caption="💎 FF MARGEDAR — Premium Diamond Shop",
+            )
+        except Exception:
+            import logging
+            logging.exception("Shop animation failed; continuing without animation")
     await message.answer("🎮 Бозиро интихоб кунед:", reply_markup=games_menu_keyboard())
 
 
