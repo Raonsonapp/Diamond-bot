@@ -806,9 +806,11 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(OrderFlow.entering_player_id)
         prompt = await _recipient_prompt(product.category)
         text = (
-            f"Шумо интихоб кардед: {product.display_name} — "
-            f"{format_price(product.price_somoni)} сомонӣ.\\n\\n"
-            f"Лутфан {prompt} ирсол кунед:"
+            "✅ <b>Фармоиши шумо</b>\n"
+            f"🎮 Бозӣ: <b>{html.escape(product.category.value.replace('_', ' ').title())}</b>\n"
+            f"💎 Баста: <b>{html.escape(product.display_name)}</b>\n"
+            f"💰 Нарх: <b>{format_price(product.price_somoni)} сомонӣ</b>\n\n"
+            f"🆔 Лутфан {prompt} худро фиристед:"
         )
         markup = None
         if last_recipient:
@@ -862,19 +864,17 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     recipient_label = (
         "📱 Username" if category == ProductCategory.TELEGRAM else "🆔 ID"
     )
-    confirm_lines = ["🛒 <b>Тасдиқи фармоиш</b>\n", f"{recipient_label}: {recipient}"]
+    confirm_lines = ["🧾 <b>Тафсилоти фармоиш</b>", f"{recipient_label}: <code>{html.escape(recipient)}</code>"]
     if player_name:
-        confirm_lines.append(f"👤 Ном: <b>{html.escape(player_name)}</b>")
+        confirm_lines.append(f"👤 Номи бозигар: <b>{html.escape(player_name)}</b>")
+    confirm_lines.append(f"🎮 Бозӣ: <b>{html.escape(category.value.replace('_', ' ').title())}</b>")
     confirm_lines.append("")
-
     for p in products:
-        confirm_lines.append(f"🎁 Маҳсулот: {p.display_name}")
-    if len(products) > 1:
-        confirm_lines.append(f"💰 Ҳамагӣ: <b>{format_price(total_price)} сомонӣ</b>")
-    else:
-        confirm_lines.append(f"💰 Нарх: <b>{format_price(products[0].price_somoni)} сомонӣ</b>")
-
-    confirm_lines.append("\nҲама дуруст аст?")
+        confirm_lines.append(f"💎 Баста: <b>{html.escape(p.display_name)}</b>")
+    confirm_lines.append(f"📦 Теъдод: <b>{len(products)}</b>")
+    confirm_lines.append(f"💰 Ҳамагӣ: <b>{format_price(total_price)} сомонӣ</b>")
+    confirm_lines.append("")
+    confirm_lines.append("☑️ Маълумот дуруст аст?")
     await answer_target.answer(
         "\n".join(confirm_lines),
         reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance, offer_wallet_payment=offer_wallet),
