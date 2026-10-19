@@ -39,7 +39,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="👛 Ҳамён", callback_data="wallet:open"),
-                InlineKeyboardButton(text="➕ Пур кардани баланс", callback_data="wallet:open"),
+                InlineKeyboardButton(text="➕ Пур кардани баланс", callback_data="wallet:topup_menu"),
             ],
             [
                 InlineKeyboardButton(text="🔑 API-и шахсӣ", callback_data="api:open"),
