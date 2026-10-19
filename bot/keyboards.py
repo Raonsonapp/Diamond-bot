@@ -265,9 +265,9 @@ def receipt_keyboard(order_id: int) -> InlineKeyboardMarkup:
 def free_fire_region_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🌍 СНГ (Россия / Тоҷикистон)", callback_data="region:ff_cis")],
-            [InlineKeyboardButton(text="🇮🇩 Индонезия", callback_data="region:ff_indonesia")],
-            [InlineKeyboardButton(text="❌ Бекор кардан", callback_data="order:cancel")],
+            [InlineKeyboardButton(text="🌐 СНГ · Тоҷикистон / Россия", callback_data="region:ff_cis")],
+            [InlineKeyboardButton(text="🇮🇩 Индонезия · ID Server", callback_data="region:ff_indonesia")],
+            [InlineKeyboardButton(text="🏠 Ба меню", callback_data="menu:main")],
         ]
     )
 
