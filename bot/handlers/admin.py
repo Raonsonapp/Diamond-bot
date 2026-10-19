@@ -1675,6 +1675,12 @@ async def announce_new_bot(message: Message) -> None:
         return
 
     async with get_session() as session:
+        if await get_setting(session, "legacy_bot_migration_announcement_sent") == "1":
+            await message.answer(
+                "ℹ️ Эълони кӯчидан аллакай фиристода шудааст. Барои пешгирии паёмҳои такрорӣ "
+                "фармон дигар кор намекунад."
+            )
+            return
         user_ids = await list_all_user_ids(session)
 
     if not user_ids:
@@ -1723,6 +1729,9 @@ async def announce_new_bot(message: Message) -> None:
                 if name == "TelegramRetryAfter":
                     await asyncio.sleep(min(getattr(exc, "retry_after", 1), 30))
         await asyncio.sleep(0.05)
+
+    async with get_session() as session:
+        await set_setting(session, "legacy_bot_migration_announcement_sent", "1")
 
     await message.answer(
         "📊 <b>Натиҷаи эълон</b>\n"
