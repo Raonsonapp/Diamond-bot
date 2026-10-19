@@ -399,6 +399,18 @@ async def menu_reviews(callback: CallbackQuery) -> None:
 @router.message(F.text == "📋 Меню")
 async def persistent_menu_button(message: Message, state: FSMContext) -> None:
     await state.clear()
+    # The persistent reply-keyboard Menu button is a separate route from the
+    # inline menu callback. Play the configured welcome clip here too.
+    if config.welcome_animation_file_id:
+        try:
+            await message.answer_video(
+                video=config.welcome_animation_file_id,
+                caption="💎 FF MARGEDAR — хуш омадед!",
+                supports_streaming=True,
+            )
+        except Exception:
+            import logging
+            logging.exception("Could not send WELCOME_ANIMATION_FILE_ID from persistent Menu")
     await message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
 
 
