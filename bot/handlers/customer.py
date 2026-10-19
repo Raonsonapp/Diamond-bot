@@ -1340,6 +1340,16 @@ async def choose_payment_method(callback: CallbackQuery, state: FSMContext) -> N
             await session.commit()
             await session.refresh(primary)
 
+    if config.loading_animation_file_id:
+        try:
+            await callback.message.answer_animation(
+                animation=config.loading_animation_file_id,
+                caption="⏳ Лутфан интизор шавед, маълумоти пардохт омода мешавад…",
+            )
+        except Exception:
+            import logging
+            logging.exception("Loading animation failed; continuing with payment flow")
+
     invoice = await provider.create_invoice(primary.id, total, bank_hint=bank_hint)
 
     await state.update_data(order_id=primary.id)
