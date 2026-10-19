@@ -9,10 +9,10 @@ from bot.db.session import get_session
 
 # Values based on the current FF MARGEDAR retail price list.
 MILESTONES = (
-    (5, 1, "🎟 Ваучери Лайт ×1", 5.50),
-    (10, 2, "🎟 Ваучери Лайт ×2", 11.00),
-    (15, 3, "💎 110 алмос", 9.00),
-    (20, 5, "🎁 Ваучери ҳафтаина ×1", 17.00),
+    (5, 1, "🎟 Ваучери Лайт ×1", 5.90),
+    (10, 2, "🎟 Ваучери Лайт ×2", 11.80),
+    (15, 3, "💎 110 алмос", 9.50),
+    (20, 5, "🎁 Ваучери ҳафтаина ×1", 15.90),
 )
 
 async def maybe_credit_referral_milestone(bot: Bot, referrer_id: int) -> None:
