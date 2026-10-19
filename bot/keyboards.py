@@ -31,20 +31,33 @@ def terms_keyboard() -> InlineKeyboardMarkup:
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
-    # Full-width one-button rows are easier to read and tap on mobile.
+    # Keep the original compact two-column layout; only nested/navigation
+    # keyboards should use full-width buttons where needed.
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🎮 Бозиҳо", callback_data="menu:games")],
-            [InlineKeyboardButton(text="✈️ Telegram", callback_data="menu:telegram")],
-            [InlineKeyboardButton(text="👛 Ҳамён", callback_data="wallet:open")],
-            [InlineKeyboardButton(text="➕ Пур кардани баланс", callback_data="wallet:topup_menu")],
-            [InlineKeyboardButton(text="🔑 API-и шахсӣ", callback_data="api:open")],
-            [InlineKeyboardButton(text="👤 Профил", callback_data="menu:profile")],
-            [InlineKeyboardButton(text="🤝 Реферал", callback_data="menu:referral")],
-            [InlineKeyboardButton(text="🆘 Дастгирӣ", callback_data="menu:contact")],
-            [InlineKeyboardButton(text="⭐ Отзив", callback_data="menu:reviews")],
-            [InlineKeyboardButton(text="❓ Саволҳои маъмул", callback_data="menu:faq")],
-            [InlineKeyboardButton(text="ℹ️ Маълумот", callback_data="menu:about")],
+            [
+                InlineKeyboardButton(text="🎮 Бозиҳо", callback_data="menu:games"),
+                InlineKeyboardButton(text="✈️ Telegram", callback_data="menu:telegram"),
+            ],
+            [
+                InlineKeyboardButton(text="👛 Ҳамён", callback_data="wallet:open"),
+                InlineKeyboardButton(text="➕ Пур кардани баланс", callback_data="wallet:topup_menu"),
+            ],
+            [
+                InlineKeyboardButton(text="🔑 API-и шахсӣ", callback_data="api:open"),
+                InlineKeyboardButton(text="👤 Профил", callback_data="menu:profile"),
+            ],
+            [
+                InlineKeyboardButton(text="🤝 Реферал", callback_data="menu:referral"),
+                InlineKeyboardButton(text="🆘 Дастгирӣ", callback_data="menu:contact"),
+            ],
+            [
+                InlineKeyboardButton(text="⭐ Отзив", callback_data="menu:reviews"),
+                InlineKeyboardButton(text="❓ Саволҳои маъмул", callback_data="menu:faq"),
+            ],
+            [
+                InlineKeyboardButton(text="ℹ️ Маълумот", callback_data="menu:about"),
+            ],
         ]
     )
 
