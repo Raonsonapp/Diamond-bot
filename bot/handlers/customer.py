@@ -553,9 +553,10 @@ async def menu_buy_diamonds(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     await state.clear()
     await callback.message.answer(
-        "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
-        "🌐 СНГ — нархҳои СНГ\n"
-        "🇮🇩 Индонезия — нархҳои Индонезия",
+        "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
+        "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
+        "🇮🇩 <b>Индонезия</b> — ID Server\n\n"
+        "🔎 Пеш аз пардохт ID ва минтақа санҷида мешаванд.",
         reply_markup=free_fire_region_keyboard(),
     )
 
@@ -592,9 +593,10 @@ async def menu_buy_ff_indonesia(callback: CallbackQuery, state: FSMContext) -> N
     await callback.answer()
     await state.clear()
     await callback.message.answer(
-        "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
-        "🌐 СНГ — нархҳои СНГ\n"
-        "🇮🇩 Индонезия — нархҳои Индонезия",
+        "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
+        "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
+        "🇮🇩 <b>Индонезия</b> — ID Server\n\n"
+        "🔎 Пеш аз пардохт ID ва минтақа санҷида мешаванд.",
         reply_markup=free_fire_region_keyboard(),
     )
 
@@ -1094,7 +1096,6 @@ async def reuse_saved_id(callback: CallbackQuery, state: FSMContext) -> None:
             ff_region="СНГ" if product.category == ProductCategory.DIAMONDS else "Индонезия",
         )
     await _finalize_recipient(state, callback.from_user.id, recipient, callback.message)
-    await callback.answer()
     await callback.answer()
 
 
