@@ -8,7 +8,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import config
-from bot.db.models import Order, OrderStatus, Product, ProductCategory
+from bot.db.models import Order, OrderStatus, Product, ProductCategory, User
 from bot.db.repo import (
     adjust_fazercards_balance,
     contest_leaderboard,
@@ -393,6 +393,32 @@ async def contest_status(message: Message) -> None:
             bought = "✅ харид кард" if purchase_flags.get(user.id) else "❌ ҳанӯз харид накард"
             lines.append(f"{icon} {name} — {count}/{contest.target_referrals} (боқӣ {left}) — {bought}")
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("userstats"))
+async def user_stats_command(message: Message) -> None:
+    """Show database-backed user counts so the owner can diagnose apparent count mismatches."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    async with get_session() as session:
+        total_result = await session.execute(select(func.count()).select_from(User))
+        accepted_result = await session.execute(
+            select(func.count()).select_from(User).where(User.accepted_terms_at.is_not(None))
+        )
+        total = int(total_result.scalar_one())
+        accepted = int(accepted_result.scalar_one())
+        latest_result = await session.execute(select(func.max(User.created_at)))
+        latest = latest_result.scalar_one()
+    latest_text = latest.strftime("%d.%m.%Y %H:%M") if latest else "—"
+    await message.answer(
+        "📊 <b>Омори воқеии базаи ҳамин бот</b>\\n\\n"
+        f"👥 Сабтшуда дар база: <b>{total}</b>\\n"
+        f"✅ Шартномаро қабул кардаанд: <b>{accepted}</b>\\n"
+        f"🕒 Охирин сабти нав: <b>{latest_text}</b>\\n\\n"
+        "Эзоҳ: Telegram рӯйхати ҳамаи одамони ботро намедиҳад; ин рақам шумораи сабтҳои база аст. "
+        "Агар шумора аз он чизе, ки мебинед, фарқ кунад, DATABASE_URL метавонад ба базаи кӯҳна ё муштарак ишора кунад."
+    )
 
 
 MAINTENANCE_SETTING_KEY = "maintenance_mode"
