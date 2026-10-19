@@ -789,8 +789,10 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
 
 
 async def _recipient_prompt(category: ProductCategory) -> str:
-    if category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA):
+    if category == ProductCategory.DIAMONDS:
         return "ID-и бозингари Free Fire-и худро (рақаме, ки дар профили худ мебинед)"
+    if category == ProductCategory.FF_INDONESIA:
+        return "ID-и бозингари Free Fire Indonesia-и худро (рақаме, ки дар профили худ мебинед)"
     if category == ProductCategory.BIGO_LIVE:
         return "ID-и Bigo Live-и худро (рақаме, ки дар профили худ мебинед)"
     return (
@@ -827,7 +829,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         )
         markup = None
         if last_recipient:
-            text += f"\\n\\nШумо пештар бо ин истифода карда будед: {last_recipient}"
+            text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
             markup = reuse_recipient_keyboard(last_recipient)
 
         # Always send the next step as a fresh text message. This works whether
