@@ -274,24 +274,37 @@ async def tutorial_command(message: Message) -> None:
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
-    args = message.text.split(maxsplit=1)
-    referred_by = None
-    if len(args) > 1 and args[1].startswith("ref_"):
+    """Handle /start without silently failing: log unexpected errors and tell the user to retry."""
+    try:
+        args = (message.text or "/start").split(maxsplit=1)
+        referred_by = None
+        if len(args) > 1 and args[1].startswith("ref_"):
+            try:
+                referred_by = int(args[1].removeprefix("ref_"))
+            except ValueError:
+                referred_by = None
+
+        if not await is_subscribed_to_sponsor_channel(message.bot, message.from_user.id):
+            await state.update_data(pending_referred_by=referred_by)
+            await message.answer(
+                "📢 Барои истифодаи бот, лутфан аввал ба канали мо ҳамроҳ шавед, "
+                "баъд тугмаи \"✅ Санҷидан\"-ро зер кунед:",
+                reply_markup=sponsor_gate_keyboard(),
+            )
+            return
+
+        await _register_and_continue(message, state, message.from_user, referred_by)
+    except Exception:
+        import logging
+        logging.exception("Unhandled error while processing /start for Telegram user %s",
+                          message.from_user.id if message.from_user else "unknown")
         try:
-            referred_by = int(args[1].removeprefix("ref_"))
-        except ValueError:
-            referred_by = None
-
-    if not await is_subscribed_to_sponsor_channel(message.bot, message.from_user.id):
-        await state.update_data(pending_referred_by=referred_by)
-        await message.answer(
-            "📢 Барои истифодаи бот, лутфан аввал ба канали мо ҳамроҳ шавед, "
-            "баъд тугмаи \"✅ Санҷидан\"-ро зер кунед:",
-            reply_markup=sponsor_gate_keyboard(),
-        )
-        return
-
-    await _register_and_continue(message, state, message.from_user, referred_by)
+            await message.answer(
+                "⚠️ Ҳангоми кушодани бот хатогӣ шуд. Лутфан баъд аз чанд сония /start-ро такрор кунед. "
+                "Агар мушкил боқӣ монад, ба админ хабар диҳед."
+            )
+        except Exception:
+            logging.exception("Could not send /start error notice")
 
 
 @router.callback_query(F.data == "sponsor:check")
