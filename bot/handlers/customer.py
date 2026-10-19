@@ -202,21 +202,8 @@ async def _show_main_menu(
     # Telegram cannot combine a persistent reply keyboard and inline buttons
     # on one message. Keep the bottom Menu button persistent, then show the
     # inline shop navigation as a separate, editable message.
-    sent_welcome_animation = False
-    if config.welcome_animation_file_id:
-        try:
-            await message.answer_animation(
-                animation=config.welcome_animation_file_id,
-                caption=WELCOME_TEXT,
-                reply_markup=persistent_menu_keyboard(),
-            )
-            sent_welcome_animation = True
-        except Exception:
-            # A stale/invalid Telegram file_id must never block /start.
-            import logging
-            logging.exception("Welcome animation failed; falling back to text welcome")
-    if not sent_welcome_animation:
-        await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_keyboard())
+    # Keep /start text-only: no optional media IDs can block the welcome flow.
+    await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_keyboard())
     await message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
     await maybe_send_ad(message.bot, recipient_id, recipient_language)
 
@@ -393,15 +380,6 @@ async def persistent_menu_button(message: Message, state: FSMContext) -> None:
 @router.message(F.text == "🎮 Бозиҳо")
 async def reply_games(message: Message, state: FSMContext) -> None:
     await state.clear()
-    if config.shop_animation_file_id:
-        try:
-            await message.answer_animation(
-                animation=config.shop_animation_file_id,
-                caption="💎 FF MARGEDAR — Premium Diamond Shop",
-            )
-        except Exception:
-            import logging
-            logging.exception("Shop animation failed; continuing without animation")
     await message.answer("🎮 Бозиро интихоб кунед:", reply_markup=games_menu_keyboard())
 
 
@@ -1339,16 +1317,6 @@ async def choose_payment_method(callback: CallbackQuery, state: FSMContext) -> N
                 o.amount_somoni = 0.0
             await session.commit()
             await session.refresh(primary)
-
-    if config.loading_animation_file_id:
-        try:
-            await callback.message.answer_animation(
-                animation=config.loading_animation_file_id,
-                caption="⏳ Лутфан интизор шавед, маълумоти пардохт омода мешавад…",
-            )
-        except Exception:
-            import logging
-            logging.exception("Loading animation failed; continuing with payment flow")
 
     invoice = await provider.create_invoice(primary.id, total, bank_hint=bank_hint)
 
