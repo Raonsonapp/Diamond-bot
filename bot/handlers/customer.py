@@ -367,8 +367,23 @@ async def accept_terms_cb(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "menu:main")
 async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
+    # Play the same configured 5-second welcome clip whenever the user opens
+    # the main menu, not only on /start. A bad file_id must not break navigation.
     await callback.answer()
+    if config.welcome_animation_file_id:
+        try:
+            await callback.message.answer_video(
+                video=config.welcome_animation_file_id,
+                caption="💎 FF MARGEDAR — хуш омадед!",
+                supports_streaming=True,
+            )
+        except Exception:
+            import logging
+            logging.exception("Could not send WELCOME_ANIMATION_FILE_ID from main menu")
+    try:
+        await callback.message.edit_text("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
+    except Exception:
+        await callback.message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
 
 
 @router.callback_query(F.data == "menu:reviews")
