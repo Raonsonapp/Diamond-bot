@@ -180,13 +180,20 @@ async def _show_main_menu(
     # Telegram cannot combine a persistent reply keyboard and inline buttons
     # on one message. Keep the bottom Menu button persistent, then show the
     # inline shop navigation as a separate, editable message.
+    sent_welcome_animation = False
     if config.welcome_animation_file_id:
-        await message.answer_animation(
-            animation=config.welcome_animation_file_id,
-            caption=WELCOME_TEXT,
-            reply_markup=persistent_menu_keyboard(),
-        )
-    else:
+        try:
+            await message.answer_animation(
+                animation=config.welcome_animation_file_id,
+                caption=WELCOME_TEXT,
+                reply_markup=persistent_menu_keyboard(),
+            )
+            sent_welcome_animation = True
+        except Exception:
+            # A stale/invalid Telegram file_id must never block /start.
+            import logging
+            logging.exception("Welcome animation failed; falling back to text welcome")
+    if not sent_welcome_animation:
         await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_keyboard())
     await message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
     await maybe_send_ad(message.bot, recipient_id, recipient_language)
