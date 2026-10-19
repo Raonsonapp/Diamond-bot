@@ -1648,6 +1648,93 @@ async def wallet_topup_reject_callback(callback: CallbackQuery) -> None:
     await callback.answer("Дархост рад шуд.")
 
 
+@router.message(Command("announce_new_bot"))
+async def announce_new_bot(message: Message) -> None:
+    """Send a one-time migration notice to users of the legacy bot.
+
+    Preview first; require the explicit /announce_new_bot SEND confirmation.
+    Run this only while BOT_TOKEN still belongs to the OLD bot.
+    """
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    confirmation = (message.text or "").strip().split(maxsplit=1)
+    if len(confirmation) != 2 or confirmation[1].strip().upper() != "SEND":
+        await message.answer(
+            "📣 <b>Эълон барои кӯчидан ба боти нав</b>\n\n"
+            "Салом! 💎 Барои харидани алмосҳои Free Fire ва гирифтани хабарҳои нав "
+            "ба боти нави расмии FF MARGEDAR гузаред:\n"
+            "👉 https://t.me/FF_MARGEDAR_BOT\n\n"
+            "Лутфан ботро кушоед ва /start-ро пахш кунед.\n\n"
+            "Барои фиристодани ин эълон ба ҳамаи корбарони сабтшуда, "
+            "пас аз санҷидани матн фармони зеринро фиристед:\n"
+            "<code>/announce_new_bot SEND</code>\n\n"
+            "⚠️ Ин фармонро танҳо дар боти кӯҳна иҷро кунед."
+        )
+        return
+
+    async with get_session() as session:
+        user_ids = await list_all_user_ids(session)
+
+    if not user_ids:
+        await message.answer("Корбарони сабтшуда ёфт нашуданд; эълон фиристода нашуд.")
+        return
+
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text="🚀 Кушодани боти нави FF MARGEDAR",
+                url="https://t.me/FF_MARGEDAR_BOT",
+            )
+        ]]
+    )
+    announcement = (
+        "💎 <b>FF MARGEDAR — БОТИ НАВ!</b>\n\n"
+        "Салом! Мо боти худро нав кардем, то харидани алмосҳои Free Fire "
+        "бароятон қулайтар шавад. 🎮\n\n"
+        "👉 Ба боти нави расмӣ гузаред: <b>@FF_MARGEDAR_BOT</b>\n"
+        "Пас аз кушодан тугмаи <b>/start</b>-ро пахш кунед.\n\n"
+        "⭐ Барои нархнома, фармоиш ва дастгирӣ аз боти нав истифода баред.\n"
+        "Ташаккур, ки бо FF MARGEDAR ҳастед! 💚"
+    )
+
+    sent = 0
+    blocked = 0
+    failed = 0
+    for user_id in user_ids:
+        try:
+            await message.bot.send_message(
+                chat_id=user_id,
+                text=announcement,
+                reply_markup=keyboard,
+                disable_web_page_preview=True,
+            )
+            sent += 1
+        except Exception as exc:
+            # Keep the batch running if a user blocked the old bot or Telegram
+            # temporarily rejects a delivery; do not log message contents/tokens.
+            name = type(exc).__name__
+            if name in {"TelegramForbiddenError", "TelegramBadRequest"}:
+                blocked += 1
+            else:
+                failed += 1
+                if name == "TelegramRetryAfter":
+                    await asyncio.sleep(min(getattr(exc, "retry_after", 1), 30))
+        await asyncio.sleep(0.05)
+
+    await message.answer(
+        "📊 <b>Натиҷаи эълон</b>\n"
+        f"👥 Корбарон дар база: {len(user_ids)}\n"
+        f"✅ Фиристода шуд: {sent}\n"
+        f"🚫 Ботро баста/чат дастнорас: {blocked}\n"
+        f"⚠️ Хатогиҳои дигар: {failed}\n\n"
+        "Эълон танҳо аз боти кӯҳна фиристода мешавад. Корбарон бояд боти навро "
+        "худашон кушода /start пахш кунанд."
+    )
+
+
 @router.message(Command("setalmazonprices"))
 async def set_almaz_tj_prices(message: Message) -> None:
     """Run the safe catalog migration immediately for an admin."""
