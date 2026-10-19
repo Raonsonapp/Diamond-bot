@@ -134,13 +134,13 @@ class Config:
 
     # Public shop channel: bot must be added there as admin with "Post
     # Messages" permission, otherwise announcements silently fail.
-    shop_channel_url: str = os.getenv("SHOP_CHANNEL_URL", "https://t.me/ALMAZ_TJ_SHOP")
-    review_channel_id: str = os.getenv("REVIEW_CHANNEL_ID", "@ALMAZ_TJ_SHOP")
+    shop_channel_url: str = os.getenv("SHOP_CHANNEL_URL", "https://t.me/FF_MARGEDAR_SHOP")
+    review_channel_id: str = os.getenv("REVIEW_CHANNEL_ID", "@FF_MARGEDAR_SHOP")
 
     # Customer support is Telegram-only. Set this to the owner's public
     # Telegram username, e.g. https://t.me/your_support_account.
     # Falls back to the shop channel until the support username is configured.
-    support_telegram_url: str = os.getenv("SUPPORT_TELEGRAM_URL", "https://t.me/ALMAZ_TJ_SHOP")
+    support_telegram_url: str = os.getenv("SUPPORT_TELEGRAM_URL", "https://t.me/FF_MARGEDAR_SHOP")
 
 
 config = Config()
