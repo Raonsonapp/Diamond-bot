@@ -103,7 +103,11 @@ WELCOME_TEXT = "Хуш омадед ба FF MARGEDAR! 💎\nМагазини ф�
 
 @router.message(F.video | F.animation | F.photo)
 async def admin_get_media_file_id(message: Message, state: FSMContext) -> None:
-    """Return file IDs for admin-uploaded design media, but never intercept payment proofs."""
+    """Return reusable Telegram file IDs for admin-uploaded shop media.
+
+    Video/animation IDs are reusable for the welcome experience. No binary
+    media is stored in GitHub; Telegram hosts the uploaded file.
+    """
     # Payment screenshots must continue to the order/wallet proof handlers.
     # Otherwise the admin sees SHOP_IMAGE_FILE_ID instead of the actual receipt workflow.
     current_state = await state.get_state()
