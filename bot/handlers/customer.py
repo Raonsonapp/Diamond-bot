@@ -226,6 +226,21 @@ async def _show_main_menu(
     await maybe_send_ad(message.bot, recipient_id, recipient_language)
 
 
+async def _edit_navigation_message(
+    callback: CallbackQuery, text: str, reply_markup=None
+) -> None:
+    """Update the existing menu/media message instead of stacking new menus below it."""
+    msg = callback.message
+    try:
+        if msg.video or msg.animation or msg.photo:
+            await msg.edit_caption(caption=text, reply_markup=reply_markup, parse_mode="HTML")
+        else:
+            await msg.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
+    except Exception:
+        # Only create a new message when Telegram cannot edit the existing one.
+        await msg.answer(text, reply_markup=reply_markup, parse_mode="HTML")
+
+
 async def _format_orders_text(user_id: int) -> str:
     from sqlalchemy import select
 
@@ -376,14 +391,7 @@ async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
     # is media, remove its old inline buttons before sending the text menu.
     await state.clear()
     await callback.answer()
-    try:
-        await callback.message.edit_text("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
-    except Exception:
-        try:
-            await callback.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
-        await callback.message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
+    await _edit_navigation_message(callback, "📋 Менюи асосӣ — бахшро интихоб кунед:", main_menu_keyboard())
 
 
 @router.callback_query(F.data == "menu:reviews")
@@ -528,17 +536,7 @@ async def menu_games(callback: CallbackQuery, state: FSMContext) -> None:
     # Acknowledge immediately to prevent Telegram's spinner from appearing stuck.
     await callback.answer()
     await state.clear()
-    try:
-        await callback.message.edit_text(
-            "🎮 Бозиро интихоб кунед:",
-            reply_markup=games_menu_keyboard(),
-        )
-    except Exception:
-        # If the current message is a media message, send a fresh compact menu.
-        await callback.message.answer(
-            "🎮 Бозиро интихоб кунед:",
-            reply_markup=games_menu_keyboard(),
-        )
+    await _edit_navigation_message(callback, "🎮 Бозиро интихоб кунед:", games_menu_keyboard())
 
 
 async def _open_catalog(
@@ -560,16 +558,7 @@ async def _open_catalog(
         # Remember the parent section for the Back button on package/product screens.
         await state.update_data(catalog_category=category.value, catalog_telegram_kind=telegram_kind)
         # Keep the catalog compact: product icons and prices are shown on buttons.
-        try:
-            await callback.message.edit_text(
-                title,
-                reply_markup=products_keyboard(products, category, telegram_kind),
-            )
-        except Exception:
-            await callback.message.answer(
-                title,
-                reply_markup=products_keyboard(products, category, telegram_kind),
-            )
+        await _edit_navigation_message(callback, title, products_keyboard(products, category, telegram_kind))
         await state.set_state(OrderFlow.choosing_product)
     except Exception:
         await callback.message.answer(
@@ -583,12 +572,13 @@ async def menu_buy_diamonds(callback: CallbackQuery, state: FSMContext) -> None:
     # Region must be chosen before showing prices; each region has its own SKU catalog.
     await callback.answer()
     await state.clear()
-    await callback.message.answer(
+    await _edit_navigation_message(
+        callback,
         "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
         "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
         "🇮🇩 <b>Индонезия</b> — ID Server\n\n"
         "🔎 Пеш аз пардохт ID ва минтақа санҷида мешаванд.",
-        reply_markup=free_fire_region_keyboard(),
+        free_fire_region_keyboard(),
     )
 
 
@@ -601,25 +591,26 @@ async def catalog_back(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
 
     if category_value in {ProductCategory.DIAMONDS.value, ProductCategory.FF_INDONESIA.value}:
-        await callback.message.answer(
+        await _edit_navigation_message(
+            callback,
             "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
             "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
             "🇮🇩 <b>Индонезия</b> — ID Server",
-            reply_markup=free_fire_region_keyboard(),
+            free_fire_region_keyboard(),
         )
     elif category_value == ProductCategory.TELEGRAM.value:
-        await callback.message.answer("✈️ Хизматро интихоб кунед:", reply_markup=telegram_menu_keyboard())
+        await _edit_navigation_message(callback, "✈️ Хизматро интихоб кунед:", telegram_menu_keyboard())
     elif category_value == ProductCategory.BIGO_LIVE.value:
-        await callback.message.answer("🎮 Бозиро интихоб кунед:", reply_markup=games_menu_keyboard())
+        await _edit_navigation_message(callback, "🎮 Бозиро интихоб кунед:", games_menu_keyboard())
     else:
-        await callback.message.answer("📋 Менюи асосӣ — бахшро интихоб кунед:", reply_markup=main_menu_keyboard())
+        await _edit_navigation_message(callback, "📋 Менюи асосӣ — бахшро интихоб кунед:", main_menu_keyboard())
 
 
 @router.callback_query(F.data == "menu:telegram")
 async def menu_telegram(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("✈️ Хизматро интихоб кунед:", reply_markup=telegram_menu_keyboard())
     await callback.answer()
+    await _edit_navigation_message(callback, "✈️ Хизматро интихоб кунед:", telegram_menu_keyboard())
 
 
 @router.callback_query(F.data == "menu:telegram_stars")
