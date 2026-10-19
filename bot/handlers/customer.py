@@ -1933,14 +1933,14 @@ async def wallet_topup_request(callback: CallbackQuery, state: FSMContext) -> No
         )
     await state.set_state(WalletTopupFlow.awaiting_proof)
     await state.update_data(wallet_topup_request_id=req_id)
-    await callback.message.answer(
+    await _edit_navigation_message(
+        callback,
         f"👛 <b>Пур кардани баланс — {amount} сомонӣ</b>\n"
-        f"Дархост: <code>#{req_id}</code>\n\n"
+        f"🧾 Дархост: <code>#{req_id}</code>\n"
         f"{payment_details}\n"
-        "1) Маблағи дақиқро ба ҳисоби қабулкунанда гузаронед.\n"
-        "2) Скриншот ё файли чеки пардохтро ҳамин ҷо фиристед.\n"
-        "3) Админ пардохтро месанҷад; баланс танҳо баъди тасдиқи воқеии маблағ зиёд мешавад.\n\n"
-        "Агар ҳоло пардохт кардан нахоҳед, /start фиристед.",
+        "📷 Пардохт кунед ва расидро ҳамин ҷо фиристед.\n"
+        "✅ Админ санҷида, баъд балансро пур мекунад.",
+        None,
     )
     await callback.answer("Дархост сохта шуд.")
 
@@ -2035,40 +2035,98 @@ async def api_key_command(message: Message) -> None:
 
 @router.callback_query(F.data == "wallet:open")
 async def wallet_open_button(callback: CallbackQuery) -> None:
-    """Open the same wallet/top-up choices as /wallet from the main menu."""
+    """Show a concise wallet summary and lifetime top-up/spend statistics."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     from bot.db.models import WalletTransaction
     from bot.db.session import get_session
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"➕ Пур кардан: {amount} сомонӣ", callback_data=f"wallet:topup:{amount}")]
-        for amount in (50, 100, 200, 500)
-    ])
+    await callback.answer()
     async with get_session() as session:
         await upsert_user(
             session, callback.from_user.id, callback.from_user.username,
             callback.from_user.full_name,
         )
         user = await get_user(session, callback.from_user.id)
-        balance = float(user.wallet_balance_somoni or 0) if user else 0.0
-        rows = await session.execute(
+        balance = round(float(user.wallet_balance_somoni or 0), 2) if user else 0.0
+        result = await session.execute(
             select(WalletTransaction)
             .where(WalletTransaction.user_id == callback.from_user.id)
-            .order_by(WalletTransaction.created_at.desc()).limit(5)
+            .order_by(WalletTransaction.created_at.desc())
         )
-        history = list(rows.scalars().all())
-    history_text = "\\n".join(
-        f"• {tx.amount_somoni:+.2f}с — {tx.kind} — {tx.created_at.strftime('%d.%m %H:%M')}"
-        for tx in history
-    ) or "Ҳоло амалиёт нест."
-    await callback.message.answer(
-        f"👛 <b>Ҳамёни FF MARGEDAR</b>\\nБаланс: <b>{balance:.2f} сомонӣ</b>\\n\\n"
-        f"<b>Амалиёти охирин:</b>\\n{history_text}\\n\\n"
-        "Маблағро интихоб кунед. Пуркунӣ ҳоло дастӣ баррасӣ мешавад; "
-        "баланс танҳо баъди тасдиқи админ зиёд мешавад.",
-        reply_markup=keyboard,
+        transactions = list(result.scalars().all())
+
+    credits = [tx for tx in transactions if tx.amount_somoni > 0]
+    debits = [tx for tx in transactions if tx.amount_somoni < 0]
+    total_credited = sum(tx.amount_somoni for tx in credits)
+    total_spent = -sum(tx.amount_somoni for tx in debits)
+    last_topup = next((tx for tx in transactions if tx.amount_somoni > 0), None)
+    last_topup_text = (
+        f"{last_topup.created_at.strftime('%d.%m.%Y %H:%M')} — {last_topup.amount_somoni:.2f} сомонӣ"
+        if last_topup else "Ҳоло пур карда нашудааст"
     )
+    text = (
+        "👛 <b>Ҳамёни шумо</b>\\n"
+        f"💰 <b>Баланс:</b> {balance:.2f} сомонӣ\\n"
+        f"📥 <b>Ҳамагӣ пур карда шуд:</b> {total_credited:.2f} сомонӣ ({len(credits)} бор)\\n"
+        f"📤 <b>Ҳамагӣ аз ҳамён сарф шуд:</b> {total_spent:.2f} сомонӣ ({len(debits)} амалиёт)\\n"
+        f"🕒 <b>Пуркунии охирин:</b> {last_topup_text}\\n\\n"
+        "ℹ️ Баланс баъди тасдиқи чек аз ҷониби админ зиёд мешавад."
+    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📜 Таърихи амалиёт", callback_data="wallet:history")],
+        [InlineKeyboardButton(text="➕ Пур кардани баланс", callback_data="wallet:topup_menu")],
+        [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
+    ])
+    await _edit_navigation_message(callback, text, keyboard)
+
+
+@router.callback_query(F.data == "wallet:history")
+async def wallet_history_button(callback: CallbackQuery) -> None:
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from bot.db.models import WalletTransaction
+    from bot.db.session import get_session
+
     await callback.answer()
+    async with get_session() as session:
+        result = await session.execute(
+            select(WalletTransaction)
+            .where(WalletTransaction.user_id == callback.from_user.id)
+            .order_by(WalletTransaction.created_at.desc()).limit(10)
+        )
+        history = list(result.scalars().all())
+    lines = []
+    for tx in history:
+        sign = "+" if tx.amount_somoni > 0 else ""
+        label = "Пур кардани баланс" if tx.amount_somoni > 0 else "Харид аз ҳамён"
+        lines.append(f"• {sign}{tx.amount_somoni:.2f} сомонӣ — {label} · {tx.created_at.strftime('%d.%m.%Y %H:%M')}")
+    history_text = "\\n".join(lines) or "Ҳоло амалиёт нест."
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Ба ҳамён", callback_data="wallet:open")],
+        [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
+    ])
+    await _edit_navigation_message(callback, "📜 <b>Таърихи ҳамён</b>\\n" + history_text, keyboard)
+
+
+@router.callback_query(F.data == "wallet:topup_menu")
+async def wallet_topup_menu(callback: CallbackQuery) -> None:
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    await callback.answer()
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"➕ {amount} сомонӣ", callback_data=f"wallet:topup:{amount}")]
+        for amount in (50, 100, 200, 500)
+    ] + [
+        [InlineKeyboardButton(text="⬅️ Ба ҳамён", callback_data="wallet:open")],
+        [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
+    ])
+    await _edit_navigation_message(
+        callback,
+        "➕ <b>Пур кардани баланс</b>\\n\\n"
+        "💵 Маблағро интихоб кунед.\\n"
+        "📷 Баъд аз пардохт чекро фиристед.\\n"
+        "✅ Админ онро месанҷад ва танҳо баъд балансро пур мекунад.",
+        keyboard,
+    )
 
 
 @router.callback_query(F.data == "api:open")
