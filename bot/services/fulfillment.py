@@ -394,6 +394,10 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
 
     async with get_session() as session:
         fresh_order = await get_order(session, order_id)
+        buyer = await get_user(session, fresh_order.user_id) if fresh_order else None
+    if buyer is not None and buyer.referred_by is not None:
+        from bot.services.referral_rewards import maybe_credit_referral_milestone
+        await maybe_credit_referral_milestone(bot, buyer.referred_by)
     return FulfillmentResult(order=fresh_order, auto_delivered=True)
 
 
@@ -430,4 +434,13 @@ async def mark_delivered_and_notify(bot: Bot, order_id: int) -> Order | None:
             reply_markup=receipt_keyboard(delivered[0].id),
         )
     await prompt_for_review(bot, delivered[0])
+    from bot.services.referral_rewards import maybe_credit_referral_milestone
+    async with get_session() as session:
+        referrer_ids = set()
+        for delivered_order in delivered:
+            buyer = await get_user(session, delivered_order.user_id)
+            if buyer is not None and buyer.referred_by is not None:
+                referrer_ids.add(buyer.referred_by)
+    for referrer_id in referrer_ids:
+        await maybe_credit_referral_milestone(bot, referrer_id)
     return delivered[0]
