@@ -97,7 +97,7 @@ def _format_local_datetime(dt) -> str:
 
 router = Router(name="customer")
 
-WELCOME_TEXT = "Хуш омадед ба ALMAZ TJ! 💎\nМагазини фурӯши хидматҳои рақамӣ.\n\nЧиро интихоб мекунед?"
+WELCOME_TEXT = "Хуш омадед ба FF MARGEDAR! 💎\nМагазини фурӯши хидматҳои рақамӣ.\n\nЧиро интихоб мекунед?"
 
 
 
@@ -363,7 +363,7 @@ async def reply_review_channel(message: Message, state: FSMContext) -> None:
 async def reply_contact(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(
-        "💬 Барои тамос бо ALMAZ TJ танҳо Telegram-ро истифода баред. "
+        "💬 Барои тамос бо FF MARGEDAR танҳо Telegram-ро истифода баред. "
         "Рақами телефон ва WhatsApp дар бот нишон дода намешавад.",
         reply_markup=contact_keyboard(),
     )
@@ -374,7 +374,7 @@ async def support_command(message: Message, state: FSMContext) -> None:
     """Quick access to Telegram-only support from any point in the bot."""
     await state.clear()
     await message.answer(
-        "💬 Дастгирии ALMAZ TJ дар Telegram:",
+        "💬 Дастгирии FF MARGEDAR дар Telegram:",
         reply_markup=contact_keyboard(),
     )
 
@@ -393,7 +393,7 @@ async def reply_about(message: Message, state: FSMContext) -> None:
         orders_count = await count_total_delivered_orders(session)
 
     text = (
-        "ℹ️ Дар бораи ALMAZ TJ\n\n"
+        "ℹ️ Дар бораи FF MARGEDAR\n\n"
         "🤖 Боти расмии фурӯши хидматҳои рақамӣ дар Тоҷикистон\n\n"
         "🎮 Хизматҳо: Free Fire diamonds, Telegram Stars\n"
         "🚀 Афзалиятҳо: суръати баланд (1-5 дақ.), бехатар\n\n"
@@ -623,7 +623,7 @@ async def menu_about(callback: CallbackQuery) -> None:
         orders_count = await count_total_delivered_orders(session)
 
     text = (
-        "ℹ️ Дар бораи ALMAZ TJ\n\n"
+        "ℹ️ Дар бораи FF MARGEDAR\n\n"
         "🤖 Боти расмии фурӯши хидматҳои рақамӣ дар Тоҷикистон\n\n"
         "🎮 Хизматҳо: Free Fire diamonds, Telegram Stars\n"
         "🚀 Афзалиятҳо: суръати баланд (1-5 дақ.), бехатар\n\n"
@@ -1570,7 +1570,7 @@ async def wallet_command(message: Message) -> None:
         for tx in history
     ) or "Ҳоло амалиёт нест."
     await message.answer(
-        f"👛 <b>Ҳамёни ALMAZ TJ</b>\nБаланс: <b>{balance:.2f} сомонӣ</b>\n\n"
+        f"👛 <b>Ҳамёни FF MARGEDAR</b>\nБаланс: <b>{balance:.2f} сомонӣ</b>\n\n"
         f"<b>Амалиёти охирин:</b>\n{history_text}\n\n"
         "Маблағи пуркуниро интихоб кунед. Пуркунӣ дастӣ тасдиқ мешавад: "
         "админ бояд ворид шудани маблағро дар ҳисоби қабулкунанда санҷад.",
@@ -1742,7 +1742,7 @@ async def wallet_open_button(callback: CallbackQuery) -> None:
         for tx in history
     ) or "Ҳоло амалиёт нест."
     await callback.message.answer(
-        f"👛 <b>Ҳамёни ALMAZ TJ</b>\\nБаланс: <b>{balance:.2f} сомонӣ</b>\\n\\n"
+        f"👛 <b>Ҳамёни FF MARGEDAR</b>\\nБаланс: <b>{balance:.2f} сомонӣ</b>\\n\\n"
         f"<b>Амалиёти охирин:</b>\\n{history_text}\\n\\n"
         "Маблағро интихоб кунед. Пуркунӣ ҳоло дастӣ баррасӣ мешавад; "
         "баланс танҳо баъди тасдиқи админ зиёд мешавад.",
