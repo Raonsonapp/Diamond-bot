@@ -302,3 +302,20 @@ class ApiAccessPin(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"), primary_key=True)
     pin_hash: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReferralMilestoneAward(Base):
+    """One-time record that a referral milestone prize has been unlocked."""
+    __tablename__ = "bot_referral_milestone_awards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"), index=True)
+    milestone: Mapped[int] = mapped_column(Integer)
+    reward_name: Mapped[str] = mapped_column(String(128))
+    reward_value_somoni: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "milestone", name="uq_referral_milestone_award"),
+    )
