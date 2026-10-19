@@ -125,6 +125,16 @@ async def admin_get_media_file_id(message: Message, state: FSMContext) -> None:
     if any(word in caption_check for word in ("чек", "расид", "receipt", "пардохт", "payment")):
         return
 
+    if message.video and "tutorial" in (message.caption or "").lower():
+        env_key = "TUTORIAL_VIDEO_FILE_ID"
+        media = message.video
+        await message.reply(
+            f"✅ Видеои омӯзишӣ қабул шуд. Дар Render → Environment тағйирёбандаи "
+            f"<code>{env_key}</code>-ро ба ин file_id гузоред:\n\n<code>{media.file_id}</code>",
+            parse_mode="HTML",
+        )
+        return
+
     if message.photo:
         media = message.photo[-1]
         media_kind = "Расм"
@@ -224,6 +234,42 @@ async def _register_and_continue(message: Message, state: FSMContext, from_user,
         return
 
     await _show_main_menu(message, state, from_user.id, from_user.language_code or "ru")
+
+
+@router.message(Command("tutorial"))
+@router.message(Command("help"))
+async def tutorial_command(message: Message) -> None:
+    """Customer-facing Tajik guide; sends an MP4 when configured, otherwise a readable step-by-step guide."""
+    if config.tutorial_video_file_id:
+        await message.answer_video(
+            video=config.tutorial_video_file_id,
+            caption=(
+                "🎬 <b>Дастури истифодаи FF MARGEDAR</b>\n\n"
+                "Агар видео ҳама чизро нишон надиҳад, қадамҳоро дар зер хонед: /tutorial"
+            ),
+            parse_mode="HTML",
+        )
+    await message.answer(
+        "🎮 <b>Дастури истифодаи FF MARGEDAR</b>\n\n"
+        "1️⃣ <b>Хариди алмаз:</b> «🎮 Бозиҳо» → «💎 Free Fire — Алмазҳо» → бастаро интихоб кунед.\n"
+        "2️⃣ <b>ID-и бозингар:</b> ID-и дурусти Free Fire-ро ворид карда, фармоишро тасдиқ кунед.\n"
+        "3️⃣ <b>Пардохт:</b> усули пардохтро интихоб кунед, маблағи нишон додашударо пардохт карда, расидро фиристед.\n"
+        "4️⃣ <b>Интизорӣ:</b> расид аз ҷониби админ санҷида мешавад; то тасдиқ шудан фармоишро пардохтшуда ҳисоб накунед.\n"
+        "5️⃣ <b>Фармоишҳо:</b> аз «👤 Профил» → «📦 Фармоишҳои ман» ҳолатро бинед.\n"
+        "6️⃣ <b>Ҳамён ва реферал:</b> аз меню «👛 Ҳамён» ё «🤝 Реферал»-ро кушоед.\n"
+        "7️⃣ <b>Кӯмак:</b> «🆘 Дастгирӣ»-ро интихоб кунед.\n\n"
+        "✨ Emoji-пакҳо барои кушодан дар Telegram:\n"
+        "• https://t.me/addemoji/NewsEmoji\n"
+        "• https://t.me/addemoji/Alphabet_Red_Bright\n"
+        "• https://t.me/addemoji/G8yg_by_fStikBot\n"
+        "• https://t.me/addemoji/FinanceEmoji\n"
+        "• https://t.me/addemoji/abc2394_by_TgEmojiBot\n"
+        "• https://t.me/addemoji/sticks_f97eb_by_TgEmodziBot\n"
+        "• https://t.me/addemoji/tj_rus_by_TgEmodziBot\n\n"
+        "Барои дидани ҳамин дастур ҳар вақт /tutorial нависед.",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
 
 
 @router.message(CommandStart())
