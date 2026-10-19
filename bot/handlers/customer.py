@@ -925,9 +925,9 @@ async def enter_player_id(message: Message, state: FSMContext) -> None:
         await state.set_state(OrderFlow.choosing_region)
         await message.answer(
             "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
-            "🌐 СНГ — танҳо барои бастаҳои Free Fire (СНГ)\n"
-            "🇮🇩 Индонезия — танҳо барои бастаҳои Free Fire Indonesia\n\n"
-            "⚠️ Регион бояд ба баста мувофиқат кунад.",
+            "🌐 СНГ\n"
+            "🇮🇩 Индонезия\n\n"
+            "Пас аз интихоб, ID-и бозигарро ворид кунед.",
             parse_mode="HTML",
             reply_markup=free_fire_region_keyboard(),
         )
@@ -948,9 +948,9 @@ async def reuse_saved_id(callback: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(OrderFlow.choosing_region)
         await callback.message.answer(
             "🌍 <b>Минтақаи аккаунти Free Fire-ро интихоб кунед:</b>\n\n"
-            "🌐 СНГ — танҳо барои бастаҳои Free Fire (СНГ)\n"
-            "🇮🇩 Индонезия — танҳо барои бастаҳои Free Fire Indonesia\n\n"
-            "⚠️ Регион бояд ба баста мувофиқат кунад.",
+            "🌐 СНГ\n"
+            "🇮🇩 Индонезия\n\n"
+            "Пас аз интихоб, ID-и бозигарро ворид кунед.",
             parse_mode="HTML",
             reply_markup=free_fire_region_keyboard(),
         )
