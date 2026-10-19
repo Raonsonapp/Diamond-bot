@@ -412,10 +412,10 @@ async def user_stats_command(message: Message) -> None:
         latest = latest_result.scalar_one()
     latest_text = latest.strftime("%d.%m.%Y %H:%M") if latest else "—"
     await message.answer(
-        "📊 <b>Омори воқеии базаи ҳамин бот</b>\\n\\n"
-        f"👥 Сабтшуда дар база: <b>{total}</b>\\n"
-        f"✅ Шартномаро қабул кардаанд: <b>{accepted}</b>\\n"
-        f"🕒 Охирин сабти нав: <b>{latest_text}</b>\\n\\n"
+        "📊 <b>Омори воқеии базаи ҳамин бот</b>\n\n"
+        f"👥 Сабтшуда дар база: <b>{total}</b>\n"
+        f"✅ Шартномаро қабул кардаанд: <b>{accepted}</b>\n"
+        f"🕒 Охирин сабти нав: <b>{latest_text}</b>\n\n"
         "Эзоҳ: Telegram рӯйхати ҳамаи одамони ботро намедиҳад; ин рақам шумораи сабтҳои база аст. "
         "Агар шумора аз он чизе, ки мебинед, фарқ кунад, DATABASE_URL метавонад ба базаи кӯҳна ё муштарак ишора кунад."
     )
