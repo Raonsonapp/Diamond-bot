@@ -1911,8 +1911,9 @@ async def wallet_topup_request(callback: CallbackQuery, state: FSMContext) -> No
         await callback.answer("Маблағ нодуруст аст.", show_alert=True)
         return
     if amount not in (50, 100, 200, 500):
-        await callback.answer("Маблағ иҷозат дода нашудааст.", show_alert=True)
+        await callback.answer("Ин маблағ дастрас нест.", show_alert=True)
         return
+
     async with get_session() as session:
         await upsert_user(session, callback.from_user.id, callback.from_user.username, callback.from_user.full_name)
         req = WalletTopupRequest(
@@ -1924,25 +1925,75 @@ async def wallet_topup_request(callback: CallbackQuery, state: FSMContext) -> No
         await session.refresh(req)
         req_id = req.id
 
-    if config.receiving_card_number:
-        payment_details = f"💳 Рақам/ҳисоби қабул: <code>{html.escape(config.receiving_card_number)}</code>\n"
-    else:
-        payment_details = (
-            "⚠️ Рақами қабул дар Render Environment (RECEIVING_CARD_NUMBER) танзим нашудааст. "
-            "Пеш аз пардохт бо дастгирӣ тамос гиред.\n"
-        )
     await state.set_state(WalletTopupFlow.awaiting_proof)
-    await state.update_data(wallet_topup_request_id=req_id)
+    await state.update_data(wallet_topup_request_id=req_id, wallet_topup_amount=amount)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💙 Душанбе Сити", callback_data=f"wallet:bank:dc:{req_id}")],
+        [InlineKeyboardButton(text="🟢 Алиф Мобайл", callback_data=f"wallet:bank:alif:{req_id}")],
+        [InlineKeyboardButton(text="⬅️ Ба маблағҳо", callback_data="wallet:topup_menu")],
+    ])
     await _edit_navigation_message(
         callback,
         f"👛 <b>Пур кардани баланс — {amount} сомонӣ</b>\n"
-        f"🧾 Дархост: <code>#{req_id}</code>\n"
-        f"{payment_details}\n"
-        "📷 Пардохт кунед ва расидро ҳамин ҷо фиристед.\n"
-        "✅ Админ санҷида, баъд балансро пур мекунад.",
-        None,
+        f"🧾 Дархост: <code>#{req_id}</code>\n\n"
+        "🏦 <b>Усули пардохтро интихоб кунед:</b>\n"
+        "💙 Душанбе Сити ё 🟢 Алиф Мобайл.\n"
+        "📷 Баъди пардохт расидро ҳамин ҷо фиристед.\n"
+        "✅ Баланс танҳо баъди тасдиқи админ зиёд мешавад.",
+        keyboard,
     )
-    await callback.answer("Дархост сохта шуд.")
+    await callback.answer("Маблағ интихоб шуд.")
+
+
+@router.callback_query(F.data.regexp(r"^wallet:bank:(dc|alif):\d+$"))
+async def wallet_topup_choose_bank(callback: CallbackQuery, state: FSMContext) -> None:
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from bot.db.models import WalletTopupRequest
+    from bot.db.session import get_session
+    from bot.services.payments import _build_alif_link, _build_dc_link
+
+    parts = callback.data.split(":")
+    bank, req_id = parts[2], int(parts[3])
+    data = await state.get_data()
+    if int(data.get("wallet_topup_request_id") or 0) != req_id:
+        await callback.answer("Дархост фаъол нест. Пуркуниро аз нав оғоз кунед.", show_alert=True)
+        return
+
+    async with get_session() as session:
+        req = await session.get(WalletTopupRequest, req_id)
+        if req is None or req.user_id != callback.from_user.id or req.status != "pending":
+            await callback.answer("Дархост ёфт нашуд ё дигар фаъол нест.", show_alert=True)
+            return
+        amount = float(req.amount_somoni)
+
+    pay_url = _build_alif_link(amount) if bank == "alif" else _build_dc_link(req_id, amount)
+    bank_name = "🟢 Алиф Мобайл" if bank == "alif" else "💙 Душанбе Сити"
+    rows = []
+    if pay_url:
+        rows.append([InlineKeyboardButton(text=f"💳 Пардохт бо {bank_name}", url=pay_url)])
+    rows.append([InlineKeyboardButton(text="🔄 Иваз кардани бонк", callback_data=f"wallet:topup:{int(amount)}")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+
+    if config.receiving_card_number:
+        card_line = f"💳 Корти қабул: <code>{html.escape(config.receiving_card_number)}</code>\n"
+    else:
+        card_line = "⚠️ Рақами корти қабул танзим нашудааст; бо дастгирӣ тамос гиред.\n"
+    link_line = (
+        "🔗 Тугмаи «Пардохт»-ро зер кунед; бонк бо маблағи интихобшуда кушода мешавад.\n"
+        if pay_url else
+        "🔗 Силқаи пардохт танзим нашудааст. Аз рақами корти қабул истифода баред.\n"
+    )
+    await _edit_navigation_message(
+        callback,
+        f"👛 <b>Пур кардани баланс — {amount:.2f} сомонӣ</b>\n"
+        f"🏦 Усул: <b>{bank_name}</b>\n"
+        f"🧾 Дархост: <code>#{req_id}</code>\n\n"
+        f"{card_line}{link_line}\n"
+        "📷 Пас аз пардохт скриншоти чекро ҳамин ҷо фиристед.\n"
+        "✅ Админ пардохтро месанҷад; баъд баланс пур мешавад.",
+        keyboard,
+    )
+    await callback.answer("Усули пардохт интихоб шуд.")
 
 
 @router.message(WalletTopupFlow.awaiting_proof)
