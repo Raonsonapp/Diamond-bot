@@ -1599,6 +1599,51 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     await state.update_data(order_id=order_id)
 
 
+@router.message(F.photo | F.document)
+async def recover_payment_proof_after_restart(message: Message, state: FSMContext) -> None:
+    """Recover receipt handling when Render restarted and in-memory FSM state was lost.
+
+    The order itself is persisted in the database, while MemoryStorage is not.
+    If the customer sends a receipt after a restart, restore the order context
+    from their latest unpaid order instead of silently ignoring the image.
+    """
+    if not message.from_user:
+        return
+
+    # If an active FSM state exists, another specific handler owns this media.
+    if await state.get_state() is not None:
+        return
+
+    from bot.db.models import Order
+    from sqlalchemy import select
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(Order)
+            .where(
+                Order.user_id == message.from_user.id,
+                Order.status == OrderStatus.AWAITING_PAYMENT,
+            )
+            .order_by(Order.created_at.desc())
+            .limit(1)
+        )
+        order = result.scalar_one_or_none()
+
+    if order is None:
+        await message.answer(
+            "📷 Расм қабул шуд, аммо фармоиши интизори пардохт ёфт нашуд. "
+            "Лутфан аз «📋 Меню» фармоишро аз нав кушоед ё ба дастгирӣ муроҷиат кунед."
+        )
+        return
+
+    await state.set_state(OrderFlow.awaiting_payment_proof)
+    await state.update_data(order_id=order.id)
+    await message.answer(
+        f"🔄 Фармоиши интизори пардохт #{order.id} барқарор шуд. Чекро месанҷам..."
+    )
+    await receive_payment_proof(message, state)
+
+
 @router.message(OrderFlow.awaiting_admin_review)
 async def awaiting_admin_review_reply(message: Message, state: FSMContext) -> None:
     await message.answer(
