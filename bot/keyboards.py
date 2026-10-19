@@ -272,7 +272,8 @@ def free_fire_region_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="🌐 СНГ · Тоҷикистон / Россия", callback_data="region:ff_cis")],
             [InlineKeyboardButton(text="🇮🇩 Индонезия · ID Server", callback_data="region:ff_indonesia")],
-            [InlineKeyboardButton(text="🏠 Ба меню", callback_data="menu:main")],
+            [InlineKeyboardButton(text="⬅️ Бозгашт ба бозиҳо", callback_data="menu:games")],
+            [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
         ]
     )
 
