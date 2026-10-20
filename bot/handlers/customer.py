@@ -23,6 +23,7 @@ from bot.db.repo import (
     deduct_referral_balance,
     get_buyer_rank,
     get_last_recipient,
+    get_recent_recipients,
     get_product,
     get_setting,
     get_user,
@@ -778,7 +779,7 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
     text = f"Шумо интихоб кардед:\n{summary}\n\n💰 Ҳамагӣ: {format_price(total)} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
 
     if last_recipient:
-        text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
+        text += "\n\n🕘 ID-ҳои охирини шумо (то 3-то):\n" + "\n".join(f"• {pid}" + (f" — {html.escape(pname)}" if pname else "") for pid, pname in last_recipient)
         markup = reuse_recipient_keyboard(last_recipient)
     else:
         markup = None
@@ -1006,10 +1007,10 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
     text = f"{amount} {unit} — {format_price(price)} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
 
     async with get_session() as session:
-        last_recipient = await get_last_recipient(session, message.from_user.id, category)
+        last_recipient = await get_recent_recipients(session, message.from_user.id, category)
 
     if last_recipient:
-        text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
+        text += "\n\n🕘 ID-ҳои охирини шумо (то 3-то):\n" + "\n".join(f"• {pid}" + (f" — {html.escape(pname)}" if pname else "") for pid, pname in last_recipient)
         await message.answer(text, reply_markup=reuse_recipient_keyboard(last_recipient))
     else:
         await message.answer(text)
@@ -1036,7 +1037,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         async with get_session() as session:
             product = await get_product(session, product_id)
             if product is not None:
-                last_recipient = await get_last_recipient(
+                last_recipient = await get_recent_recipients(
                     session, callback.from_user.id, product.category
                 )
 
@@ -1157,7 +1158,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
             return
         player_name = region_check["player_name"]
 
-    await state.update_data(ff_player_id=recipient)
+    await state.update_data(ff_player_id=recipient, ff_player_name=player_name)
     await state.set_state(OrderFlow.confirming)
     total_price = sum(p.price_somoni for p in products)
     offer_balance = user is not None and user.referral_balance >= total_price > 0
@@ -1349,6 +1350,7 @@ async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
                 user_id=callback.from_user.id,
                 product=p,
                 ff_player_id=data["ff_player_id"],
+                player_name=data.get("ff_player_name"),
                 payment_provider="referral_balance",
                 paid_with_referral_balance=True,
                 cart_group_id=group_id,
@@ -1507,6 +1509,7 @@ async def choose_payment_method(callback: CallbackQuery, state: FSMContext) -> N
                 user_id=callback.from_user.id,
                 product=p,
                 ff_player_id=data["ff_player_id"],
+                player_name=data.get("ff_player_name"),
                 payment_provider=config.payment_provider,
                 cart_group_id=group_id,
                 bank_hint=bank_hint,
