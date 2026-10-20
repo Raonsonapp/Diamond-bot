@@ -88,18 +88,25 @@ async def _add_product(message: Message, category: ProductCategory, usage_exampl
         name = " ".join(parts[1:-3])
         amount, price, cost = parts[-3:]
         try:
+            amount_value = int(amount)
+            price_value = float(price.replace(",", "."))
+            cost_value = float(cost.replace(",", "."))
+            if amount_value <= 0 or price_value <= 0 or cost_value < 0:
+                raise ValueError
+            if not all(map(__import__("math").isfinite, (price_value, cost_value))):
+                raise ValueError
+            if round(price_value) < cost_value:
+                reports.append(f"⚠️ {name}: нархи фурӯш аз нархи харид кам аст. Фармоиш илова нашуд.")
+                continue
             product = Product(
                 name=name,
                 category=category,
-                diamonds=int(amount),
-                # Customer-facing prices are always whole soms now (see
-                # /roundprices) — round here so a typed-in "8.90" becomes
-                # "9" instead of silently keeping kopecks.
-                price_somoni=round(float(price)),
-                cost_somoni=float(cost),
+                diamonds=amount_value,
+                price_somoni=round(price_value),
+                cost_somoni=cost_value,
             )
         except ValueError:
-            reports.append(f"⚠️ Миқдор ва нарх бояд рақам бошанд: {line}")
+            reports.append(f"⚠️ {line}: миқдор бояд мусбат, нархи фурӯш мусбат ва нархи харид 0 ё зиёд бошад.")
             continue
 
         async with get_session() as session:
@@ -544,8 +551,10 @@ async def setbalance_command(message: Message) -> None:
         return
     try:
         amount = float(parts[1].strip().replace(",", "."))
+        if not __import__("math").isfinite(amount) or amount < 0:
+            raise ValueError
     except ValueError:
-        await message.answer("⚠️ Маблағ нодуруст аст. Масалан: /setbalance 150")
+        await message.answer("⚠️ Маблағ бояд рақами дурусти 0 ё аз он зиёд бошад. Мисол: /setbalance 150")
         return
     async with get_session() as session:
         new_balance = await set_fazercards_balance(session, amount)
@@ -567,8 +576,10 @@ async def addbalance_command(message: Message) -> None:
         return
     try:
         delta = float(parts[1].strip().replace(",", "."))
+        if not __import__("math").isfinite(delta) or delta <= 0:
+            raise ValueError
     except ValueError:
-        await message.answer("⚠️ Маблағ нодуруст аст. Масалан: /addbalance 50")
+        await message.answer("⚠️ Маблағи илова бояд рақами мусбат бошад. Мисол: /addbalance 50")
         return
     async with get_session() as session:
         new_balance = await adjust_fazercards_balance(session, delta)
@@ -1343,10 +1354,14 @@ async def set_price(message: Message) -> None:
             continue
 
         try:
-            price = float(parts[2])
-            cost = float(parts[3]) if len(parts) == 4 else None
+            price = float(parts[2].replace(",", "."))
+            cost = float(parts[3].replace(",", ".")) if len(parts) == 4 else None
+            if not __import__("math").isfinite(price) or price <= 0:
+                raise ValueError
+            if cost is not None and (not __import__("math").isfinite(cost) or cost < 0):
+                raise ValueError
         except ValueError:
-            reports.append(f"⚠️ Нарх бояд рақам бошад: {line}")
+            reports.append(f"⚠️ {line}: нархи фурӯш бояд мусбат ва нархи харид 0 ё зиёд бошад.")
             continue
 
         async with get_session() as session:
