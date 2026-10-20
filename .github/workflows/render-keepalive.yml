@@ -4,7 +4,7 @@ on:
   schedule:
     # Render free web services sleep after inactivity; send a lightweight
     # health request periodically. GitHub scheduled jobs can be delayed.
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
