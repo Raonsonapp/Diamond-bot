@@ -576,6 +576,7 @@ async def addbalance_command(message: Message) -> None:
 
 
 @router.message(Command("broadcast"))
+@router.message(F.text.startswith("/эълон"))
 async def broadcast(message: Message) -> None:
     if not is_admin(message.from_user.id):
         await _reject_non_admin(message)
