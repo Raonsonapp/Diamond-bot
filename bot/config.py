@@ -96,7 +96,7 @@ class Config:
     # always-on host: Render free-tier usage limits may still suspend the
     # service, and external pings cannot override provider policies.
     # Keep disabled by default. Enable only if your paid hosting plan allows it.
-    keepalive_ping_seconds: int = int(os.getenv("KEEPALIVE_PING_SECONDS", "0"))
+    keepalive_ping_seconds: int = int(os.getenv("KEEPALIVE_PING_SECONDS", "300"))
 
     # AdsGram monetization. Keep the token in the host secret store, never in git.
     adsgram_token: str = os.getenv("ADSGRAM_TOKEN", "")
