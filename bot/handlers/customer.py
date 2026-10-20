@@ -768,7 +768,7 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
     category = ProductCategory(data["cart_category"])
     async with get_session() as session:
         products = [await get_product(session, pid) for pid in cart_ids]
-        last_recipient = await get_last_recipient(session, callback.from_user.id, category)
+        last_recipient = await get_recent_recipients(session, callback.from_user.id, category)
 
     await state.update_data(cart_product_ids=cart_ids)
     await state.set_state(OrderFlow.entering_player_id)
