@@ -288,11 +288,13 @@ async def create_order(
     paid_with_referral_balance: bool = False,
     cart_group_id: str | None = None,
     bank_hint: str | None = None,
+    player_name: str | None = None,
 ) -> Order:
     order = Order(
         user_id=user_id,
         product_id=product.id,
         ff_player_id=ff_player_id,
+        player_name=player_name,
         amount_somoni=product.price_somoni,
         payment_provider=payment_provider,
         status=OrderStatus.PAID if paid_with_referral_balance else OrderStatus.AWAITING_PAYMENT,
@@ -320,20 +322,39 @@ async def get_order(session: AsyncSession, order_id: int) -> Order | None:
     return result.scalar_one_or_none()
 
 
+async def get_recent_recipients(
+    session: AsyncSession, user_id: int, category: ProductCategory, limit: int = 3
+) -> list[tuple[str, str | None]]:
+    """Return up to three most recent distinct recipient IDs and saved game names."""
+    result = await session.execute(
+        select(Order.ff_player_id, Order.player_name)
+        .join(Product, Product.id == Order.product_id)
+        .where(
+            Order.user_id == user_id,
+            Product.category == category,
+            Order.ff_player_id.is_not(None),
+        )
+        .order_by(Order.created_at.desc())
+        .limit(100)
+    )
+    rows = []
+    seen = set()
+    for player_id, player_name in result.all():
+        if player_id in seen:
+            continue
+        seen.add(player_id)
+        rows.append((player_id, player_name))
+        if len(rows) >= limit:
+            break
+    return rows
+
+
 async def get_last_recipient(
     session: AsyncSession, user_id: int, category: ProductCategory
 ) -> str | None:
-    """Most recent recipient (Free Fire player ID or Telegram @username)
-    this user ordered something for, in this category — lets the bot offer
-    a "use the same one again" shortcut instead of retyping every time."""
-    result = await session.execute(
-        select(Order.ff_player_id)
-        .join(Product, Product.id == Order.product_id)
-        .where(Order.user_id == user_id, Product.category == category)
-        .order_by(Order.created_at.desc())
-        .limit(1)
-    )
-    return result.scalars().first()
+    """Backward-compatible helper returning the most recent recipient ID."""
+    rows = await get_recent_recipients(session, user_id, category, limit=1)
+    return rows[0][0] if rows else None
 
 
 async def list_orders_by_status(session: AsyncSession, status: OrderStatus) -> list[Order]:
