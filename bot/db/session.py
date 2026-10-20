@@ -69,6 +69,7 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("user_id", "BIGINT"),
         ("product_id", "INTEGER"),
         ("ff_player_id", "VARCHAR(32)"),
+        ("player_name", "VARCHAR(128)"),
         ("amount_somoni", "FLOAT"),
         ("paid_with_referral_balance", "BOOLEAN DEFAULT 0"),
         # Same Enum-stores-.name-not-.value gotcha as products.category.
