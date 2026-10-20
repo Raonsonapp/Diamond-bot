@@ -45,6 +45,18 @@ from bot.services.adsgram import get_ad_stats
 router = Router(name="admin")
 
 
+@router.message(Command("myid"))
+async def show_telegram_user_id(message: Message) -> None:
+    """Show a user their own Telegram ID to configure ADMIN_USER_IDS safely."""
+    await message.answer(
+        "🆔 <b>Telegram ID-и шумо:</b>\n"
+        f"<code>{message.from_user.id}</code>\n\n"
+        "⚙️ Барои гирифтани чекҳо дар Render → Environment, "
+        "ин рақамро ба <code>ADMIN_USER_IDS</code> гузоред. "
+        "Агар якчанд админ бошад, ID-ҳоро бо вергул ҷудо кунед."
+    )
+
+
 def is_admin(user_id: int) -> bool:
     return user_id in config.admin_user_ids
 
