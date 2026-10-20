@@ -1661,10 +1661,11 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     # Deliver the proof to a configured admin destination. If the group/chat
     # ID is missing or no longer accessible, fall back to individual admin IDs.
     # Never tell the customer it was sent unless Telegram confirms delivery.
-    admin_targets: list[int] = []
-    if config.admin_chat_id:
+    # Send receipts to each configured destination. If the group/chat ID is
+    # invalid or unavailable, do not let that prevent direct delivery to admins.
+    admin_targets: list[int] = list(config.admin_user_ids)
+    if config.admin_chat_id and config.admin_chat_id not in admin_targets:
         admin_targets.append(config.admin_chat_id)
-    admin_targets.extend(uid for uid in config.admin_user_ids if uid not in admin_targets)
 
     delivered_to_admin = False
     last_admin_error: Exception | None = None
