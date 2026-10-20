@@ -1096,7 +1096,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         raise
 
 
-async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, answer_target) -> None:
+async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, answer_target, *, edit_existing: bool = False) -> None:
     """Validate a Free Fire ID against the selected region before showing payment."""
     data = await state.get_data()
     cart_ids = data.get("cart_product_ids")
@@ -1199,10 +1199,16 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     confirm_lines.append(f"📦 Теъдод: <b>{len(products)}</b>")
     confirm_lines.append(f"💰 Ҳамагӣ: <b>{format_price(total_price)} сомонӣ</b>")
     confirm_lines.extend(["", "☑️ Маълумот дуруст аст?"])
-    await answer_target.answer(
-        "\n".join(confirm_lines),
-        reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance, offer_wallet_payment=offer_wallet),
-    )
+    if edit_existing and hasattr(answer_target, "edit_text"):
+        await answer_target.edit_text(
+            "\n".join(confirm_lines),
+            reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance, offer_wallet_payment=offer_wallet),
+        )
+    else:
+        await answer_target.answer(
+            "\n".join(confirm_lines),
+            reply_markup=confirm_order_keyboard(offer_balance_payment=offer_balance, offer_wallet_payment=offer_wallet),
+        )
 
 
 @router.message(OrderFlow.entering_player_id, F.text)
@@ -1245,7 +1251,7 @@ async def reuse_saved_id(callback: CallbackQuery, state: FSMContext) -> None:
             ff_player_id=recipient,
             ff_region="СНГ" if product.category == ProductCategory.DIAMONDS else "Индонезия",
         )
-    await _finalize_recipient(state, callback.from_user.id, recipient, callback.message)
+    await _finalize_recipient(state, callback.from_user.id, recipient, callback.message, edit_existing=True)
     await callback.answer()
 
 
