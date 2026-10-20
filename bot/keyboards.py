@@ -196,18 +196,20 @@ def cart_select_keyboard(
 
 
 def reuse_recipient_keyboard(recipient: str, label_suffix: str = "") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"✅ Истифодаи: {recipient}{label_suffix}",
-                    callback_data=f"reuseid:{recipient}",
-                )
-            ],
-            [InlineKeyboardButton(text="⬅️ Бозгашт ба бастаҳо", callback_data="catalog:back")],
-            [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
-        ]
-    )
+    # Accept either one legacy ID or a list of (player_id, in-game name).
+    entries = recipient if isinstance(recipient, list) else [(recipient, None)]
+    rows = []
+    for player_id, player_name in entries[:3]:
+        name = f" · {player_name}" if player_name else ""
+        rows.append([InlineKeyboardButton(
+            text=f"✅ {player_id}{name}"[:64],
+            callback_data=f"reuseid:{player_id}",
+        )])
+    rows.extend([
+        [InlineKeyboardButton(text="⬅️ Бозгашт ба бастаҳо", callback_data="catalog:back")],
+        [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def payment_link_keyboard(pay_url: str | None = None) -> InlineKeyboardMarkup:
