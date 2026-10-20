@@ -1615,46 +1615,13 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
             return
         amount_to_match = order.amount_somoni
 
-    # Actively cross-check against SMS the webhook already saw (or is
-    # about to see) — now that we know exactly which order this
-    # screenshot is for, we can poll for a few seconds instead of relying
-    # entirely on the webhook's own one-shot amount match. Mirrors a rival
-    # bot's "🔍 system is searching, 5-30 seconds" UX: says so up front,
-    # then actually checks repeatedly instead of just claiming to.
-    from datetime import datetime, timedelta, timezone as _tz
-
-    from bot.db.repo import find_unmatched_sms_for_amount, mark_sms_matched
-
+    # Forward the receipt to the admin immediately. Do not make the customer
+    # wait for the optional SMS polling window before human review can begin.
     await message.answer(
         "✅ Чек қабул шуд!\n\n"
-        "🔍 Системаи мо ҳозир пардохти шуморо худкор ҷустуҷӯ мекунад — одатан 5-30 сония мегирад.\n"
-        "Натиҷа ҳозир хабар дода мешавад..."
+        "📨 Чек фавран ба админ барои санҷиш фиристода мешавад.\n"
+        "⏳ Пас аз тасдиқи пардохт фармоиши шумо иҷро мешавад."
     )
-
-    sms_match = None
-    for attempt in range(_PROOF_SMS_POLL_ATTEMPTS):
-        if attempt > 0:
-            await asyncio.sleep(_PROOF_SMS_POLL_DELAY_SECONDS)
-        since = datetime.now(_tz.utc) - timedelta(minutes=config.sms_match_window_minutes)
-        async with get_session() as session:
-            sms_match = await find_unmatched_sms_for_amount(session, amount_to_match, since)
-            if sms_match is not None:
-                await mark_sms_matched(session, sms_match, order_id)
-        if sms_match is not None:
-            break
-
-    if sms_match is not None:
-        from bot.services.fulfillment import confirm_and_deliver
-
-        await state.clear()
-        result = await confirm_and_deliver(message.bot, order_id, payment_reference=sms_match.kod)
-        if config.admin_chat_id and result is not None:
-            status_note = "автоматӣ ирсол шуд" if result.auto_delivered else "лутфан дастӣ ирсол кунед ва 'Delivered'-ро занед"
-            await message.bot.send_message(
-                config.admin_chat_id,
-                f"🤖 Фармоиши #{order_id} тавассути чеки мизоҷ + СМС-и қаблан омада худкор тасдиқ шуд — {status_note}.",
-            )
-        return
 
     async with get_session() as session:
         order = await get_order(session, order_id)
