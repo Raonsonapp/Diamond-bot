@@ -93,6 +93,18 @@ async def _set_bot_commands(bot: Bot) -> None:
         BotCommand(command="fzr_offers", description="📦 Бастаҳои FazerCards"),
         BotCommand(command="fzr_validate_id", description="🆔 Санҷиши ID-и бозигар"),
         BotCommand(command="fzr_raw", description="🔍 Ҷавоби хоми FazerCards"),
+        BotCommand(command="addstars", description="⭐ Иловаи бастаи Telegram Stars"),
+        BotCommand(command="addbigo", description="📦 Иловаи маҳсулоти иловагӣ"),
+        BotCommand(command="addffid", description="🆔 Иловаи бастаи Free Fire ID"),
+        BotCommand(command="apologize", description="💬 Паёми узрхоҳӣ ба фармоишгар"),
+        BotCommand(command="settgkind", description="✈️ Танзими навъи маҳсулоти Telegram"),
+        BotCommand(command="fzr_docs_search", description="🔎 Ҷустуҷӯ дар ҳуҷҷатҳои FazerCards"),
+        BotCommand(command="fzr_docs_path", description="📚 Роҳи ҳуҷҷатҳои FazerCards"),
+        BotCommand(command="adcheck", description="🔍 Санҷиши пайвасти AdsGram"),
+        BotCommand(command="setad", description="📢 Танзими рекламаи AdsGram"),
+        BotCommand(command="stopad", description="⏹️ Қатъи рекламаи AdsGram"),
+        BotCommand(command="campaignstats", description="📊 Омори маъракаи AdsGram"),
+        BotCommand(command="announce_new_bot", description="📣 Эълони навсозии бот"),
         BotCommand(command="resetbot", description="⚠️ Аз нав танзим кардан"),
     ]
     admin_chat_ids = set(config.admin_user_ids or [])
