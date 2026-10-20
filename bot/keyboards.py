@@ -199,12 +199,15 @@ def reuse_recipient_keyboard(recipient: str, label_suffix: str = "") -> InlineKe
     # Accept either one legacy ID or a list of (player_id, in-game name).
     entries = recipient if isinstance(recipient, list) else [(recipient, None)]
     rows = []
+    buttons = []
     for player_id, player_name in entries[:3]:
         name = f" · {player_name}" if player_name else ""
-        rows.append([InlineKeyboardButton(
+        buttons.append(InlineKeyboardButton(
             text=f"✅ {player_id}{name}"[:64],
             callback_data=f"reuseid:{player_id}",
-        )])
+        ))
+    for i in range(0, len(buttons), 2):
+        rows.append(buttons[i:i + 2])
     rows.extend([
         [InlineKeyboardButton(text="⬅️ Бозгашт ба бастаҳо", callback_data="catalog:back")],
         [InlineKeyboardButton(text="🏠 Менюи асосӣ", callback_data="menu:main")],
