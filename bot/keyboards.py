@@ -303,7 +303,9 @@ def admin_order_keyboard(order: Order) -> InlineKeyboardMarkup:
     rows = []
     if order.status.value == "awaiting_payment":
         rows.append(
-            [InlineKeyboardButton(text="✅ Пардохт тасдиқ шуд", callback_data=f"admin:paid:{order.id}")],
+            [InlineKeyboardButton(text="✅ Пардохт тасдиқ шуд", callback_data=f"admin:paid:{order.id}")]
+        )
+        rows.append(
             [InlineKeyboardButton(text="❌ Рад кардани пардохт", callback_data=f"admin:reject:{order.id}")]
         )
     elif order.status.value in ("paid", "delivering"):
