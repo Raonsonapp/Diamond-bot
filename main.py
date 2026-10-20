@@ -53,7 +53,6 @@ async def _set_bot_commands(bot: Bot) -> None:
         BotCommand(command="wallet", description="👛 Ҳамён ва пур кардани тавозун"),
         BotCommand(command="apikey", description="🔑 Калиди API-и шахсӣ"),
         BotCommand(command="help", description="❓ Дастури истифода"),
-        BotCommand(command="tutorial", description="🎬 Дастури харид"),
     ]
     await bot.set_my_commands(user_commands)
 
