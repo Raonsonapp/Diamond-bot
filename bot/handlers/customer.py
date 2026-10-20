@@ -1123,23 +1123,27 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
                     "⛔ Танзими таъминкунанда барои бастаи СНГ тасдиқ нашуд. Пардохт қатъ шуд; админ бояд mapping-и СНГ-ро ислоҳ кунад."
                 )
                 return
-            if category == ProductCategory.FF_INDONESIA and not any(tag in sku for tag in ("indonesia", "ind", "id_")):
+            if category == ProductCategory.FF_INDONESIA and not (
+                "indonesia" in sku or "ind" in sku or sku.endswith("_id") or sku == "id"
+            ):
                 await answer_target.answer(
                     "⛔ Танзими таъминкунанда барои бастаи Индонезия тасдиқ нашуд. Пардохт қатъ шуд; админ бояд mapping-и Индонезияро ислоҳ кунад."
                 )
                 return
 
-        # The supplier's ID-validation endpoint must explicitly identify the
-        # account region. A valid player name alone is not proof of region.
+        # FazerCards uses the game-level validation category ("free_fire"),
+        # while purchasable top-up SKUs use region-specific IDs such as
+        # "free_fire_cis" and "free_fire_id". Validate the player through the
+        # game-level endpoint, then compare the region only when the supplier
+        # actually returns explicit region metadata.
         region_check = await _try_validate_player_id(products[0].fzr_category_id, recipient)
-        if not region_check or not region_check.get("player_name") or not region_check.get("region"):
+        if not region_check or not region_check.get("player_name"):
             await answer_target.answer(
-                "⚠️ Минтақаи ID-ро ҳоло тасдиқ карда натавонистем. Барои пешгирии донати хато пардохт баста шуд. "
-                "ID-ро санҷед ё баъдтар кӯшиш кунед."
+                "⚠️ ID-ро FazerCards тасдиқ карда натавонист. Рақамро санҷед ё баъдтар кӯшиш кунед."
             )
             return
-        detected = region_check["region"]
-        if detected != expected_region:
+        detected = region_check.get("region")
+        if detected and detected != expected_region:
             await answer_target.answer(
                 f"⛔ ID-и шумо ба минтақаи <b>{html.escape(detected)}</b> тааллуқ дорад, "
                 f"аммо шумо <b>{html.escape(expected_region)}</b>-ро интихоб кардед. "
@@ -1249,14 +1253,15 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> dict 
     except FazerCardsError:
         return None
 
+    # Validation categories are game-level (e.g. "free_fire"), unlike
+    # region-specific top-up categories (e.g. "free_fire_cis"/"free_fire_id").
+    validation_category_id = (
+        "free_fire" if fzr_category_id.startswith("free_fire_") else fzr_category_id
+    )
     item = next(
         (
             i for i in supported.get("items", [])
-            if i.get("category_id")
-            and (
-                fzr_category_id == i["category_id"]
-                or fzr_category_id.startswith(i["category_id"] + "_")
-            )
+            if i.get("category_id") == validation_category_id
         ),
         None,
     )
