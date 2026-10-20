@@ -1618,10 +1618,10 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
 
     # Forward the receipt to the admin immediately. Do not make the customer
     # wait for the optional SMS polling window before human review can begin.
-    await message.answer(
-        "✅ Чек қабул шуд!\n\n"
-        "🔄 Ҳоло чек ба админ фиристода мешавад.\n"
-        "📌 Фармоиш танҳо баъд аз тасдиқи пардохт иҷро мешавад."
+    status_message = await message.answer(
+        "📩 <b>Чек қабул шуд!</b>\n"
+        "⏳ Чек ба админ фиристода мешавад.\n"
+        "🛡️ Фармоиш танҳо баъд аз тасдиқи пардохт иҷро мешавад."
     )
 
     async with get_session() as session:
@@ -1704,21 +1704,22 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
         # the admin destination/configuration is fixed.
         if not admin_targets:
             logging.error("Cannot forward payment proof for order #%s: ADMIN_CHAT_ID and ADMIN_USER_IDS are empty", order_id)
-            await message.answer(
-                "⚠️ Чек қабул шуд, аммо фиристодан ба админ ҳоло имкон надорад. "
-                "Админ бояд ADMIN_CHAT_ID ё ADMIN_USER_IDS-ро дар Render танзим кунад. "
-                "Лутфан чекро ҳоло нигоҳ доред ва баъд аз хабар гирифтани админ аз нав фиристед."
+            await status_message.edit_text(
+                "⚠️ <b>Чек қабул шуд, аммо ба админ нарасид.</b>\n"
+                "🛠️ Админ бояд танзимоти фиристоданро дар Render санҷад.\n"
+                "❗️ Пардохт ҳанӯз тасдиқ нашудааст."
             )
         else:
-            await message.answer(
-                "⚠️ Чек қабул шуд, аммо ба админ фиристода нашуд.\n\n"
-                "🛠️ Админ бояд Logs-и Render-ро санҷад. "
-                "Пардохт ҳанӯз тасдиқ нашудааст ва фармоиш иҷро намешавад."
+            await status_message.edit_text(
+                "⚠️ <b>Чек қабул шуд, аммо ба админ нарасид.</b>\n"
+                "🛠️ Сабаби хато дар Logs-и Render сабт шудааст.\n"
+                "❗️ Пардохт ҳанӯз тасдиқ нашудааст."
             )
         return
 
-    await message.answer(
-        "✅ Чеки шумо ба админ фиристода шуд. Пас аз санҷиш ва тасдиқи пардохт маҳсулот ирсол мешавад."
+    await status_message.edit_text(
+        "✅ <b>Чек ба админ фиристода шуд!</b>\n"
+        "🔎 Пас аз санҷиши пардохт, фармоиши шумо иҷро мешавад."
     )
     # Don't clear the state yet — stay in "awaiting admin review" so that if
     # the customer writes back in the meantime (e.g. "паём наомад?"), the
