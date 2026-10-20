@@ -1620,8 +1620,8 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     # wait for the optional SMS polling window before human review can begin.
     await message.answer(
         "✅ Чек қабул шуд!\n\n"
-        "📨 Чек фавран ба админ барои санҷиш фиристода мешавад.\n"
-        "⏳ Пас аз тасдиқи пардохт фармоиши шумо иҷро мешавад."
+        "🔄 Ҳоло чек ба админ фиристода мешавад.\n"
+        "📌 Фармоиш танҳо баъд аз тасдиқи пардохт иҷро мешавад."
     )
 
     async with get_session() as session:
@@ -1666,6 +1666,11 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     if config.admin_chat_id and config.admin_chat_id not in admin_targets:
         admin_targets.append(config.admin_chat_id)
 
+    logging.info(
+        "Payment proof for order #%s: configured admin destinations=%s",
+        order_id,
+        admin_targets,
+    )
     delivered_to_admin = False
     last_admin_error: Exception | None = None
     for admin_target in admin_targets:
@@ -1706,9 +1711,9 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
             )
         else:
             await message.answer(
-                "⚠️ Чек қабул шуд, аммо Telegram фиристодани онро ба админ иҷозат надод. "
-                "Эҳтимол админ ботро дар чат оғоз накардааст ё ADMIN_CHAT_ID нодуруст аст. "
-                "Лутфан ба дастгирӣ хабар диҳед; чек ҳанӯз тасдиқ нашудааст."
+                "⚠️ Чек қабул шуд, аммо ба админ фиристода нашуд.\n\n"
+                "🛠️ Админ бояд Logs-и Render-ро санҷад. "
+                "Пардохт ҳанӯз тасдиқ нашудааст ва фармоиш иҷро намешавад."
             )
         return
 
