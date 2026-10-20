@@ -1139,7 +1139,12 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
         region_check = await _try_validate_player_id(products[0].fzr_category_id, recipient)
         if not region_check or not region_check.get("player_name"):
             await answer_target.answer(
-                "⚠️ ID-ро FazerCards тасдиқ карда натавонист. Рақамро санҷед ё баъдтар кӯшиш кунед."
+                "❌ <b>ID нодуруст аст ё ба ин регион тааллуқ надорад!</b>\n\n"
+                "🔎 Сабабҳои эҳтимолӣ:\n"
+                "• 🆔 Ин ID дар Free Fire вуҷуд надорад ё хато ворид шудааст.\n"
+                "• 🌍 ID ба региони дигар тааллуқ дорад.\n\n"
+                "✅ ID-ро аз профили бозӣ нусха гиред ва региони дурустро интихоб кунед.\n"
+                "💳 То тасдиқи ID пардохт қабул намешавад."
             )
             return
         detected = region_check.get("region")
