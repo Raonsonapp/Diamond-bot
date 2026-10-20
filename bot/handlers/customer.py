@@ -768,7 +768,7 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
     category = ProductCategory(data["cart_category"])
     async with get_session() as session:
         products = [await get_product(session, pid) for pid in cart_ids]
-        last_recipient = await get_recent_recipients(session, callback.from_user.id, category)
+        last_recipient = await _recent_recipients_with_names(session, callback.from_user.id, category)
 
     await state.update_data(cart_product_ids=cart_ids)
     await state.set_state(OrderFlow.entering_player_id)
@@ -1007,13 +1007,33 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
     text = f"{amount} {unit} — {format_price(price)} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
 
     async with get_session() as session:
-        last_recipient = await get_recent_recipients(session, message.from_user.id, category)
+        last_recipient = await _recent_recipients_with_names(session, message.from_user.id, category)
 
     if last_recipient:
         text += "\n\n🕘 ID-ҳои охирини шумо (то 3-то):\n" + "\n".join(f"• {pid}" + (f" — {html.escape(pname)}" if pname else "") for pid, pname in last_recipient)
         await message.answer(text, reply_markup=reuse_recipient_keyboard(last_recipient))
     else:
         await message.answer(text)
+
+
+async def _recent_recipients_with_names(session, user_id: int, category: ProductCategory):
+    """Return recent IDs with saved names; look up older records that predate name storage."""
+    recipients = await get_recent_recipients(session, user_id, category, limit=3)
+    if not recipients:
+        return []
+    validation_category = (
+        "free_fire_id" if category == ProductCategory.FF_INDONESIA else "free_fire_cis"
+    )
+    named = []
+    for player_id, player_name in recipients:
+        if not player_name and category in (ProductCategory.DIAMONDS, ProductCategory.FF_INDONESIA):
+            try:
+                result = await _try_validate_player_id(validation_category, player_id)
+                player_name = result.get("player_name") if result else None
+            except Exception:
+                player_name = None
+        named.append((player_id, player_name))
+    return named
 
 
 async def _recipient_prompt(category: ProductCategory) -> str:
@@ -1037,7 +1057,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         async with get_session() as session:
             product = await get_product(session, product_id)
             if product is not None:
-                last_recipient = await get_recent_recipients(
+                last_recipient = await _recent_recipients_with_names(
                     session, callback.from_user.id, product.category
                 )
 
