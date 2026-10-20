@@ -128,6 +128,8 @@ class Order(Base):
     # Free Fire player ID (diamonds) or @username (Telegram Stars/Premium),
     # depending on the product's category.
     ff_player_id: Mapped[str] = mapped_column(String(32))
+    # Resolved in-game account name returned by FazerCards, if available.
+    player_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     amount_somoni: Mapped[float] = mapped_column(Float)
     paid_with_referral_balance: Mapped[bool] = mapped_column(default=False)
     status: Mapped[OrderStatus] = mapped_column(
