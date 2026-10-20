@@ -1658,11 +1658,9 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
                 )
         order = await set_proof_submitted(session, order)
 
-    # Deliver the proof to a configured admin destination. If the group/chat
-    # ID is missing or no longer accessible, fall back to individual admin IDs.
-    # Never tell the customer it was sent unless Telegram confirms delivery.
-    # Send receipts to each configured destination. If the group/chat ID is
-    # invalid or unavailable, do not let that prevent direct delivery to admins.
+    # Deliver the proof to every configured admin destination, not just the
+    # first successful chat. This ensures the owner receives it directly even
+    # if ADMIN_CHAT_ID points to a different valid group/chat.
     admin_targets: list[int] = list(config.admin_user_ids)
     if config.admin_chat_id and config.admin_chat_id not in admin_targets:
         admin_targets.append(config.admin_chat_id)
@@ -1686,7 +1684,11 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
                     reply_markup=admin_order_keyboard(order),
                 )
             delivered_to_admin = True
-            break
+            logging.info(
+                "Payment proof for order #%s delivered to admin destination %s",
+                order_id,
+                admin_target,
+            )
         except Exception as exc:
             last_admin_error = exc
             logging.exception("Could not forward payment proof for order #%s to admin %s", order_id, admin_target)
