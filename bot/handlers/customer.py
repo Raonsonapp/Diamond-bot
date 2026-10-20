@@ -1057,7 +1057,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         )
         markup = None
         if last_recipient:
-            text += f"\n\nШумо пештар бо ин истифода карда будед: {last_recipient}"
+            text += "\n\n🕘 <b>ID-ҳои охирини шумо (то 3-то):</b>\n" + "\n".join(f"• <code>{html.escape(pid)}</code>" + (f" — {html.escape(pname)}" if pname else "") for pid, pname in last_recipient)
             markup = reuse_recipient_keyboard(last_recipient)
 
         # Always send the next step as a fresh text message. This works whether
