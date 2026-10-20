@@ -362,9 +362,14 @@ async def contest_start(message: Message) -> None:
     target_str, days_str = parts[-2:]
     try:
         target_referrals = int(target_str)
-        duration_days = float(days_str)
+        duration_days = float(days_str.replace(",", "."))
+        if target_referrals <= 0 or duration_days <= 0 or not __import__("math").isfinite(duration_days):
+            raise ValueError
     except ValueError:
-        await message.answer("Шумораи реферал бояд рақами бутун бошад, рӯз бояд рақам бошад.")
+        await message.answer(
+            "⚠️ Маълумот нодуруст аст. Шумораи реферал ва давомнокии озмун бояд аз 0 зиёд бошанд.\n"
+            "📝 Мисол: /contest_start Ваучери лайт 5 2"
+        )
         return
 
     async with get_session() as session:
