@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import BotCommand, ErrorEvent
+from aiogram.types import BotCommand, BotCommandScopeChat, ErrorEvent
 from aiohttp import web
 
 from bot.config import config
@@ -47,16 +47,60 @@ async def _set_bot_commands(bot: Bot) -> None:
     """Populates Telegram's native "☰ Меню" quick-command popup next to
     the message box — separate from (and doesn't replace) the persistent
     reply-keyboard, which stays the primary navigation."""
-    await bot.set_my_commands(
-        [
-            BotCommand(command="start", description="🏠 Ба меню баргаштан"),
-            BotCommand(command="myorders", description="📦 Фармоишҳои ман"),
-            BotCommand(command="wallet", description="👛 Ҳамён ва пур кардани баланс"),
-            BotCommand(command="apikey", description="🔑 API-и шахсӣ"),
-            BotCommand(command="help", description="❓ Дастури истифодаи бот"),
-            BotCommand(command="tutorial", description="🎬 Видео ва дастури харид"),
-        ]
-    )
+    user_commands = [
+        BotCommand(command="start", description="🏠 Менюи асосӣ"),
+        BotCommand(command="myorders", description="📦 Фармоишҳои ман"),
+        BotCommand(command="wallet", description="👛 Ҳамён ва пур кардани тавозун"),
+        BotCommand(command="apikey", description="🔑 Калиди API-и шахсӣ"),
+        BotCommand(command="help", description="❓ Дастури истифода"),
+        BotCommand(command="tutorial", description="🎬 Дастури харид"),
+    ]
+    await bot.set_my_commands(user_commands)
+
+    # Telegram only permits ASCII English letters, digits and underscores
+    # in native slash-command names. Admin command descriptions are localized
+    # in Tajik, and the full list is visible only in each configured admin chat.
+    admin_commands = [
+        BotCommand(command="myid", description="🪪 ID-и Telegram-и худро бинед"),
+        BotCommand(command="pending", description="⏳ Фармоишҳои интизори тасдиқ"),
+        BotCommand(command="proofs", description="🧾 Чекҳои пардохт"),
+        BotCommand(command="order", description="📦 Тафсилоти фармоиш"),
+        BotCommand(command="products", description="🛍️ Рӯйхати бастаҳо"),
+        BotCommand(command="addproduct", description="➕ Иловаи баста"),
+        BotCommand(command="delproduct", description="🗑️ Нест кардани баста"),
+        BotCommand(command="setprice", description="💰 Тағйири нархи баста"),
+        BotCommand(command="setname", description="✏️ Тағйири номи баста"),
+        BotCommand(command="roundprices", description="🔢 Яклухт кардани нархҳо"),
+        BotCommand(command="mapproduct", description="🔗 Пайваст кардани баста ба таъминкунанда"),
+        BotCommand(command="broadcast", description="📢 Эълон ба ҳамаи корбарон"),
+        BotCommand(command="userstats", description="👥 Омори корбарон"),
+        BotCommand(command="salesstats", description="📊 Омори фурӯш"),
+        BotCommand(command="adstats", description="📣 Омори реклама"),
+        BotCommand(command="balance", description="💳 Баланси таъминкунанда"),
+        BotCommand(command="addbalance", description="➕ Иловаи баланс"),
+        BotCommand(command="setbalance", description="🛠️ Танзими баланс"),
+        BotCommand(command="walletpending", description="👛 Пардохтҳои ҳамёни интизор"),
+        BotCommand(command="walletapprove", description="✅ Тасдиқи пардохти ҳамён"),
+        BotCommand(command="paid", description="✅ Тасдиқи дастии пардохт"),
+        BotCommand(command="underpaid", description="⚠️ Фармоишҳои кампардохт"),
+        BotCommand(command="underpaidok", description="🧾 Тасдиқи кампардохт"),
+        BotCommand(command="delivered", description="🚚 Қайд кардани ирсоли маҳсулот"),
+        BotCommand(command="maintenance", description="🛠️ Фурӯзон/хомӯш кардани нигоҳдорӣ"),
+        BotCommand(command="setbonus", description="🎁 Танзими бонус"),
+        BotCommand(command="setalmazonprices", description="💎 Танзими нархҳои алмос"),
+        BotCommand(command="contest_start", description="🏆 Оғози озмун"),
+        BotCommand(command="contest_status", description="📋 Ҳолати озмун"),
+        BotCommand(command="fzr_categories", description="🧩 Категорияҳои FazerCards"),
+        BotCommand(command="fzr_offers", description="📦 Бастаҳои FazerCards"),
+        BotCommand(command="fzr_validate_id", description="🆔 Санҷиши ID-и бозигар"),
+        BotCommand(command="fzr_raw", description="🔍 Ҷавоби хоми FazerCards"),
+        BotCommand(command="resetbot", description="⚠️ Аз нав танзим кардан"),
+    ]
+    admin_chat_ids = set(config.admin_user_ids or [])
+    if config.admin_chat_id:
+        admin_chat_ids.add(config.admin_chat_id)
+    for chat_id in admin_chat_ids:
+        await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=chat_id))
 
 
 async def run_polling(bot: Bot, dp: Dispatcher) -> None:
