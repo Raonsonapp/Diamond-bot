@@ -7,7 +7,7 @@ from bot.formatting import format_price
 
 def _button(*, text: str, style: str = "primary", **kwargs) -> InlineKeyboardButton:
     """Create a Telegram button with native blue/green/red styling (Bot API 9.4+)."""
-    return _button(text=text, style=style, **kwargs)
+    return InlineKeyboardButton(text=text, style=style, **kwargs)
 
 
 def persistent_menu_keyboard() -> ReplyKeyboardMarkup:
