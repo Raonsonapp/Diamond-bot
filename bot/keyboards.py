@@ -47,32 +47,32 @@ def terms_keyboard() -> InlineKeyboardMarkup:
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
-    # Keep the original compact two-column layout; only nested/navigation
-    # keyboards should use full-width buttons where needed.
+    # Telegram native button styles are limited to primary (blue),
+    # success (green), and danger (red). Use them intentionally by action.
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 _button(text="🎮 Бозиҳо", callback_data="menu:games", style="success"),
-                _button(text="✈️ Telegram", callback_data="menu:telegram"),
+                _button(text="✈️ Telegram", callback_data="menu:telegram", style="primary"),
             ],
             [
-                _button(text="👛 Ҳамён", callback_data="wallet:open"),
+                _button(text="👛 Ҳамён", callback_data="wallet:open", style="primary"),
                 _button(text="➕ Пур кардани баланс", callback_data="wallet:topup_menu", style="success"),
             ],
             [
-                _button(text="🔑 API-и шахсӣ", callback_data="api:open"),
-                _button(text="👤 Профил", callback_data="menu:profile"),
+                _button(text="🔑 API-и шахсӣ", callback_data="api:open", style="primary"),
+                _button(text="👤 Профил", callback_data="menu:profile", style="primary"),
             ],
             [
-                _button(text="🤝 Реферал", callback_data="menu:referral"),
-                _button(text="🆘 Дастгирӣ", callback_data="menu:contact"),
+                _button(text="🤝 Реферал", callback_data="menu:referral", style="primary"),
+                _button(text="🆘 Дастгирӣ", callback_data="menu:contact", style="danger"),
             ],
             [
-                _button(text="⭐ Отзив", callback_data="menu:reviews"),
-                _button(text="❓ Саволҳои маъмул", callback_data="menu:faq"),
+                _button(text="⭐ Отзив", callback_data="menu:reviews", style="success"),
+                _button(text="❓ Саволҳои маъмул", callback_data="menu:faq", style="primary"),
             ],
             [
-                _button(text="ℹ️ Маълумот", callback_data="menu:about"),
+                _button(text="ℹ️ Маълумот", callback_data="menu:about", style="primary"),
             ],
         ]
     )
