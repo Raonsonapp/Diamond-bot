@@ -5,8 +5,19 @@ from bot.db.models import Order, Product, ProductCategory
 from bot.formatting import format_price
 
 
-def _button(*, text: str, style: str = "primary", **kwargs) -> InlineKeyboardButton:
-    """Create a Telegram button with native blue/green/red styling (Bot API 9.4+)."""
+def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardButton:
+    """Choose a native Telegram button color by action; Telegram supports only blue, green and red."""
+    if style is None:
+        label = text.lower()
+        if any(word in label for word in ("дастгир", "бекор", "рад", "❌")):
+            style = "danger"
+        elif any(word in label for word in (
+            "бозиҳо", "пур кардани баланс", "донат", "харидан", "харид",
+            "пардохт", "тасдиқ", "муваффақ", "дода шуд", "идома", "кушодани пардохт",
+        )):
+            style = "success"
+        else:
+            style = "primary"
     return InlineKeyboardButton(text=text, style=style, **kwargs)
 
 
