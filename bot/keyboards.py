@@ -60,7 +60,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
                 _button(text="➕ Пур кардани баланс", callback_data="wallet:topup_menu", style="success"),
             ],
             [
-                _button(text="🔑 API-и шахсӣ", callback_data="api:open", style="primary"),
+                _button(text="🔑 API-и шахсӣ", callback_data="api:open", style="danger"),
                 _button(text="👤 Профил", callback_data="menu:profile", style="primary"),
             ],
             [
@@ -137,7 +137,7 @@ def contact_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_button(text="💬 Навиштан ба дастгирӣ дар Telegram", url=config.support_telegram_url)],
-            [_button(text="📢 Канали мағоза", url=config.shop_channel_url)],
+            [_button(text="📢 Канали мағоза", url="https://t.me/FF_MARGEDAR_CROUP")],
             [_button(text="🔙 Ба меню", callback_data="menu:main")],
         ]
     )
