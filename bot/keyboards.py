@@ -13,7 +13,7 @@ def _button(*, text: str, style: str = "primary", **kwargs) -> InlineKeyboardBut
 def persistent_menu_keyboard() -> ReplyKeyboardMarkup:
     """A single persistent bottom button, like the competitor bot's Menu button."""
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📋 Меню")]],
+        keyboard=[[KeyboardButton(text="📋 Меню", style="primary")]],
         resize_keyboard=True,
         is_persistent=True,
         input_field_placeholder="📋 Менюро пахш кунед",
