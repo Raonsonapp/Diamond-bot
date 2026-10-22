@@ -110,9 +110,19 @@ def generate_receipt_image(
     when_text: str,
     amount_somoni: float,
     bot_name: str = "FF MARGEDAR",
+    template_image: bytes | None = None,
 ) -> bytes:
-    """Returns PNG bytes for a receipt card. `items` is one or more
-    "product name" lines (multiple for a cart order)."""
+    """Returns a personalized receipt using the supplied 9:16 template when available."""
+    if template_image:
+        return _render_on_template(
+            template_image=template_image,
+            order_id=order_id,
+            items=items,
+            recipient_id=recipient_id,
+            payment_method=payment_method,
+            when_text=when_text,
+            amount_somoni=amount_somoni,
+        )
     row_h = 60
     # Generous upper bound — the image is cropped to the real content
     # height at the end, this just needs to never run out of canvas.
@@ -205,6 +215,57 @@ def generate_receipt_image(
     buf = io.BytesIO()
     img.convert("RGB").crop((0, 0, _WIDTH, final_h)).save(buf, format="PNG")
     return buf.getvalue()
+
+
+def _render_on_template(
+    *,
+    template_image: bytes,
+    order_id: int,
+    items: list[str],
+    recipient_id: str,
+    payment_method: str,
+    when_text: str,
+    amount_somoni: float,
+) -> bytes:
+    """Keep the uploaded FF MARGEDAR artwork intact; replace only order-specific text."""
+    source = Image.open(io.BytesIO(template_image)).convert("RGB")
+    width, height = 720, 1280
+    img = source.resize((width, height), Image.Resampling.LANCZOS)
+    draw = ImageDraw.Draw(img)
+
+    # The artwork's product line and value column are deliberately masked,
+    # while the logo, gems, checkmark, icons, frame, glow and watermark remain untouched.
+    panel = (3, 16, 31)
+    green = (37, 239, 101)
+    white = (246, 248, 255)
+    muted = (157, 176, 203)
+    product_font = _font("DejaVuSans-Bold.ttf", 27)
+    value_font = _font("DejaVuSans-Bold.ttf", 22)
+
+    product = " / ".join(_clean(x) for x in items) or "Фармоиш"
+    draw.rectangle((45, 448, 675, 506), fill=(3, 18, 35))
+    while draw.textlength(product, font=product_font) > 610 and product_font.size > 15:
+        product_font = _font("DejaVuSans-Bold.ttf", product_font.size - 1)
+    product_w = draw.textlength(product, font=product_font)
+    draw.text(((width-product_w)/2, 463), product, font=product_font, fill=green)
+
+    def value(y: int, text: str) -> None:
+        draw.rectangle((370, y-20, 665, y+25), fill=panel)
+        text = _clean(str(text))
+        font = value_font
+        while draw.textlength(text, font=font) > 275 and font.size > 13:
+            font = _font("DejaVuSans-Bold.ttf", font.size - 1)
+        draw.text((650-draw.textlength(text, font=font), y-font.size//2), text, font=font, fill=white)
+
+    value(584, f"#{order_id}")
+    value(658, recipient_id)
+    value(733, payment_method)
+    value(807, when_text)
+    value(881, f"{amount_somoni:.2f} сомонӣ")
+
+    out = io.BytesIO()
+    img.save(out, format="PNG", optimize=True)
+    return out.getvalue()
 
 
 def _draw_centered(draw: ImageDraw.ImageDraw, text: str, cx: int, y: int, font, fill) -> None:
