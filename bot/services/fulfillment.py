@@ -336,29 +336,10 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
         )
     await clear_awaiting_review(bot, order)
 
-    # Proactive, honest heads-up when our own tracked FazerCards balance
-    # estimate looks too low for this order — never a blocking gate (the
-    # estimate can be stale/wrong), the real delivery attempt below still
-    # runs exactly as normal either way. Only checked for products actually
-    # wired to FazerCards (cost_somoni > 0 for the rest is 0 anyway, so a
-    # fully-manual order would never trip this).
-    total_cost = sum(products[o.id].cost_somoni for o in group)
-    if total_cost:
-        async with get_session() as session:
-            current_balance = await get_fazercards_balance(session)
-        if current_balance < total_cost:
-            await bot.send_message(
-                order.user_id,
-                "ℹ️ Ҳозир ин маблағ дар балансатони мо назди таъминкунанда нест, "
-                "аммо ба нигарониятон сабаб нест — фармоиши шумо баҳар ҳол иҷро мешавад, "
-                "танҳо метавонад каме бештар вақт гирад. Админ ба зудӣ баланси худро пур мекунад.",
-            )
-            if config.admin_chat_id:
-                await bot.send_message(
-                    config.admin_chat_id,
-                    f"⚠️ Фармоиши #{order.id}: баланси тахминии FazerCards ({current_balance:.2f}с) "
-                    f"аз нархи фармоиш ({total_cost:.2f}с) камтар аст — балки лозим ба пуркунӣ бошад.",
-                )
+    # Do not warn about low supplier balance before attempting delivery:
+    # this is only a locally tracked estimate, not a live FazerCards balance.
+    # A stale estimate caused false warnings even when the supplier completed
+    # the order. Actual delivery status and API errors below are authoritative.
 
     async with get_session() as session:
         buyer = await get_user(session, order.user_id)
