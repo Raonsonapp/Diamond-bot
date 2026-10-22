@@ -124,6 +124,8 @@ class Config:
     welcome_animation_file_id: str = os.getenv("WELCOME_ANIMATION_FILE_ID", "")
     # Optional Telegram animation IDs; invalid IDs are handled with text fallbacks.
     shop_animation_file_id: str = os.getenv("SHOP_ANIMATION_FILE_ID", "")
+    # Optional Telegram file_id for the exact 9:16 receipt artwork/template.
+    shop_image_file_id: str = os.getenv("SHOP_IMAGE_FILE_ID", "").strip()
     loading_animation_file_id: str = os.getenv("LOADING_ANIMATION_FILE_ID", "")
     # Optional MP4 tutorial video shown by /tutorial.
     tutorial_video_file_id: str = os.getenv("TUTORIAL_VIDEO_FILE_ID", "").strip()
