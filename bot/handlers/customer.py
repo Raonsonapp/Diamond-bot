@@ -566,7 +566,7 @@ async def reply_about(message: Message, state: FSMContext) -> None:
         "🎮 Хизматҳо: Free Fire diamonds, Telegram Stars\n"
         "🚀 Афзалиятҳо: суръати баланд (1-5 дақ.), бехатар\n\n"
         f"📊 Корбарон: {users_count} | Фармоишҳои иҷрошуда: {orders_count}\n\n"
-        f"📢 Канал: {config.shop_channel_url}"
+        "📢 Канал: https://t.me/FF_MARGEDAR_CROUP"
     )
     await message.answer(text, reply_markup=back_to_menu_keyboard())
 
