@@ -113,19 +113,19 @@ def generate_receipt_image(
 ) -> bytes:
     """Returns PNG bytes for a receipt card. `items` is one or more
     "product name" lines (multiple for a cart order)."""
-    row_h = 46
+    row_h = 60
     # Generous upper bound — the image is cropped to the real content
     # height at the end, this just needs to never run out of canvas.
-    height = 620 + len(items) * 50
+    height = 1280
 
     img = _vertical_gradient(_WIDTH, height, _BG_TOP, _BG_BOTTOM).convert("RGBA")
 
-    title_font = _font("DejaVuSans-Bold.ttf", 30)
-    big_font = _font("DejaVuSans-Bold.ttf", 40)
-    label_font = _font("DejaVuSans.ttf", 24)
-    value_font = _font("DejaVuSans-Bold.ttf", 24)
-    small_font = _font("DejaVuSans.ttf", 20)
-    badge_font = _font("DejaVuSans-Bold.ttf", 22)
+    title_font = _font("DejaVuSans-Bold.ttf", 34)
+    big_font = _font("DejaVuSans-Bold.ttf", 42)
+    label_font = _font("DejaVuSans.ttf", 27)
+    value_font = _font("DejaVuSans-Bold.ttf", 27)
+    small_font = _font("DejaVuSans.ttf", 22)
+    badge_font = _font("DejaVuSans-Bold.ttf", 24)
     watermark_font = _font("DejaVuSans-Bold.ttf", 26)
 
     cx = _WIDTH // 2
@@ -189,13 +189,16 @@ def generate_receipt_image(
     _draw_centered(draw, badge_text, cx, y + badge_h / 2 - 14, badge_font, _WHITE)
     y += badge_h + 26
 
+    # Keep the receipt in a consistent 9:16 portrait layout. The footer is
+    # anchored near the bottom, leaving breathing room around the receipt card.
+    y = max(y, 1110)
     draw.line([(48, y), (_WIDTH - 48, y)], fill=_LINE, width=2)
-    y += 22
+    y += 24
     _draw_centered(draw, _clean(bot_name), cx, y, value_font, _ACCENT)
-    y += 32
+    y += 36
     _draw_centered(draw, "Ташаккур барои интихоби шумо!", cx, y, small_font, _MUTED)
 
-    final_h = min(y + 50, height)
+    final_h = height
     # Card border, drawn last so it frames the exact final (cropped) size.
     draw.rounded_rectangle((10, 10, _WIDTH - 10, final_h - 10), radius=26, outline=_ACCENT, width=3)
 
