@@ -95,6 +95,19 @@ async def _send_success_receipt(bot: Bot, orders: list[Order], products: dict[in
     total = sum(float(o.amount_somoni or 0) for o in orders)
     items = [products[o.id].display_name for o in orders]
     when = primary.updated_at.strftime("%d.%m.%Y • %H:%M") if primary.updated_at else ""
+    template_image = None
+    if config.shop_image_file_id:
+        try:
+            telegram_file = await bot.get_file(config.shop_image_file_id)
+            if telegram_file.file_path:
+                downloaded = await bot.download_file(telegram_file.file_path)
+                if downloaded:
+                    template_image = downloaded.read()
+        except Exception:
+            # Template download failure must not prevent delivery confirmation;
+            # fall back to the generated receipt layout.
+            template_image = None
+
     try:
         png = generate_receipt_image(
             order_id=primary.id,
@@ -105,6 +118,7 @@ async def _send_success_receipt(bot: Bot, orders: list[Order], products: dict[in
             when_text=when,
             amount_somoni=total,
             bot_name="FF MARGEDAR",
+            template_image=template_image,
         )
         await bot.send_photo(
             chat_id=primary.user_id,
