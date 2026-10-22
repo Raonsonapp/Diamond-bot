@@ -28,7 +28,7 @@ from bot.db.repo import (
 )
 from bot.db.session import get_session
 from bot.fsm_storage import storage
-from bot.keyboards import receipt_keyboard, review_prompt_keyboard
+from bot.keyboards import review_prompt_keyboard
 from bot.services.contest import maybe_declare_contest_winner
 from bot.services.delivery import get_delivery_provider
 from bot.states import OrderFlow
@@ -76,6 +76,54 @@ async def _resolve_group(session, order: Order) -> list[Order]:
 
 def _item_line(order: Order, product) -> str:
     return f"📦 {product.display_name}"
+
+
+async def _send_success_receipt(bot: Bot, orders: list[Order], products: dict[int, object]) -> None:
+    """Send a branded 9:16 receipt automatically after delivery is confirmed."""
+    from aiogram.types import BufferedInputFile
+    from bot.keyboards import BANK_HINT_NAMES
+    from bot.services.receipt_image import generate_receipt_image
+
+    primary = orders[0]
+    if primary.bank_hint:
+        method = BANK_HINT_NAMES.get(primary.bank_hint, primary.bank_hint)
+    elif primary.payment_provider == "referral_balance":
+        method = "Баланси реферал"
+    else:
+        method = "Дастӣ"
+
+    total = sum(float(o.amount_somoni or 0) for o in orders)
+    items = [products[o.id].display_name for o in orders]
+    when = primary.updated_at.strftime("%d.%m.%Y • %H:%M") if primary.updated_at else ""
+    try:
+        png = generate_receipt_image(
+            order_id=primary.id,
+            title="Фармоиш бо муваффақият анҷом ёфт!",
+            items=items,
+            recipient_id=primary.ff_player_id,
+            payment_method=method,
+            when_text=when,
+            amount_somoni=total,
+            bot_name="FF MARGEDAR",
+        )
+        await bot.send_photo(
+            chat_id=primary.user_id,
+            photo=BufferedInputFile(png, filename=f"ff_margedar_receipt_{primary.id}.png"),
+            caption="🧾 Чеки фармоиши шумо — FF MARGEDAR",
+        )
+    except Exception:
+        items_block = "\n".join(f"• {name}" for name in items)
+        await bot.send_message(
+            primary.user_id,
+            "🧾 <b>FF MARGEDAR — Чеки фармоиш</b>\n\n"
+            "✅ <b>МУВАФФАҚ</b>\n"
+            f"Фармоиш №: <code>#{primary.id}</code>\n"
+            f"Маҳсулот: {items_block}\n"
+            f"ID аккаунт: <code>{primary.ff_player_id}</code>\n"
+            f"Усули пардохт: {method}\n"
+            f"Сана: {when}\n"
+            f"Маблағ: {total:.2f} сомонӣ",
+        )
 
 
 _PROGRESS_TEXT = "⏳ Фармоиши шумо коркард шуда истодааст..."
@@ -231,15 +279,15 @@ async def _attempt_delivery(
         await bot.send_message(
             primary.user_id,
             f"🎉 Ҳама маҳсулоти фармоиши шумо ирсол шуд:\n{summary}",
-            reply_markup=receipt_keyboard(delivered[0].id),
         )
     else:
         product = products[delivered[0].id]
         await bot.send_message(
             primary.user_id,
             f"🎉 {product.display_name} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
-            reply_markup=receipt_keyboard(delivered[0].id),
         )
+    await _send_success_receipt(bot, delivered, products)
+
     await prompt_for_review(bot, delivered[0])
     return True, results
 
@@ -405,15 +453,15 @@ async def mark_delivered_and_notify(bot: Bot, order_id: int) -> Order | None:
         await bot.send_message(
             order.user_id,
             f"🎉 Ҳама маҳсулоти фармоиши шумо ирсол шуд:\n{summary}",
-            reply_markup=receipt_keyboard(delivered[0].id),
         )
     else:
         product = products[delivered[0].id]
         await bot.send_message(
             order.user_id,
             f"🎉 {product.display_name} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
-            reply_markup=receipt_keyboard(delivered[0].id),
         )
+    await _send_success_receipt(bot, delivered, products)
+
     await prompt_for_review(bot, delivered[0])
     from bot.services.referral_rewards import maybe_credit_referral_milestone
     async with get_session() as session:
