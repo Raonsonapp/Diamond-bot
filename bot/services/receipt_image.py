@@ -109,7 +109,7 @@ def generate_receipt_image(
     payment_method: str,
     when_text: str,
     amount_somoni: float,
-    bot_name: str = "ALMAZ TJ BOT",
+    bot_name: str = "FF MARGEDAR",
 ) -> bytes:
     """Returns PNG bytes for a receipt card. `items` is one or more
     "product name" lines (multiple for a cart order)."""
