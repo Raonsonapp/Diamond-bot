@@ -52,64 +52,42 @@ def quote_custom_price(diamonds: int, breakpoints: list[Breakpoint]) -> tuple[fl
     raise RuntimeError("unreachable")
 
 
-# Customer-facing promotional price bands. Each customer gets one stable price
-# per SKU (rather than a price that changes every time the menu is reopened).
-# Values are (minimum, maximum), in somoni. These are price bands, not ranges
-# displayed to the customer.
-CUSTOM_PRICE_BANDS: dict[int, tuple[float, float]] = {
-    40: (7.90, 7.99), 30: (11.50, 11.99), 41: (11.50, 11.99),
-    31: (23.90, 24.99), 42: (15.50, 15.99), 43: (20.50, 20.99),
-    32: (58.90, 61.99), 44: (40.90, 41.99), 45: (51.90, 52.99),
-    33: (118.90, 124.99), 46: (76.90, 78.99), 47: (96.90, 99.99),
-    34: (239.90, 249.99), 35: (599.90, 624.99), 36: (1199.90, 1249.99),
-    37: (154.90, 159.99), 38: (224.90, 234.99), 39: (379.90, 398.99),
-    1: (8.50, 8.90), 2: (26.95, 26.99), 3: (42.90, 42.99),
-    4: (82.90, 82.99), 5: (169.90, 169.99), 6: (419.90, 419.99),
-    9: (4.94, 4.99), 7: (16.32, 16.99), 8: (59.90, 59.99),
-    48: (22.90, 23.99), 49: (89.90, 94.99),
-}
-
-def _stable_band_price(product_id: int, user_id: int, low: float, high: float, promo: bool) -> float:
-    import hashlib
-    import math
-    seed = f"ff-margedar-price-v1:{user_id}:{product_id}:{int(promo)}".encode()
-    value = int.from_bytes(hashlib.sha256(seed).digest()[:4], "big") / 0xFFFFFFFF
-    cents_low = math.ceil(low * 100)
-    cents_high = math.floor(high * 100)
-    cents = cents_low + int(value * (cents_high - cents_low + 1))
-    return round(cents / 100, 2)
-
 async def apply_customer_prices(session, products: list, user_id: int) -> bool:
-    """Set per-customer stable display/order prices in memory. Promo requires
-    5 registered referrals and at least one referral with a paid/delivered order."""
-    from datetime import datetime, timezone
+    """Apply a referral discount only to eligible non-admin customers.
+
+    The catalog's configured price_somoni values are the normal prices and
+    must remain unchanged for everyone else, including admins. A customer
+    qualifies only after inviting at least five users and at least one of
+    those referrals has a paid, delivering, or delivered order. Eligible
+    customers receive up to 3% off, while retaining at least 0.25 somoni
+    gross margin above supplier cost. Prices are changed on loaded objects
+    only; the catalog database values are not committed here.
+    """
+    from bot.config import config
     from bot.db.repo import count_referrals, has_referral_with_purchase
+    from datetime import datetime, timezone
+
+    # Admins always see and pay the configured base catalog prices.
+    admin_ids = set(config.admin_user_ids or [])
+    if config.admin_chat_id:
+        admin_ids.add(config.admin_chat_id)
+    if user_id in admin_ids:
+        return False
 
     referral_count = await count_referrals(session, user_id)
     has_purchase = await has_referral_with_purchase(
         session, user_id, datetime(2000, 1, 1, tzinfo=timezone.utc)
     )
     promo = referral_count >= 5 and has_purchase
+    if not promo:
+        return False
+
     for product in products:
-        # Custom-amount quote rows are intentionally inactive catalog entries;
-        # their price was already computed from the customer's price curve.
         if not getattr(product, "is_active", True):
             continue
-        band = CUSTOM_PRICE_BANDS.get(product.id)
-        if band:
-            price = _stable_band_price(product.id, user_id, band[0], band[1], promo)
-        else:
-            # Lower unlisted packages slightly while preserving at least 0.25с
-            # gross margin; do not undercut the supplier cost.
-            current = float(product.price_somoni)
-            target = max(round(current * 0.98, 2), round(float(product.cost_somoni) + 0.25, 2))
-            # Give each user/SKU a stable two-decimal variation, capped by margin.
-            import hashlib
-            cents = int(hashlib.sha256(f"ff-other:{user_id}:{product.id}".encode()).hexdigest()[:2], 16) % 10
-            price = max(round(float(product.cost_somoni) + 0.25, 2), round(target - cents / 100, 2))
-        if promo:
-            # Extra 3% customer-specific referral discount, with a small safety
-            # margin above supplier cost for all SKUs.
-            price = max(round(price * 0.97, 2), round(float(product.cost_somoni) + 0.25, 2))
-        product.price_somoni = round(price, 2)
-    return promo
+        base_price = float(product.price_somoni)
+        minimum_price = round(float(product.cost_somoni) + 0.25, 2)
+        discounted_price = round(base_price * 0.97, 2)
+        product.price_somoni = max(discounted_price, minimum_price)
+
+    return True
