@@ -47,7 +47,7 @@ def quote_custom_price(diamonds: int, breakpoints: list[Breakpoint]) -> tuple[fl
             frac = (diamonds - d1) / (d2 - d1)
             price = p1 + frac * (p2 - p1)
             cost = c1 + frac * (c2 - c1)
-            return round(price), round(cost, 2)
+            return round(price, 2), round(cost, 2)
 
     raise RuntimeError("unreachable")
 
