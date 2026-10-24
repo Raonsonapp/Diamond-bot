@@ -53,21 +53,17 @@ def quote_custom_price(diamonds: int, breakpoints: list[Breakpoint]) -> tuple[fl
 
 
 async def apply_customer_prices(session, products: list, user_id: int) -> bool:
-    """Apply a referral discount only to eligible non-admin customers.
+    """Return whether the customer qualifies for referral pricing.
 
-    The catalog's configured price_somoni values are the normal prices and
-    must remain unchanged for everyone else, including admins. A customer
-    qualifies only after inviting at least five users and at least one of
-    those referrals has a paid, delivering, or delivered order. Eligible
-    customers receive up to 3% off, while retaining at least 0.25 somoni
-    gross margin above supplier cost. Prices are changed on loaded objects
-    only; the catalog database values are not committed here.
+    Do not change catalog prices here: this function is called before the
+    recipient Free Fire ID is selected, so applying a discount here would
+    incorrectly discount every ID. The special-ID workflow must apply any
+    discount only after a recipient ID is explicitly registered as special.
     """
     from bot.config import config
     from bot.db.repo import count_referrals, has_referral_with_purchase
     from datetime import datetime, timezone
 
-    # Admins always see and pay the configured base catalog prices.
     admin_ids = set(config.admin_user_ids or [])
     if config.admin_chat_id:
         admin_ids.add(config.admin_chat_id)
@@ -78,16 +74,4 @@ async def apply_customer_prices(session, products: list, user_id: int) -> bool:
     has_purchase = await has_referral_with_purchase(
         session, user_id, datetime(2000, 1, 1, tzinfo=timezone.utc)
     )
-    promo = referral_count >= 5 and has_purchase
-    if not promo:
-        return False
-
-    for product in products:
-        if not getattr(product, "is_active", True):
-            continue
-        base_price = float(product.price_somoni)
-        minimum_price = round(float(product.cost_somoni) + 0.25, 2)
-        discounted_price = round(base_price * 0.97, 2)
-        product.price_somoni = max(discounted_price, minimum_price)
-
-    return True
+    return referral_count >= 5 and has_purchase
