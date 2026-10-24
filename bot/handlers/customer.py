@@ -495,15 +495,16 @@ async def reply_referral(message: Message, state: FSMContext) -> None:
         f"👥 <b>Даъватшудагон:</b> {invited} нафар\n"
         f"💰 <b>Бонуси ҷамъшуда:</b> {user.referral_balance:.2f} сомонӣ\n\n"
         "━━━━━━━━━━━━━━\n"
-        "🎁 <b>ҶОИЗАҲО</b>\n\n"
-        "👥 5 нафар + 1 харид\n"
-        "   🎟 1 ваучери Лайт\n\n"
-        "👥 10 нафар + 2 харид\n"
-        "   🎟 2 ваучери Лайт\n\n"
-        "👥 15 нафар + 3 харид\n"
-        "   💎 110 алмос\n\n"
-        "👥 20 нафар + 5 харид\n"
-        "   🎁 1 ваучери ҳафтаина\n"
+        "🎉 <b>АКСИЯИ НАРХИ МАХСУС</b>\n\n"
+        "👥 5 дӯсти навро ба бот даъват кунед ва интизор шавед, ки ҳадди ақал 1 нафарашон хариди аввалини худро анҷом диҳад.\n"
+        "✅ Баъди иҷрои ин шарт, барои аккаунти шумо нархҳои махсус фаъол мешаванд — тахфифи иловагӣ то 3%.\n"
+        "💎 Нархҳои махсус танҳо барои шумо нишон дода мешаванд ва дар меню маблағи ниҳоӣ дида мешавад.\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "🎁 <b>ҶОИЗАҲОИ РЕФЕРАЛӢ</b>\n\n"
+        "👥 5 нафар + 1 харид — 🎟 1 ваучери Лайт\n"
+        "👥 10 нафар + 2 харид — 🎟 2 ваучери Лайт\n"
+        "👥 15 нафар + 3 харид — 💎 110 алмос\n"
+        "👥 20 нафар + 5 харид — 🎁 1 ваучери ҳафтаина\n"
         "━━━━━━━━━━━━━━\n"
         "💸 <b>БОНУС АЗ ҲАР ХАРИД — 5%</b>\n\n"
         "🧾 10 сомонӣ → <b>+0.50 с.</b>\n"
@@ -1432,7 +1433,7 @@ async def pay_with_wallet(callback: CallbackQuery, state: FSMContext) -> None:
     from bot.db.models import Order, WalletTransaction
 
     async with get_session() as session:
-        products = await _cart_products(session, data)
+        products = await _cart_products(session, data, callback.from_user.id)
         if not products or any(p is None or not p.is_active for p in products):
             await callback.answer("Маҳсулот дигар дастрас нест.", show_alert=True)
             return
@@ -1521,7 +1522,7 @@ async def choose_payment_method(callback: CallbackQuery, state: FSMContext) -> N
     provider = get_payment_provider()
 
     async with get_session() as session:
-        products = await _cart_products(session, data)
+        products = await _cart_products(session, data, callback.from_user.id)
         group_id = uuid.uuid4().hex if len(products) > 1 else None
         orders = [
             await create_order(
