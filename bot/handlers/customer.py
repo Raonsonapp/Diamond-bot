@@ -883,6 +883,83 @@ async def menu_referral(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "menu:bonus")
+async def menu_bonus(callback: CallbackQuery) -> None:
+    """Show referral bonus rules, live progress, and special-ID allowance."""
+    from sqlalchemy import func, select
+    from bot.db.models import Order, OrderStatus
+
+    bot_user = await callback.bot.get_me()
+    link = f"https://t.me/{bot_user.username}?start=ref_{callback.from_user.id}"
+
+    async with get_session() as session:
+        invited = await count_referrals(session, callback.from_user.id)
+        result = await session.execute(
+            select(func.count(func.distinct(Order.user_id)))
+            .join(User, User.id == Order.user_id)
+            .where(
+                User.referred_by == callback.from_user.id,
+                Order.status.in_([OrderStatus.PAID, OrderStatus.DELIVERING, OrderStatus.DELIVERED]),
+            )
+        )
+        buyers = int(result.scalar_one() or 0)
+        user = await get_user(session, callback.from_user.id)
+
+    # The largest qualified tier applies; limits are cumulative across tiers.
+    if invited >= 15 and buyers >= 3:
+        id_limit = 20
+        tier_text = "🏆 Зинаи 3 фаъол аст: то 20 ID-и махсус"
+    elif invited >= 10 and buyers >= 2:
+        id_limit = 8
+        tier_text = "🥈 Зинаи 2 фаъол аст: то 8 ID-и махсус дар маҷмӯъ"
+    elif invited >= 5 and buyers >= 1:
+        id_limit = 3
+        tier_text = "🥉 Зинаи 1 фаъол аст: то 3 ID-и махсус"
+    else:
+        id_limit = 0
+        tier_text = "🔒 Функсияи ID-и махсус ҳоло баста аст"
+
+    if invited < 5 or buyers < 1:
+        next_condition = f"🎯 Барои кушодан: {max(0, 5-invited)} даъвати дигар ва {max(0, 1-buyers)} хариди шартӣ."
+    elif invited < 10 or buyers < 2:
+        next_condition = f"🚀 Зинаи навбатӣ: то 10 даъват ва 2 харид. Ҳоло: {invited} даъват, {buyers} харид."
+    elif invited < 15 or buyers < 3:
+        next_condition = f"🚀 Зинаи навбатӣ: то 15 даъват ва 3 харид. Ҳоло: {invited} даъват, {buyers} харид."
+    else:
+        next_condition = "🎉 Шумо ба зинаи баландтарини ID-и махсус расидед."
+
+    text = (
+        "🎁 <b>БОНУСИ FF MARGEDAR</b>\n"
+        "━━━━━━━━━━━━━━\n"
+        "💎 <b>Нархи махсус барои ID-и интихобшуда</b>\n"
+        "📉 Пас аз иҷрои шарти аввал, шумо метавонед ID-и махсус сабт кунед. "
+        "Тахфиф танҳо ба ID-ҳои сабтшуда татбиқ мешавад; ID-и оддӣ нархи муқаррарӣ дорад.\n\n"
+        "📊 <b>Зинаҳои бонус</b>\n"
+        "🥉 5 нафар даъват + 1 хариди пардохтшуда → 3 ID\n"
+        "🥈 10 нафар даъват + 2 хариди пардохтшуда → 8 ID дар маҷмӯъ\n"
+        "🏆 15 нафар даъват + 3 хариди пардохтшуда → 20 ID дар маҷмӯъ\n\n"
+        f"📍 <b>Ҳолати шумо:</b> {invited} даъват · {buyers} харид аз ҷониби даъватшудагон\n"
+        f"🎯 {tier_text}\n"
+        f"📌 {next_condition}\n\n"
+        "💸 <b>Фоидаи тахфиф</b>\n"
+        "Нархи асосии бастаҳо тағйир намеёбад. Барои ID-и махсус тахфифи 3% ҳисоб мешавад, "
+        "агар нарх аз арзиши таъминкунанда паст наравад.\n"
+        "🧮 Масалан: 10 сомонӣ → 9.70 с. (сарфа 0.30 с.)\n"
+        "🧮 50 сомонӣ → 48.50 с. (сарфа 1.50 с.)\n"
+        "🧮 100 сомонӣ → 97.00 с. (сарфа 3.00 с.)\n\n"
+        "🪜 <b>Чӣ тавр бонусро гирифтан?</b>\n"
+        "1️⃣ Линки шахсии худро ба дӯстон фиристед.\n"
+        "2️⃣ Дӯст бояд аз ҳамин линк ба бот ворид шуда сабти ном шавад.\n"
+        "3️⃣ Хариди ӯ бояд пардохт ва иҷро шавад, то дар шарт ҳисоб гардад.\n"
+        "4️⃣ Баъди кушода шудани функсия, ҳангоми фармоиш ID-и Free Fire-ро ворид кунед.\n"
+        "5️⃣ Агар бот пурсад, ки ID-ро махсус сабт кунад, «Ҳа»-ро интихоб кунед.\n\n"
+        f"🔗 <b>Линки даъвати шумо:</b>\n{link}\n\n"
+        "ℹ️ Ҳисобкунии ID-ҳои махсус танҳо баъди пайваст шудани ин функсия ба фармоиш фаъол мегардад."
+    )
+    await _edit_navigation_message(callback, text, reply_markup=back_to_menu_keyboard())
+    await callback.answer()
+
+
 @router.callback_query(F.data == "menu:top_buyers")
 async def menu_top_buyers(callback: CallbackQuery) -> None:
     medals = ["🥇", "🥈", "🥉"]
