@@ -65,6 +65,9 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 _button(text="🤝 Реферал", callback_data="menu:referral", style="primary"),
+                _button(text="🎁 Бонус", callback_data="menu:bonus", style="success"),
+            ],
+            [
                 _button(text="🆘 Дастгирӣ", callback_data="menu:contact", style="danger"),
             ],
             [
