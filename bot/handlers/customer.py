@@ -62,7 +62,7 @@ from bot.keyboards import (
 )
 from bot.services.contest import maybe_declare_contest_winner
 from bot.services.payments import get_payment_provider
-from bot.services.pricing import quote_custom_price
+from bot.services.pricing import apply_customer_prices, quote_custom_price
 from bot.services.referral_rewards import maybe_credit_referral_milestone
 from bot.services.sponsor import is_subscribed_to_sponsor_channel
 from bot.states import ApiAccessFlow, OrderFlow, WalletTopupFlow
@@ -587,6 +587,7 @@ async def _open_catalog(
     try:
         async with get_session() as session:
             products = await list_active_products(session, category=category, telegram_kind=telegram_kind)
+            promo_active = await apply_customer_prices(session, products, callback.from_user.id)
 
         if not products:
             await callback.message.answer(
@@ -598,7 +599,8 @@ async def _open_catalog(
         # Remember the parent section for the Back button on package/product screens.
         await state.update_data(catalog_category=category.value, catalog_telegram_kind=telegram_kind)
         # Keep the catalog compact: product icons and prices are shown on buttons.
-        await _edit_navigation_message(callback, title, products_keyboard(products, category, telegram_kind))
+        display_title = title + ("\n\n🎉 <b>Нархи махсус фаъол аст!</b> Шумо 5 нафарро даъват кардаед ва ҳадди ақал 1 нафарашон харид кардааст." if promo_active else "")
+        await _edit_navigation_message(callback, display_title, products_keyboard(products, category, telegram_kind))
         await state.set_state(OrderFlow.choosing_product)
     except Exception:
         await callback.message.answer(
@@ -691,10 +693,13 @@ async def enter_cart_mode(callback: CallbackQuery, state: FSMContext) -> None:
     category = ProductCategory(callback.data.split(":", 1)[1])
     async with get_session() as session:
         products = await list_active_products(session, category=category)
+        promo_active = await apply_customer_prices(session, products, callback.from_user.id)
 
     await state.update_data(cart_category=category.value, cart_ids=[])
     await state.set_state(OrderFlow.choosing_cart)
     cart_text = "🛒 Бастаҳоеро, ки мехоҳед якҷоя харед, интихоб кунед (якчанд адад мумкин аст):"
+    if promo_active:
+        cart_text += "\n\n🎉 Барои шумо нархи махсуси рефералӣ фаъол аст!"
     cart_markup = cart_select_keyboard(products, category, set())
     if callback.message.photo or callback.message.animation or callback.message.video:
         await callback.message.answer(cart_text, reply_markup=cart_markup)
@@ -733,6 +738,7 @@ async def toggle_cart_item(callback: CallbackQuery, state: FSMContext) -> None:
 
     async with get_session() as session:
         products = await list_active_products(session, category=category)
+        promo_active = await apply_customer_prices(session, products, callback.from_user.id)
 
     await callback.message.edit_reply_markup(reply_markup=cart_select_keyboard(products, category, selected))
     await callback.answer()
@@ -749,6 +755,7 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
     category = ProductCategory(data["cart_category"])
     async with get_session() as session:
         products = [await get_product(session, pid) for pid in cart_ids]
+        await apply_customer_prices(session, products, callback.from_user.id)
         last_recipient = await _recent_recipients_with_names(session, callback.from_user.id, category)
 
     await state.update_data(cart_product_ids=cart_ids)
@@ -961,6 +968,7 @@ async def enter_custom_amount(message: Message, state: FSMContext) -> None:
         # 30-diamond breakpoint). Only genuine diamond packs (digit-led
         # name, same heuristic as their button label) belong here.
         diamond_packs = [p for p in products if p.name[:1].isdigit()]
+        await apply_customer_prices(session, diamond_packs, message.from_user.id)
         if not diamond_packs:
             await message.answer("Ҳозир нархгузорӣ дастрас нест. Бо админ тамос гиред.")
             await state.clear()
@@ -1038,6 +1046,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         async with get_session() as session:
             product = await get_product(session, product_id)
             if product is not None:
+                await apply_customer_prices(session, [product], callback.from_user.id)
                 last_recipient = await _recent_recipients_with_names(
                     session, callback.from_user.id, product.category
                 )
@@ -1087,6 +1096,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
             products = [await get_product(session, pid) for pid in cart_ids]
         else:
             products = [await get_product(session, data["product_id"])]
+        await apply_customer_prices(session, products, user_id)
 
     if not products or any(p is None for p in products):
         await answer_target.answer("⚠️ Баста ёфт нашуд. Лутфан каталогро аз нав кушоед: /start")
@@ -1327,11 +1337,14 @@ async def cancel_order(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-async def _cart_products(session, data: dict) -> list[Product]:
+async def _cart_products(session, data: dict, user_id: int) -> list[Product]:
     cart_ids = data.get("cart_product_ids")
     if cart_ids:
-        return [await get_product(session, pid) for pid in cart_ids]
-    return [await get_product(session, data["product_id"])]
+        products = [await get_product(session, pid) for pid in cart_ids]
+    else:
+        products = [await get_product(session, data["product_id"])]
+    await apply_customer_prices(session, products, user_id)
+    return products
 
 
 @router.callback_query(OrderFlow.confirming, F.data == "order:pay_balance")
@@ -1341,7 +1354,7 @@ async def pay_with_balance(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
 
     async with get_session() as session:
-        products = await _cart_products(session, data)
+        products = await _cart_products(session, data, callback.from_user.id)
         total = sum(p.price_somoni for p in products)
         user = await get_user(session, callback.from_user.id)
 
