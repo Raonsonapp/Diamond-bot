@@ -1,0 +1,19 @@
+[Unit]
+Description=FF MARGEDAR Telegram Diamond Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=diamondbot
+Group=diamondbot
+WorkingDirectory=/opt/diamond-bot
+EnvironmentFile=/opt/diamond-bot/.env
+ExecStart=/opt/diamond-bot/.venv/bin/python /opt/diamond-bot/main.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
