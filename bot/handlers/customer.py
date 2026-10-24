@@ -1173,6 +1173,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
     await state.update_data(ff_player_id=recipient, ff_player_name=player_name)
     await state.set_state(OrderFlow.confirming)
     total_price = sum(p.price_somoni for p in products)
+    await state.update_data(customer_prices={str(p.id): round(p.price_somoni, 2) for p in products})
     offer_balance = user is not None and user.referral_balance >= total_price > 0
     offer_wallet = user is not None and float(user.wallet_balance_somoni or 0) >= total_price > 0
 
@@ -1345,6 +1346,11 @@ async def _cart_products(session, data: dict, user_id: int) -> list[Product]:
     else:
         products = [await get_product(session, data["product_id"])]
     await apply_customer_prices(session, products, user_id)
+    saved_prices = data.get("customer_prices") or {}
+    for product in products:
+        saved = saved_prices.get(str(product.id))
+        if saved is not None:
+            product.price_somoni = round(float(saved), 2)
     return products
 
 
