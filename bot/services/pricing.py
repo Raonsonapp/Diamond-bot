@@ -91,6 +91,10 @@ async def apply_customer_prices(session, products: list, user_id: int) -> bool:
     )
     promo = referral_count >= 5 and has_purchase
     for product in products:
+        # Custom-amount quote rows are intentionally inactive catalog entries;
+        # their price was already computed from the customer's price curve.
+        if not getattr(product, "is_active", True):
+            continue
         band = CUSTOM_PRICE_BANDS.get(product.id)
         if band:
             price = _stable_band_price(product.id, user_id, band[0], band[1], promo)
