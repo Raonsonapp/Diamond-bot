@@ -1,3 +1,14 @@
+---
+title: FF MARGEDAR BOT
+emoji: 💎
+colorFrom: blue
+colorTo: green
+sdk: gradio
+sdk_version: 5.49.1
+app_file: app.py
+pinned: false
+---
+
 # Diamond Bot — боти фурӯши top-up-и Free Fire
 
 Боти Telegram барои фурӯши алмази Free Fire: мизоҷ бастаро интихоб мекунад, ID-и
