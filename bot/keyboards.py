@@ -194,22 +194,36 @@ def products_keyboard(
 
 
 def cart_select_keyboard(
-    products: list[Product], category: ProductCategory, selected_ids: set[int]
+    products: list[Product],
+    category: ProductCategory,
+    selected_ids: set[int],
+    quantities: dict[str, int] | None = None,
 ) -> InlineKeyboardMarkup:
+    """Multi-item cart with per-SKU quantity controls."""
+    quantities = quantities or {}
     rows = []
+    total = 0.0
+    item_count = 0
     for p in products:
-        mark = "✅" if p.id in selected_ids else "⬜"
-        rows.append(
-            [_button(text=f"{mark} {_product_label(p)}", callback_data=f"cartitem:{p.id}")]
-        )
-    if selected_ids:
-        total = sum(p.price_somoni for p in products if p.id in selected_ids)
-        rows.append(
-            [_button(text=f"🛍 Идома ({len(selected_ids)} — {format_price(total)} сомонӣ)", callback_data="cart:checkout")]
-        )
-    rows.append(
-        [_button(text="🔙 Якто-якто харидан", callback_data=f"cartmode:exit:{category.value}")]
-    )
+        qty = max(0, int(quantities.get(str(p.id), 0)))
+        mark = "✅" if qty > 0 else "⬜"
+        rows.append([_button(text=f"{mark} {_product_label(p)}", callback_data=f"cartitem:{p.id}")])
+        if qty > 0:
+            total += p.price_somoni * qty
+            item_count += qty
+            rows.append([
+                _button(text="➖", callback_data=f"cartqty:dec:{p.id}"),
+                _button(text=f"{qty} дона", callback_data="cartqty:noop"),
+                _button(text="➕", callback_data=f"cartqty:inc:{p.id}"),
+            ])
+    if item_count:
+        rows.append([
+            _button(
+                text=f"🛍 Идома ({item_count} адад — {format_price(total)} сомонӣ)",
+                callback_data="cart:checkout",
+            )
+        ])
+    rows.append([_button(text="🔙 Якто-якто харидан", callback_data=f"cartmode:exit:{category.value}")])
     rows.append([_button(text="🔙 Ба меню", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
