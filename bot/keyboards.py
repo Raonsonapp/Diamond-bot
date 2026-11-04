@@ -213,7 +213,7 @@ def cart_select_keyboard(
             item_count += qty
             rows.append([
                 _button(text="➖", callback_data=f"cartqty:dec:{p.id}"),
-                _button(text=f"{qty} дона", callback_data="cartqty:noop"),
+                _button(text=f"{qty} дона", callback_data="cartqty:noop:0"),
                 _button(text="➕", callback_data=f"cartqty:inc:{p.id}"),
             ])
     if item_count:
