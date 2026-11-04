@@ -1,15 +1,13 @@
-"""Hugging Face ZeroGPU-compatible Gradio entrypoint for FF MARGEDAR.
+"""Hugging Face Space entrypoint for the FF MARGEDAR Telegram bot.
 
-The Telegram bot runs in polling mode in a background thread. The small
-ZeroGPU callback exists to satisfy the ZeroGPU Space runtime; the bot itself
-does not need a GPU.
+Gradio serves the Space UI in a background thread. The Telegram bot runs
+on the main thread because aiogram installs OS signal handlers there.
 """
 import asyncio
 import logging
 import os
 import threading
 
-# Run the Telegram bot in polling mode; do not configure a webhook URL here.
 os.environ["PUBLIC_URL"] = ""
 os.environ["PORT"] = "7860"
 
@@ -20,44 +18,30 @@ import main as bot_main  # noqa: E402
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ff_margedar.hf")
 
-_bot_thread = None
-
 @spaces.GPU
 def zero_gpu_runtime_check():
-    """Minimal decorated callback required by ZeroGPU Spaces."""
-    return "ZeroGPU runtime is available. FF MARGEDAR Telegram bot runs on CPU."
-
-def _run_bot() -> None:
-    try:
-        asyncio.run(bot_main.main())
-    except Exception:
-        logger.exception("Telegram bot stopped with an error")
-
-def start_bot() -> None:
-    global _bot_thread
-    if _bot_thread is not None and _bot_thread.is_alive():
-        return
-    _bot_thread = threading.Thread(target=_run_bot, name="telegram-bot", daemon=True)
-    _bot_thread.start()
-
-start_bot()
+    """Small ZeroGPU callback required by the selected Space hardware."""
+    return "ZeroGPU runtime is available. Telegram bot is running separately."
 
 with gr.Blocks(title="FF MARGEDAR BOT") as demo:
     gr.Markdown("""
     # 💎 FF MARGEDAR BOT
 
-    Telegram bot service starts in the background. Open Telegram and send
-    /start to the bot to check it.
+    Telegram bot is started by this Space. Open Telegram and send /start.
 
-    This Space uses ZeroGPU only to satisfy the Space runtime requirement;
-    the Telegram bot itself does not require GPU processing.
-
-    > Free Spaces may pause after inactivity, so uninterrupted 24/7
-    > availability is not guaranteed.
+    This page is only the Space status page; bot commands are handled in Telegram.
     """)
-    gpu_status = gr.Textbox(label="Space runtime check", interactive=False)
-    check_button = gr.Button("Check ZeroGPU runtime")
-    check_button.click(fn=zero_gpu_runtime_check, outputs=gpu_status)
+    status = gr.Textbox(label="Space runtime check", interactive=False)
+    check = gr.Button("Check ZeroGPU runtime")
+    check.click(fn=zero_gpu_runtime_check, outputs=status)
+
+def _serve_gradio():
+    demo.launch(server_name="0.0.0.0", server_port=7860, quiet=True)
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    # Gradio runs separately so the main thread remains available to aiogram.
+    web_thread = threading.Thread(target=_serve_gradio, name="gradio-web", daemon=True)
+    web_thread.start()
+
+    # aiogram needs the main interpreter thread for signal.set_wakeup_fd().
+    asyncio.run(bot_main.main())
