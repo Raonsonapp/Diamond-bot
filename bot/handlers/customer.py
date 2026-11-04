@@ -729,26 +729,67 @@ async def toggle_cart_item(callback: CallbackQuery, state: FSMContext) -> None:
     product_id = int(callback.data.split(":", 1)[1])
     data = await state.get_data()
     category = ProductCategory(data["cart_category"])
-    selected = set(data.get("cart_ids", []))
+    quantities = {str(k): int(v) for k, v in (data.get("cart_quantities") or {}).items()}
 
-    if product_id in selected:
-        selected.discard(product_id)
+    if quantities.get(str(product_id), 0) > 0:
+        quantities.pop(str(product_id), None)
     else:
-        selected.add(product_id)
-    await state.update_data(cart_ids=list(selected))
+        quantities[str(product_id)] = 1
+    selected = {int(pid) for pid, qty in quantities.items() if qty > 0}
+    await state.update_data(cart_quantities=quantities, cart_ids=list(selected))
 
     async with get_session() as session:
         products = await list_active_products(session, category=category)
-        promo_active = await apply_customer_prices(session, products, callback.from_user.id)
+        await apply_customer_prices(session, products, callback.from_user.id)
 
-    await callback.message.edit_reply_markup(reply_markup=cart_select_keyboard(products, category, selected))
+    await callback.message.edit_reply_markup(
+        reply_markup=cart_select_keyboard(products, category, selected, quantities)
+    )
     await callback.answer()
+
+
+@router.callback_query(OrderFlow.choosing_cart, F.data.startswith("cartqty:"))
+async def change_cart_quantity(callback: CallbackQuery, state: FSMContext) -> None:
+    _, action, raw_id = callback.data.split(":", 2)
+    if action == "noop":
+        await callback.answer()
+        return
+    product_id = int(raw_id)
+    data = await state.get_data()
+    category = ProductCategory(data["cart_category"])
+    quantities = {str(k): int(v) for k, v in (data.get("cart_quantities") or {}).items()}
+    current = quantities.get(str(product_id), 0)
+
+    if action == "inc":
+        quantities[str(product_id)] = min(99, current + 1)
+    elif action == "dec":
+        if current <= 1:
+            quantities.pop(str(product_id), None)
+        else:
+            quantities[str(product_id)] = current - 1
+
+    selected = {int(pid) for pid, qty in quantities.items() if qty > 0}
+    await state.update_data(cart_quantities=quantities, cart_ids=list(selected))
+
+    async with get_session() as session:
+        products = await list_active_products(session, category=category)
+        await apply_customer_prices(session, products, callback.from_user.id)
+
+    await callback.message.edit_reply_markup(
+        reply_markup=cart_select_keyboard(products, category, selected, quantities)
+    )
+    await callback.answer("Миқдор нав шуд.")
 
 
 @router.callback_query(OrderFlow.choosing_cart, F.data == "cart:checkout")
 async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    cart_ids = data.get("cart_ids", [])
+    quantities = {str(k): int(v) for k, v in (data.get("cart_quantities") or {}).items()}
+    cart_ids = [
+        int(product_id)
+        for product_id, qty in quantities.items()
+        for _ in range(max(0, qty))
+    ]
     if not cart_ids:
         await callback.answer("Аввал ҳадди ақал як маҳсулот интихоб кунед.", show_alert=True)
         return
@@ -763,7 +804,13 @@ async def cart_checkout(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(OrderFlow.entering_player_id)
 
     total = sum(p.price_somoni for p in products)
-    summary = "\n".join(f"• {p.display_name}" for p in products)
+    counts = {}
+    for p in products:
+        counts[p.id] = counts.get(p.id, 0) + 1
+    summary = "\n".join(
+        f"• {p.display_name} × {counts[p.id]} — {format_price(p.price_somoni * counts[p.id])} сомонӣ"
+        for p in {item.id: item for item in products}.values()
+    )
     prompt = await _recipient_prompt(category)
     text = f"Шумо интихоб кардед:\n{summary}\n\n💰 Ҳамагӣ: {format_price(total)} сомонӣ.\n\nЛутфан {prompt} ирсол кунед:"
 
