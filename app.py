@@ -1,25 +1,31 @@
-"""Hugging Face Gradio entrypoint for FF MARGEDAR.
+"""Hugging Face ZeroGPU-compatible Gradio entrypoint for FF MARGEDAR.
 
-The Telegram bot runs in polling mode in a background thread. Gradio provides
-the HTTP application required by Hugging Face Spaces on port 7860.
+The Telegram bot runs in polling mode in a background thread. The small
+ZeroGPU callback exists to satisfy the ZeroGPU Space runtime; the bot itself
+does not need a GPU.
 """
 import asyncio
 import logging
 import os
 import threading
 
-# A Space URL is not a stable always-on webhook target. Polling lets the bot
-# receive Telegram updates whenever this Space process is running.
+# Run the Telegram bot in polling mode; do not configure a webhook URL here.
 os.environ["PUBLIC_URL"] = ""
 os.environ["PORT"] = "7860"
 
 import gradio as gr  # noqa: E402
+import spaces  # noqa: E402
 import main as bot_main  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ff_margedar.hf")
 
 _bot_thread = None
+
+@spaces.GPU
+def zero_gpu_runtime_check():
+    """Minimal decorated callback required by ZeroGPU Spaces."""
+    return "ZeroGPU runtime is available. FF MARGEDAR Telegram bot runs on CPU."
 
 def _run_bot() -> None:
     try:
@@ -39,14 +45,19 @@ start_bot()
 with gr.Blocks(title="FF MARGEDAR BOT") as demo:
     gr.Markdown("""
     # 💎 FF MARGEDAR BOT
-    **Telegram bot service is running in the background.**
 
-    This page is the Hugging Face Space health interface. Open Telegram
-    and send the /start command to your bot to check its availability.
+    Telegram bot service starts in the background. Open Telegram and send
+    /start to the bot to check it.
 
-    > Free Spaces may pause after inactivity. This does not guarantee
-    > uninterrupted 24/7 bot availability.
+    This Space uses ZeroGPU only to satisfy the Space runtime requirement;
+    the Telegram bot itself does not require GPU processing.
+
+    > Free Spaces may pause after inactivity, so uninterrupted 24/7
+    > availability is not guaranteed.
     """)
+    gpu_status = gr.Textbox(label="Space runtime check", interactive=False)
+    check_button = gr.Button("Check ZeroGPU runtime")
+    check_button.click(fn=zero_gpu_runtime_check, outputs=gpu_status)
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7860)
