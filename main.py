@@ -266,7 +266,7 @@ async def main() -> None:
     if not config.public_url:
         space_url = os.getenv(
             "HF_SPACE_URL",
-            "https://raonsonapp-diamond-bot.hf.space/",
+            "https://mahmadmurodov-ff-margedar-bot.hf.space/",
         ).strip()
         if space_url:
             asyncio.create_task(_space_heartbeat_loop(space_url))
