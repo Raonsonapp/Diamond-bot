@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 
 import aiohttp
 from aiogram import Bot, Dispatcher
@@ -122,30 +121,6 @@ async def run_polling(bot: Bot, dp: Dispatcher) -> None:
 
 
 
-_SPACE_HEARTBEAT_INTERVAL_SECONDS = 10 * 60
-
-async def _space_heartbeat_loop(url: str) -> None:
-    """Periodically check the configured Hugging Face Space URL.
-
-    This is an in-process health check: it records whether the Space responds
-    while this process is already running. It cannot wake a stopped/sleeping
-    Space because the loop stops when the process is stopped.
-    """
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45)) as session:
-        while True:
-            try:
-                async with session.get(url) as resp:
-                    logging.info("Hugging Face heartbeat %s -> HTTP %s", url, resp.status)
-                    await resp.read()
-                await asyncio.sleep(_SPACE_HEARTBEAT_INTERVAL_SECONDS)
-            except Exception as exc:
-                logging.warning(
-                    "Hugging Face heartbeat to %s failed: %s — retrying in %ss",
-                    url, exc, _SELF_PING_RETRY_SECONDS,
-                )
-                await asyncio.sleep(_SELF_PING_RETRY_SECONDS)
-
-
 _SELF_PING_RETRY_SECONDS = 20  # how soon to retry after a failed ping, instead of waiting a full interval
 
 
@@ -260,20 +235,6 @@ async def main() -> None:
     bot = Bot(token=config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = build_dispatcher()
     await _set_bot_commands(bot)
-
-    # Hugging Face Space heartbeat (10-minute interval). Override the default
-    # URL with HF_SPACE_URL in Space Variables if the Space uses another name.
-    if not config.public_url:
-        space_url = os.getenv(
-            "HF_SPACE_URL",
-            "https://mahmadmurodov-ff-margedar-bot.hf.space/",
-        ).strip()
-        if space_url:
-            asyncio.create_task(_space_heartbeat_loop(space_url))
-            logging.info(
-                "Hugging Face heartbeat enabled: %s (every %ss)",
-                space_url, _SPACE_HEARTBEAT_INTERVAL_SECONDS,
-            )
 
     if config.public_url:
         await run_webhook(bot, dp)
