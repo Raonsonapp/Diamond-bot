@@ -1,0 +1,36 @@
+name: Hugging Face Space Keepalive
+
+on:
+  schedule:
+    # Run every 10 minutes. GitHub may delay scheduled runs during high load.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-space-keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping-space:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake and check Hugging Face Space
+        env:
+          SPACE_URL: https://mahmadmurodov-ff-margedar-bot.hf.space/
+        run: |
+          echo "Sending external keepalive request to $SPACE_URL"
+          for attempt in 1 2 3 4 5 6; do
+            code="$(curl -L -sS -o /tmp/space-response.txt -w '%{http_code}' --connect-timeout 15 --max-time 45 "$SPACE_URL" || true)"
+            echo "Attempt $attempt: HTTP ${code:-no-response}"
+            if [ -n "$code" ] && [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
+              echo "Space responded successfully."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Space did not return a successful response after retries."
+          exit 1
