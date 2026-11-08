@@ -122,7 +122,7 @@ async def _add_product(message: Message, category: ProductCategory, usage_exampl
 
     if not reports:
         await message.answer(
-            f"Истифода: {usage_example} <ном> <миқдор> <нарх_фурӯш> <нарх_харид>\n"
+            f"Истифода: {usage_example} &lt;ном&gt; &lt;миқдор&gt; &lt;нарх_фурӯш&gt; &lt;нарх_харид&gt;\n"
             f"Мисол: {usage_example} Starter 100 10 8"
         )
         return
@@ -221,7 +221,7 @@ async def delete_product(message: Message) -> None:
         reports.append(f"✅ Маҳсулот #{product.id} ({product.name}) хомӯш карда шуд.")
 
     if not reports:
-        await message.answer("Истифода: /delproduct <ID>\nID-ро аз /products гиред.\n(метавонед якчанд сатрро дар як паём фиристед)")
+        await message.answer("Истифода: /delproduct &lt;ID&gt;\nID-ро аз /products гиред.\n(метавонед якчанд сатрро дар як паём фиристед)")
         return
 
     await message.answer("\n".join(reports))
@@ -260,7 +260,7 @@ async def order_details(message: Message) -> None:
 
     parts = message.text.split()
     if len(parts) != 2 or not parts[1].lstrip("#").isdigit():
-        await message.answer("Истифода: /order <order_id>\nМисол: /order 90")
+        await message.answer("Истифода: /order &lt;order_id&gt;\nМисол: /order 90")
         return
 
     order_id = int(parts[1].lstrip("#"))
@@ -353,7 +353,7 @@ async def contest_start(message: Message) -> None:
     parts = message.text.split()
     if len(parts) < 4:
         await message.answer(
-            "Истифода: /contest_start <номи ҷоиза> <шумораи реферал> <рӯз>\n"
+            "Истифода: /contest_start &lt;номи ҷоиза&gt; &lt;шумораи реферал&gt; &lt;рӯз&gt;\n"
             "Мисол: /contest_start Ваучери лайт 5 2"
         )
         return
@@ -540,8 +540,8 @@ async def balance_command(message: Message) -> None:
     await message.answer(
         f"💰 Баланси тахминии FazerCards: {current:.2f} сомонӣ\n\n"
         f"(Ин тахмини худи бот аст, на пурсиши зинда аз FazerCards — "
-        f"баъд аз ҳар пуркунии воқеӣ /addbalance <маблағ>-ро занед, "
-        f"ё барои танзими дуруст /setbalance <маблағ>.)"
+        f"баъд аз ҳар пуркунии воқеӣ /addbalance &lt;маблағ&gt;-ро занед, "
+        f"ё барои танзими дуруст /setbalance &lt;маблағ&gt;.)"
     )
 
 
@@ -552,7 +552,7 @@ async def setbalance_command(message: Message) -> None:
         return
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer("Истифода: /setbalance <маблағ дар сомонӣ>\nМасалан: /setbalance 150")
+        await message.answer("Истифода: /setbalance &lt;маблағ дар сомонӣ&gt;\nМасалан: /setbalance 150")
         return
     try:
         amount = float(parts[1].strip().replace(",", "."))
@@ -577,7 +577,7 @@ async def addbalance_command(message: Message) -> None:
         return
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer("Истифода: /addbalance <маблағ дар сомонӣ>\nМасалан: /addbalance 50")
+        await message.answer("Истифода: /addbalance &lt;маблағ дар сомонӣ&gt;\nМасалан: /addbalance 50")
         return
     try:
         delta = float(parts[1].strip().replace(",", "."))
@@ -616,9 +616,9 @@ async def broadcast(message: Message) -> None:
     if len(parts) != 2 or not parts[1].strip():
         await message.answer(
             "Истифода:\n"
-            "• /broadcast <матн>\n"
-            "• Сурат фиристед ва дар caption нависед: /broadcast <матн>\n"
-            "• Ё ба сурат reply карда нависед: /broadcast <матн>"
+            "• /broadcast &lt;матн&gt;\n"
+            "• Сурат фиристед ва дар caption нависед: /broadcast &lt;матн&gt;\n"
+            "• Ё ба сурат reply карда нависед: /broadcast &lt;матн&gt;"
         )
         return
 
@@ -757,7 +757,7 @@ async def paid_command(message: Message) -> None:
 
     if not reports:
         await message.answer(
-            "Истифода: /paid <рақами фармоиш>\nМисол: /paid 21\n"
+            "Истифода: /paid &lt;рақами фармоиш&gt;\nМисол: /paid 21\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
         return
@@ -839,7 +839,7 @@ async def underpaid_command(message: Message) -> None:
 
     if not reports:
         await message.answer(
-            "Истифода: /underpaid <order_id> <маблағи гирифташуда>\n"
+            "Истифода: /underpaid &lt;order_id&gt; &lt;маблағи гирифташуда&gt;\n"
             "Мисол: /underpaid 41 15\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
@@ -854,7 +854,7 @@ async def underpaid_ok_command(message: Message) -> None:
     fulfilled a short order as a one-time courtesy (already paid/delivered
     by the time this runs — unlike /underpaid, it does NOT check or touch
     order.status) and just wants the customer told not to repeat it. Takes
-    the same <order_id> <received_amount> shape as /underpaid so the
+    the same &lt;order_id&gt; &lt;received_amount&gt; shape as /underpaid so the
     shortfall math is identical either way."""
     if not is_admin(message.from_user.id):
         await _reject_non_admin(message)
@@ -904,7 +904,7 @@ async def underpaid_ok_command(message: Message) -> None:
 
     if not reports:
         await message.answer(
-            "Истифода: /underpaidok <order_id> <маблағи гирифташуда>\n"
+            "Истифода: /underpaidok &lt;order_id&gt; &lt;маблағи гирифташуда&gt;\n"
             "Мисол: /underpaidok 41 15\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
@@ -926,7 +926,7 @@ async def apologize_command(message: Message) -> None:
 
     if len(message.text.split(maxsplit=1)) < 2:
         await message.answer(
-            "Истифода: /apologize <order_id> [шарҳи иловагӣ]\n"
+            "Истифода: /apologize &lt;order_id&gt; [шарҳи иловагӣ]\n"
             "Мисол: /apologize 41\n"
             "Мисол бо шарҳ: /apologize 41 Фардо пагоҳирӯзӣ ҳал мешавад.\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
@@ -973,7 +973,7 @@ async def apologize_command(message: Message) -> None:
 
     if not reports:
         await message.answer(
-            "Истифода: /apologize <order_id> [шарҳи иловагӣ]\n"
+            "Истифода: /apologize &lt;order_id&gt; [шарҳи иловагӣ]\n"
             "Мисол: /apologize 41\n"
             "Мисол бо шарҳ: /apologize 41 Фардо пагоҳирӯзӣ ҳал мешавад.\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
@@ -1019,7 +1019,7 @@ async def delivered_command(message: Message) -> None:
 
     if not reports:
         await message.answer(
-            "Истифода: /delivered <рақами фармоиш>\nМисол: /delivered 21\n"
+            "Истифода: /delivered &lt;рақами фармоиш&gt;\nМисол: /delivered 21\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
         return
@@ -1071,7 +1071,7 @@ async def fzr_offers(message: Message) -> None:
 
     parts = message.text.split(maxsplit=1)
     if len(parts) != 2:
-        await message.answer("Истифода: /fzr_offers <category_id>\ncategory_id-ро аз /fzr_categories гиред.")
+        await message.answer("Истифода: /fzr_offers &lt;category_id&gt;\ncategory_id-ро аз /fzr_categories гиред.")
         return
 
     from bot.services.fazercards import FazerCardsError, get_topup_offers
@@ -1127,7 +1127,7 @@ async def fzr_raw(message: Message) -> None:
 
     if len(message.text.split(maxsplit=1)) < 2:
         await message.answer(
-            "Истифода: /fzr_raw <path>\n"
+            "Истифода: /fzr_raw &lt;path&gt;\n"
             "Мисол: /fzr_raw /api/v2/telegram/stars\n"
             "Мисол: /fzr_raw /api/v2/telegram/premium\n\n"
             "Метавонед якчанд хатро якҷоя фиристед (ҳар кадом бо /fzr_raw)."
@@ -1304,7 +1304,7 @@ async def map_product(message: Message) -> None:
 
     if processed == 0:
         await message.answer(
-            "Истифода: /mapproduct <product_id> <fzr_category_id> <fzr_offer_id>\n"
+            "Истифода: /mapproduct &lt;product_id&gt; &lt;fzr_category_id&gt; &lt;fzr_offer_id&gt;\n"
             "category_id ва offer_id-ро аз /fzr_categories ва /fzr_offers гиред.\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
@@ -1312,7 +1312,7 @@ async def map_product(message: Message) -> None:
 
     await message.answer(
         "Барои фаъол кардани ирсоли худкор, дар Render DELIVERY_PROVIDER=fazercards гузоред.\n"
-        "Агар бонус нодуруст бошад: /setbonus <product_id> <бонус>"
+        "Агар бонус нодуруст бошад: /setbonus &lt;product_id&gt; &lt;бонус&gt;"
     )
 
 
@@ -1351,7 +1351,7 @@ async def set_bonus(message: Message) -> None:
 
     parts = message.text.split(maxsplit=2)
     if len(parts) != 3 or not parts[2].lstrip("-").isdigit():
-        await message.answer("Истифода: /setbonus <product_id> <бонус_диамонд>\nМисол: /setbonus 1 10")
+        await message.answer("Истифода: /setbonus &lt;product_id&gt; &lt;бонус_диамонд&gt;\nМисол: /setbonus 1 10")
         return
 
     if not parts[1].isdigit():
@@ -1414,7 +1414,7 @@ async def set_price(message: Message) -> None:
 
     if not reports:
         await message.answer(
-            "Истифода: /setprice <product_id> <нархи_фурӯш> [нархи_харид]\n"
+            "Истифода: /setprice &lt;product_id&gt; &lt;нархи_фурӯш&gt; [нархи_харид]\n"
             "Мисол: /setprice 1 8.90\nМисол бо нархи харид: /setprice 1 8.90 7.21\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
@@ -1452,7 +1452,7 @@ async def set_name(message: Message) -> None:
 
     if not reports:
         await message.answer(
-            "Истифода: /setname <product_id> <номи нав>\n"
+            "Истифода: /setname &lt;product_id&gt; &lt;номи нав&gt;\n"
             "Мисол: /setname 16 Бастаи навкорон\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
@@ -1496,7 +1496,7 @@ async def set_tg_kind(message: Message) -> None:
 
     if not reports:
         await message.answer(
-            "Истифода: /settgkind <product_id> <stars|premium>\n"
+            "Истифода: /settgkind &lt;product_id&gt; &lt;stars|premium&gt;\n"
             "Мисол: /settgkind 20 stars\n"
             "(метавонед якчанд сатрро дар як паём фиристед)"
         )
@@ -1590,7 +1590,7 @@ async def wallet_pending(message: Message) -> None:
             f"#{r.id} — user {r.user_id} — {r.amount_somoni:.2f} сомонӣ"
             for r in requests
         )
-        + "\n\nТасдиқ: /walletapprove <request_id> <payment_reference>"
+        + "\n\nТасдиқ: /walletapprove &lt;request_id&gt; &lt;payment_reference&gt;"
     )
 
 
@@ -1605,7 +1605,7 @@ async def wallet_approve(message: Message) -> None:
 
     parts = (message.text or "").split(maxsplit=2)
     if len(parts) != 3 or not parts[1].isdigit() or not parts[2].strip():
-        await message.answer("Истифода: /walletapprove <request_id> <payment_reference>")
+        await message.answer("Истифода: /walletapprove &lt;request_id&gt; &lt;payment_reference&gt;")
         return
     req_id, payment_ref = int(parts[1]), parts[2].strip()
     if len(payment_ref) > 100:
