@@ -7,6 +7,8 @@ gate when Telegram membership checks are unavailable.
 
 from __future__ import annotations
 
+import logging
+
 from aiogram import Bot
 
 from bot.config import config
@@ -19,5 +21,10 @@ async def is_subscribed_to_sponsor_channel(bot: Bot, user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(config.review_channel_id, user_id)
     except Exception:
+        logging.exception(
+            "Sponsor membership check failed for Telegram user %s in channel %s",
+            user_id,
+            config.review_channel_id,
+        )
         return False
     return member.status not in _NOT_MEMBER_STATUSES
