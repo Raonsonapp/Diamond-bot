@@ -639,9 +639,10 @@ async def broadcast(message: Message) -> None:
                     chat_id=user_id,
                     photo=photo.file_id,
                     caption=announcement_text,
+                    parse_mode=None,
                 )
             else:
-                await message.bot.send_message(user_id, announcement_text)
+                await message.bot.send_message(user_id, announcement_text, parse_mode=None)
             sent += 1
         except Exception:
             # Blocked/deactivated users must not stop the remaining broadcast.
