@@ -592,10 +592,8 @@ async def addbalance_command(message: Message) -> None:
 
 
 @router.message(
-    Command("broadcast")
-    | F.text.startswith("/эълон")
-    | F.caption.startswith("/broadcast")
-    | F.caption.startswith("/эълон")
+    F.text.regexp(r"^/(broadcast|эълон)(@\\w+)?(?:\\s|$)")
+    | F.caption.regexp(r"^/(broadcast|эълон)(@\\w+)?(?:\\s|$)")
 )
 async def broadcast(message: Message) -> None:
     """Broadcast text, or a photo with caption, to all registered users.
