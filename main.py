@@ -20,6 +20,56 @@ logging.basicConfig(level=logging.INFO)
 
 def build_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=storage)
+
+    # Diagnostic trace: prove whether Telegram updates reach this process,
+    # which update type arrived, and whether router dispatch raises an error.
+    # Do not log message bodies, payment details, or other private content.
+    async def trace_incoming_update(handler, event, data):
+        update_id = getattr(event, "update_id", "unknown")
+        message = (
+            getattr(event, "message", None)
+            or getattr(event, "edited_message", None)
+            or getattr(event, "channel_post", None)
+            or getattr(event, "edited_channel_post", None)
+        )
+        callback = getattr(event, "callback_query", None)
+        chosen = message or callback
+        user = getattr(chosen, "from_user", None)
+        user_id = getattr(user, "id", None)
+        chat = getattr(chosen, "chat", None)
+        chat_id = getattr(chat, "id", None)
+        update_type = (
+            "message" if message is not None
+            else "callback_query" if callback is not None
+            else "other"
+        )
+        command = ""
+        if message is not None:
+            body = getattr(message, "text", None) or ""
+            if body.startswith("/"):
+                command = body.split(maxsplit=1)[0][:40]
+        elif callback is not None:
+            command = f"callback:{(getattr(callback, 'data', '') or '')[:60]}"
+
+        logging.info(
+            "UPDATE_INCOMING id=%s type=%s user_id=%s chat_id=%s action=%s",
+            update_id, update_type, user_id, chat_id, command or "-",
+        )
+        try:
+            result = await handler(event, data)
+        except Exception:
+            logging.exception(
+                "UPDATE_DISPATCH_FAILED id=%s type=%s user_id=%s action=%s",
+                update_id, update_type, user_id, command or "-",
+            )
+            raise
+        logging.info(
+            "UPDATE_DISPATCH_FINISHED id=%s type=%s user_id=%s",
+            update_id, update_type, user_id,
+        )
+        return result
+
+    dp.update.outer_middleware(trace_incoming_update)
     dp.include_router(admin.router)
     dp.include_router(customer.router)
     dp.include_router(adsgram_admin.router)
