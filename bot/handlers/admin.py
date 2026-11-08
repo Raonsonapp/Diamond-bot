@@ -591,19 +591,47 @@ async def addbalance_command(message: Message) -> None:
     await message.answer(f"✅ {delta:+.2f} сомонӣ илова шуд. Баланси тахминии ҳозира: {new_balance:.2f} сомонӣ.")
 
 
-@router.message(Command("broadcast"))
-@router.message(F.text.startswith("/эълон"))
+@router.message(
+    Command("broadcast")
+    | F.text.startswith("/эълон")
+    | F.caption.startswith("/broadcast")
+    | F.caption.startswith("/эълон")
+)
 async def broadcast(message: Message) -> None:
+    """Broadcast text, or a photo with caption, to all registered users.
+
+    Usage:
+      /broadcast Матни эълон
+      Send a photo with caption: /broadcast Матни эълон
+      Reply to a photo with: /broadcast Матни эълон
+    """
     if not is_admin(message.from_user.id):
         await _reject_non_admin(message)
         return
 
-    parts = message.text.split(maxsplit=1)
-    if len(parts) != 2:
-        await message.answer("Истифода: /broadcast <матн>\n(Матн метавонад якчанд сатр дошта бошад.)")
+    command_text = message.caption or message.text or ""
+    photo = message.photo[-1] if message.photo else None
+    if photo is None and message.reply_to_message and message.reply_to_message.photo:
+        photo = message.reply_to_message.photo[-1]
+
+    parts = command_text.split(maxsplit=1)
+    if len(parts) != 2 or not parts[1].strip():
+        await message.answer(
+            "Истифода:
+"
+            "• /broadcast <матн>
+"
+            "• Сурат фиристед ва дар caption нависед: /broadcast <матн>
+"
+            "• Ё ба сурат reply карда нависед: /broadcast <матн>"
+        )
         return
 
-    text = parts[1]
+    announcement_text = parts[1].strip()
+    if photo is not None and len(announcement_text) > 1024:
+        await message.answer("⚠️ Матни эълон бо сурат набояд аз 1024 аломат зиёд бошад.")
+        return
+
     async with get_session() as session:
         user_ids = await list_all_user_ids(session)
 
@@ -611,17 +639,24 @@ async def broadcast(message: Message) -> None:
     failed = 0
     for user_id in user_ids:
         try:
-            await message.bot.send_message(user_id, text)
+            if photo is not None:
+                await message.bot.send_photo(
+                    chat_id=user_id,
+                    photo=photo.file_id,
+                    caption=announcement_text,
+                )
+            else:
+                await message.bot.send_message(user_id, announcement_text)
             sent += 1
         except Exception:
-            # Blocked the bot, deactivated account, etc. — one bad
-            # recipient must never stop the rest of the broadcast.
+            # Blocked/deactivated users must not stop the remaining broadcast.
             failed += 1
-        await asyncio.sleep(0.05)  # stay well under Telegram's rate limit
+        await asyncio.sleep(0.05)
 
+    media_label = "бо сурату матн" if photo is not None else "бо матн"
     await message.answer(
-        f"📢 Эълон фиристода шуд: ба {sent} корбар расид"
-        + (f", ба {failed} нафар нарасид (эҳтимол боти моро баста бошанд)." if failed else ".")
+        f"📢 Эълон {media_label} фиристода шуд: ба {sent} корбар расид"
+        + (f", ба {failed} нафар нарасид (эҳтимол ботро баста бошанд)." if failed else ".")
     )
 
 
