@@ -617,12 +617,9 @@ async def broadcast(message: Message) -> None:
     parts = command_text.split(maxsplit=1)
     if len(parts) != 2 or not parts[1].strip():
         await message.answer(
-            "Истифода:
-"
-            "• /broadcast <матн>
-"
-            "• Сурат фиристед ва дар caption нависед: /broadcast <матн>
-"
+            "Истифода:\n"
+            "• /broadcast <матн>\n"
+            "• Сурат фиристед ва дар caption нависед: /broadcast <матн>\n"
             "• Ё ба сурат reply карда нависед: /broadcast <матн>"
         )
         return
