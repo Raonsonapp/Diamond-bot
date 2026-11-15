@@ -63,7 +63,7 @@ async def prompt_for_review(bot: Bot, order: Order) -> None:
 
     await bot.send_message(
         order.user_id,
-        "🎁 Ваучери шумо бо муваффақият расид!\\n\\n"
+        "🎁 Фармоиши шумо бо муваффақият анҷом ёфт!\\n\\n"
         "😊 Лутфан, фикру отзиви худро дар бораи гирифтани ваучер нависед. "
         "Назари шумо барои зиёд шудани боварии муштариёни дигар хеле муҳим аст. ❤️",
         reply_markup=review_prompt_keyboard(order.id),
