@@ -1284,6 +1284,14 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
         # game-level endpoint, then compare the region only when the supplier
         # actually returns explicit region metadata.
         region_check = await _try_validate_player_id(products[0].fzr_category_id, recipient)
+        if region_check and region_check.get("unavailable"):
+            await answer_target.answer(
+                "⚠️ <b>Санҷиши ID ҳоло дастрас нест.</b>\n\n"
+                "Хидмати санҷиши ID-и таъминкунанда ғайрифаъол аст. "
+                "Лутфан каме баъдтар кӯшиш кунед ё бо админ тамос гиред. "
+                "То барқарор шудани санҷиш пардохт қабул намешавад."
+            )
+            return
         if not region_check or not region_check.get("valid"):
             await answer_target.answer(
                 "❌ <b>ID нодуруст аст ё ба ин регион тааллуқ надорад!</b>\n\n"
@@ -1408,9 +1416,12 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> dict 
 
     try:
         supported = await list_validate_id_categories()
-    except FazerCardsError:
+    except FazerCardsError as exc:
+        if "Подписка неактивна" in str(exc):
+            logging.error("FazerCards ID validation subscription is inactive; ID checks are unavailable")
+            return {"valid": False, "unavailable": True}
         logging.exception("FazerCards validation-category lookup failed")
-        return None
+        return {"valid": False, "unavailable": True}
 
     items = supported.get("items", []) if isinstance(supported, dict) else []
     wanted = "free_fire" if fzr_category_id.lower().startswith("free_fire") else fzr_category_id
