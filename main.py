@@ -118,6 +118,7 @@ async def _set_bot_commands(bot: Bot) -> None:
     # in Tajik, and the full list is visible only in each configured admin chat.
     admin_commands = [
         BotCommand(command="myid", description="🪪 ID-и Telegram-и худро бинед"),
+        BotCommand(command="admincheck", description="🧪 Санҷиши фиристодани паём ба админ"),
         BotCommand(command="pending", description="⏳ Фармоишҳои интизори тасдиқ"),
         BotCommand(command="proofs", description="🧾 Чекҳои пардохт"),
         BotCommand(command="order", description="📦 Тафсилоти фармоиш"),
