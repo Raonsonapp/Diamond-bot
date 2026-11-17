@@ -51,11 +51,14 @@ async def _credit_referral(session, order: Order) -> None:
 
 
 async def prompt_for_review(bot: Bot, order: Order) -> None:
-    """After delivery, ask the customer for a short review — customer.py
-    posts it to the shop channel once they reply (or skip)."""
+    """Ask for a concise, product-aware Tajik review after confirmed delivery."""
     if not config.review_channel_id:
         return
 
+    async with get_session() as session:
+        product = await get_product(session, order.product_id)
+
+    item_name = product.display_name if product is not None else "маҳсулоти фармоишшуда"
     key = StorageKey(bot_id=bot.id, chat_id=order.user_id, user_id=order.user_id)
     customer_state = FSMContext(storage=storage, key=key)
     await customer_state.set_state(OrderFlow.awaiting_review)
@@ -63,12 +66,11 @@ async def prompt_for_review(bot: Bot, order: Order) -> None:
 
     await bot.send_message(
         order.user_id,
-        "🎁 Фармоиши шумо бо муваффақият анҷом ёфт!\\n\\n"
-        "😊 Лутфан, фикру отзиви худро дар бораи гирифтани ваучер нависед. "
-        "Назари шумо барои зиёд шудани боварии муштариёни дигар хеле муҳим аст. ❤️",
+        f"🎉 Фармоиши шумо расид: <b>{item_name}</b>!\\n\\n"
+        "😊 Лутфан, фикру мулоҳизаи худро дар бораи хизматрасонӣ нависед. "
+        "Назари шумо барои мо муҳим аст. ❤️",
         reply_markup=review_prompt_keyboard(order.id),
     )
-
 
 async def _resolve_group(session, order: Order) -> list[Order]:
     if not order.cart_group_id:
@@ -142,7 +144,7 @@ async def _send_success_receipt(bot: Bot, orders: list[Order], products: dict[in
         )
 
 
-_PROGRESS_TEXT = "⏳ Фармоиши шумо коркард шуда истодааст..."
+_PROGRESS_TEXT = "⏳ Фармоиш иҷро мешавад..."
 # 9 steps (0% -> 90% by +10 each) * 6.4s ≈ 58s — timed to span
 # delivery.py's own ~60s FazerCards polling window (_POLL_ATTEMPTS *
 # _POLL_DELAY_SECONDS) so 90% is reached right around when a genuinely
@@ -200,7 +202,7 @@ async def _pause_progress_bar(bot: Bot, order: Order, message_id: int) -> None:
     100%, that would be a lie) and persist message_id so whichever admin
     action finishes the order later (Delivered button / /delivered) can
     find and complete this same message instead of leaving it stuck."""
-    text = f"{_PROGRESS_TEXT}\n▓▓▓▓▓▓▓▓▓░ 90% — дар навбати коркарди дастӣ, дар наздиктарин вақт мерасад."
+    text = f"{_PROGRESS_TEXT}\n▓▓▓▓▓▓▓▓▓░ 90% — интизори тасдиқи дастӣ."
     try:
         await bot.edit_message_text(text, chat_id=order.user_id, message_id=message_id)
     except Exception:
