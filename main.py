@@ -5,12 +5,19 @@ import aiohttp
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramConflictError,
+    TelegramNetworkError,
+    TelegramRetryAfter,
+    TelegramServerError,
+)
 from aiogram.types import BotCommand, BotCommandScopeChat, ErrorEvent
 from aiohttp import web
 
 from bot.config import config
-from bot.db.session import init_db
+from bot.db.session import engine, init_db
+from sqlalchemy import text
 from bot.fsm_storage import storage
 from bot.handlers import admin, customer, adsgram_admin
 from bot.services.sms_webhook import register_sms_webhook
@@ -50,6 +57,10 @@ def build_dispatcher() -> Dispatcher:
                 command = body.split(maxsplit=1)[0][:40]
         elif callback is not None:
             command = f"callback:{(getattr(callback, 'data', '') or '')[:60]}"
+        elif message is not None and (getattr(message, "text", None) or "").strip().casefold() in {
+            "📋 меню", "меню", "🏠 меню"
+        }:
+            command = "reply:menu"
 
         logging.info(
             "UPDATE_INCOMING id=%s type=%s user_id=%s chat_id=%s action=%s",
@@ -111,6 +122,7 @@ async def _set_bot_commands(bot: Bot) -> None:
     # in Tajik, and the full list is visible only in each configured admin chat.
     admin_commands = [
         BotCommand(command="myid", description="🪪 ID-и Telegram-и худро бинед"),
+        BotCommand(command="admincheck", description="🧪 Санҷиши фиристодани паём ба админ"),
         BotCommand(command="pending", description="⏳ Фармоишҳои интизори тасдиқ"),
         BotCommand(command="proofs", description="🧾 Чекҳои пардохт"),
         BotCommand(command="order", description="📦 Тафсилоти фармоиш"),
@@ -164,10 +176,130 @@ async def _set_bot_commands(bot: Bot) -> None:
         await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=chat_id))
 
 
+# A PostgreSQL advisory lock prevents two deployments that share the same
+# database from polling the same Telegram bot token at the same time. On
+# SQLite/Hugging Face, a process lock prevents duplicate workers in one
+# container. Telegram's 409 Conflict is still treated as fatal below: it is
+# never silently retried forever while updates (including payment proofs) pile up.
+_INSTANCE_LOCK_CONNECTION = None
+_INSTANCE_LOCK_FILE = None
+_INSTANCE_LOCK_ID = 8649779422
+
+
+async def _acquire_single_instance_lock() -> None:
+    global _INSTANCE_LOCK_CONNECTION, _INSTANCE_LOCK_FILE
+
+    if engine.dialect.name == "postgresql":
+        connection = await engine.connect()
+        acquired = await connection.scalar(
+            text("SELECT pg_try_advisory_lock(:lock_id)"),
+            {"lock_id": _INSTANCE_LOCK_ID},
+        )
+        if not acquired:
+            await connection.close()
+            raise RuntimeError(
+                "Another FF MARGEDAR worker already owns the bot lock. "
+                "Stop the duplicate deployment before starting this one."
+            )
+        _INSTANCE_LOCK_CONNECTION = connection
+        logging.info("Single-instance PostgreSQL advisory lock acquired")
+        return
+
+    # Hugging Face Spaces currently uses SQLite in some configurations.
+    # flock is released automatically if the process exits or is killed.
+    import fcntl
+
+    lock_file = open("/tmp/ff-margedar-bot.lock", "w")
+    try:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        lock_file.close()
+        raise RuntimeError(
+            "Another FF MARGEDAR worker is already running in this container."
+        ) from exc
+    _INSTANCE_LOCK_FILE = lock_file
+    logging.info("Single-instance process lock acquired")
+
+
+async def _release_single_instance_lock() -> None:
+    global _INSTANCE_LOCK_CONNECTION, _INSTANCE_LOCK_FILE
+
+    if _INSTANCE_LOCK_CONNECTION is not None:
+        try:
+            await _INSTANCE_LOCK_CONNECTION.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": _INSTANCE_LOCK_ID},
+            )
+        finally:
+            await _INSTANCE_LOCK_CONNECTION.close()
+            _INSTANCE_LOCK_CONNECTION = None
+
+    if _INSTANCE_LOCK_FILE is not None:
+        import fcntl
+        try:
+            fcntl.flock(_INSTANCE_LOCK_FILE.fileno(), fcntl.LOCK_UN)
+        finally:
+            _INSTANCE_LOCK_FILE.close()
+            _INSTANCE_LOCK_FILE = None
+
+
 async def run_polling(bot: Bot, dp: Dispatcher) -> None:
-    """Local development mode: the bot itself keeps asking Telegram for updates."""
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    """Single-owner polling loop with visible, bounded recovery from outages."""
+    webhook = await bot.get_webhook_info()
+    if webhook.url:
+        logging.warning(
+            "A Telegram webhook was configured at %s; removing it without dropping queued updates",
+            webhook.url,
+        )
+        await bot.delete_webhook(drop_pending_updates=False)
+
+    offset = None
+    backoff = 1
+    allowed_updates = dp.resolve_used_update_types()
+    logging.info("Starting single-owner polling; allowed_updates=%s", allowed_updates)
+
+    while True:
+        try:
+            updates = await bot.get_updates(
+                offset=offset,
+                timeout=25,
+                request_timeout=35,
+                allowed_updates=allowed_updates,
+            )
+            backoff = 1
+            for update in updates:
+                # Acknowledge an update to Telegram only after dispatch
+                # succeeds. If a receipt handler crashes, keep the same offset
+                # so Telegram can redeliver it instead of silently losing it.
+                try:
+                    await dp.feed_update(bot, update)
+                except Exception:
+                    logging.exception(
+                        "Unhandled update dispatch error; update_id=%s; update will be retried",
+                        update.update_id,
+                    )
+                    await asyncio.sleep(1)
+                    break
+                offset = update.update_id + 1
+        except TelegramConflictError:
+            logging.critical(
+                "Telegram 409 Conflict: another server is polling this bot token. "
+                "This worker is stopping to avoid competing for updates. "
+                "Keep exactly one active deployment using this BOT_TOKEN."
+            )
+            raise
+        except TelegramRetryAfter as exc:
+            delay = max(1, int(exc.retry_after))
+            logging.warning("Telegram rate limit; retrying in %ss", delay)
+            await asyncio.sleep(delay)
+        except (TelegramNetworkError, TelegramServerError) as exc:
+            logging.warning(
+                "Telegram polling network/server error: %s; retrying in %ss",
+                exc,
+                backoff,
+            )
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30)
 
 
 
@@ -209,7 +341,7 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
     await bot.set_webhook(
         url=webhook_url,
         secret_token=config.telegram_webhook_secret or None,
-        drop_pending_updates=True,
+        drop_pending_updates=False,
     )
 
     app = web.Application()
@@ -280,16 +412,20 @@ async def main() -> None:
     if not config.bot_token:
         raise RuntimeError("BOT_TOKEN is not set. Copy .env.example to .env and fill it in.")
 
-    await init_db()
-
+    await _acquire_single_instance_lock()
     bot = Bot(token=config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = build_dispatcher()
-    await _set_bot_commands(bot)
+    try:
+        await init_db()
+        dp = build_dispatcher()
+        await _set_bot_commands(bot)
 
-    if config.public_url:
-        await run_webhook(bot, dp)
-    else:
-        await run_polling(bot, dp)
+        if config.public_url:
+            await run_webhook(bot, dp)
+        else:
+            await run_polling(bot, dp)
+    finally:
+        await bot.session.close()
+        await _release_single_instance_lock()
 
 
 if __name__ == "__main__":

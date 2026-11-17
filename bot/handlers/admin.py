@@ -58,7 +58,48 @@ async def show_telegram_user_id(message: Message) -> None:
 
 
 def is_admin(user_id: int) -> bool:
-    return user_id in config.admin_user_ids
+    # ADMIN_CHAT_ID is often the owner's private Telegram ID. Accept it as
+    # an admin identity too; group chat IDs remain distinct from user IDs.
+    return user_id in config.admin_user_ids or (
+        config.admin_chat_id > 0 and user_id == config.admin_chat_id
+    )
+
+
+@router.message(Command("admincheck"))
+async def admin_delivery_check(message: Message) -> None:
+    """Verify that configured admin chats are reachable before live orders."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    targets = list(dict.fromkeys(
+        [*config.admin_user_ids, *([config.admin_chat_id] if config.admin_chat_id else [])]
+    ))
+    if not targets:
+        await message.answer(
+            "❌ ADMIN_USER_IDS ва ADMIN_CHAT_ID холӣ ҳастанд. "
+            "ID-и худро бо /myid гиред ва дар Environment танзим кунед."
+        )
+        return
+
+    results = []
+    for target in targets:
+        try:
+            await message.bot.send_message(
+                target,
+                f"✅ Санҷиши пайвастшавии админ муваффақ аст. Ин паёмро барои санҷиши FF MARGEDAR фиристодем. (ID: {target})",
+            )
+            results.append(f"✅ {target} — паём расид")
+        except Exception as exc:
+            results.append(f"❌ {target} — {type(exc).__name__}: {str(exc)[:180]}")
+            import logging
+            logging.exception("Admin delivery check failed for destination %s", target)
+
+    await message.answer(
+        "🔎 <b>Санҷиши фиристодани паём ба админ</b>\n\n"
+        + "\n".join(results)
+        + "\n\nБарои DM, админ бояд ботро аввал кушода /start фиристода бошад."
+    )
 
 
 async def _reject_non_admin(message: Message) -> None:
