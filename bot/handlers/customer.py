@@ -1284,7 +1284,7 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
         # game-level endpoint, then compare the region only when the supplier
         # actually returns explicit region metadata.
         region_check = await _try_validate_player_id(products[0].fzr_category_id, recipient)
-        if not region_check or not region_check.get("player_name"):
+        if not region_check or not region_check.get("valid"):
             await answer_target.answer(
                 "❌ <b>ID нодуруст аст ё ба ин регион тааллуқ надорад!</b>\n\n"
                 "🔎 Сабабҳои эҳтимолӣ:\n"
@@ -1398,11 +1398,13 @@ async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) ->
 
 
 async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> dict | None:
-    """Validate a Free Fire ID and extract an explicit region when supplier provides one.
+    """Validate a Free Fire ID using FazerCards' game-level validation catalog.
 
-    The validator has a separate game-level category namespace. A player name
-    alone is not sufficient to prove CIS vs Indonesia, so callers must fail
-    closed if the response does not explicitly expose region/server metadata.
+    Top-up SKU IDs (free_fire_cis/free_fire_id) are a different namespace
+    from validation IDs (free_fire). Accept a valid response even when the
+    provider omits the optional player name; the boolean validation result
+    is authoritative. Region is enforced only when the provider explicitly
+    returns region metadata.
     """
     from bot.services.delivery import guess_id_field_key
     from bot.services.fazercards import FazerCardsError, list_validate_id_categories, validate_player_id
@@ -1410,34 +1412,74 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> dict 
     try:
         supported = await list_validate_id_categories()
     except FazerCardsError:
+        logging.exception("FazerCards validation-category lookup failed")
         return None
 
-    # Validation categories are game-level (e.g. "free_fire"), unlike
-    # region-specific top-up categories (e.g. "free_fire_cis"/"free_fire_id").
     validation_category_id = (
-        "free_fire" if fzr_category_id.startswith("free_fire_") else fzr_category_id
+        "free_fire" if fzr_category_id.lower().startswith("free_fire_") else fzr_category_id
     )
+    items = supported.get("items", []) if isinstance(supported, dict) else []
     item = next(
-        (
-            i for i in supported.get("items", [])
-            if i.get("category_id") == validation_category_id
-        ),
+        (entry for entry in items
+         if isinstance(entry, dict) and entry.get("category_id") == validation_category_id),
         None,
     )
     if item is None:
+        logging.warning(
+            "FazerCards has no validation category %r (top-up category %r)",
+            validation_category_id, fzr_category_id,
+        )
         return None
+
     field_key = guess_id_field_key(item.get("fields", []))
-    if field_key is None:
+    if not field_key:
+        logging.warning("Could not identify Free Fire ID field in validation schema: %r", item.get("fields"))
         return None
+
     try:
         result = await validate_player_id(item["category_id"], {field_key: player_id})
     except FazerCardsError:
+        logging.exception("FazerCards rejected validation request for category %s", validation_category_id)
         return None
-    if not isinstance(result, dict) or not result.get("valid"):
+
+    if not isinstance(result, dict):
+        logging.warning("Unexpected FazerCards validation response type: %s", type(result).__name__)
+        return None
+
+    def find_value(value, keys, depth=0):
+        if depth > 5:
+            return None
+        if isinstance(value, dict):
+            for key in keys:
+                candidate = value.get(key)
+                if candidate not in (None, ""):
+                    return candidate
+            for nested in value.values():
+                found = find_value(nested, keys, depth + 1)
+                if found not in (None, ""):
+                    return found
+        elif isinstance(value, list):
+            for nested in value:
+                found = find_value(nested, keys, depth + 1)
+                if found not in (None, ""):
+                    return found
+        return None
+
+    valid_value = find_value(result, ("valid", "is_valid", "isValid"))
+    is_valid = (
+        valid_value is True
+        or (isinstance(valid_value, str) and valid_value.strip().lower() in {"true", "valid", "yes", "1"})
+        or (isinstance(valid_value, int) and not isinstance(valid_value, bool) and valid_value == 1)
+    )
+    if not is_valid:
+        logging.info(
+            "FazerCards says Free Fire ID is invalid: category=%s response_keys=%s",
+            validation_category_id, list(result.keys()),
+        )
         return None
 
     def find_region(value, depth=0):
-        if depth > 4:
+        if depth > 5:
             return None
         if isinstance(value, dict):
             for key, item_value in value.items():
@@ -1445,7 +1487,7 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> dict 
                 if key_norm in {"region", "server", "server_region", "account_region", "country", "country_code", "zone"}:
                     if isinstance(item_value, (str, int)):
                         text = str(item_value).strip().lower()
-                        if any(word in text for word in ("indonesia", "indonesian", "indo", "id-server", "id server")) or text in {"id", "idn"}:
+                        if any(word in text for word in ("indonesia", "indonesian", "indo", "id-server", "id server")) or text in {"id", "idn", "ind"}:
                             return "Индонезия"
                         if any(word in text for word in ("cis", "russia", "russian", "ru-server", "ru server", "europe")) or text in {"ru", "cis"}:
                             return "СНГ"
@@ -1459,12 +1501,12 @@ async def _try_validate_player_id(fzr_category_id: str, player_id: str) -> dict 
                     return nested
         return None
 
-    player_name = result.get("player_name") or result.get("name")
+    player_name = find_value(result, ("player_name", "playerName", "name", "nickname"))
     return {
+        "valid": True,
         "player_name": str(player_name) if player_name else None,
         "region": find_region(result),
     }
-
 
 @router.callback_query(OrderFlow.confirming, F.data == "order:cancel")
 async def cancel_order(callback: CallbackQuery, state: FSMContext) -> None:
