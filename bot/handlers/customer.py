@@ -2071,7 +2071,7 @@ async def receive_review(message: Message, state: FSMContext) -> None:
             logging.exception("Could not publish customer review for order #%s", order_id)
 
     await message.answer(
-        "🙏 Ташаккур барои фикру мулоҳизаатон! Назари шумо барои мо муҳим аст.\\n\\n"
+        "🙏 Ташаккур барои фикру мулоҳизаатон! Назари шумо барои мо муҳим аст.\n\n"
         "📋 Менюи асосӣ — бахшро интихоб кунед:",
         reply_markup=main_menu_keyboard(),
     )
@@ -2097,7 +2097,7 @@ async def skip_review(callback: CallbackQuery, state: FSMContext) -> None:
 
     await _edit_navigation_message(
         callback,
-        "🙏 Хуб, ташаккур барои харид!\\n\\n📋 Менюи асосӣ — бахшро интихоб кунед:",
+        "🙏 Хуб, ташаккур барои харид!\n\n📋 Менюи асосӣ — бахшро интихоб кунед:",
         reply_markup=main_menu_keyboard(),
     )
     await callback.answer()
