@@ -1284,15 +1284,8 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
         # game-level endpoint, then compare the region only when the supplier
         # actually returns explicit region metadata.
         region_check = await _try_validate_player_id(products[0].fzr_category_id, recipient)
-        if region_check and region_check.get("unavailable"):
-            await answer_target.answer(
-                "⚠️ <b>Санҷиши ID ҳоло дастрас нест.</b>\n\n"
-                "Хидмати санҷиши ID-и таъминкунанда ғайрифаъол аст. "
-                "Лутфан каме баъдтар кӯшиш кунед ё бо админ тамос гиред. "
-                "То барқарор шудани санҷиш пардохт қабул намешавад."
-            )
-            return
-        if not region_check or not region_check.get("valid"):
+        validation_unavailable = bool(region_check and region_check.get("unavailable"))
+        if not validation_unavailable and (not region_check or not region_check.get("valid")):
             await answer_target.answer(
                 "❌ <b>ID нодуруст аст ё ба ин регион тааллуқ надорад!</b>\n\n"
                 "🔎 Сабабҳои эҳтимолӣ:\n"
@@ -1302,15 +1295,26 @@ async def _finalize_recipient(state: FSMContext, user_id: int, recipient: str, a
                 "💳 То тасдиқи ID пардохт қабул намешавад."
             )
             return
-        detected = region_check.get("region")
-        if detected and detected != expected_region:
-            await answer_target.answer(
-                f"⛔ ID-и шумо ба минтақаи <b>{html.escape(detected)}</b> тааллуқ дорад, "
-                f"аммо шумо <b>{html.escape(expected_region)}</b>-ро интихоб кардед. "
-                "Минтақаро иваз кунед; пардохт иҷозат дода нашуд."
+        if validation_unavailable:
+            # FazerCards' optional UID-validation subscription is inactive.
+            # Continue to checkout: the actual region-specific top-up API is
+            # still the final authority and will reject an invalid UID/region.
+            # Do not invent a player name or claim that the UID was verified.
+            logging.warning(
+                "Skipping pre-check for Free Fire UID %s (%s): FazerCards validation subscription inactive",
+                recipient, expected_region,
             )
-            return
-        player_name = region_check["player_name"]
+            player_name = None
+        else:
+            detected = region_check.get("region")
+            if detected and detected != expected_region:
+                await answer_target.answer(
+                    f"⛔ ID-и шумо ба минтақаи <b>{html.escape(detected)}</b> тааллуқ дорад, "
+                    f"аммо шумо <b>{html.escape(expected_region)}</b>-ро интихоб кардед. "
+                    "Минтақаро иваз кунед; пардохт иҷозат дода нашуд."
+                )
+                return
+            player_name = region_check.get("player_name")
 
     await state.update_data(ff_player_id=recipient, ff_player_name=player_name)
     await state.set_state(OrderFlow.confirming)
