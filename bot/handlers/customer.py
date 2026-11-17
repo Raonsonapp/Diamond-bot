@@ -1808,6 +1808,13 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
 
     async with get_session() as session:
         order = await get_order(session, order_id)
+        if order is None:
+            await state.clear()
+            await message.answer(
+                "⚠️ Фармоиши интизори пардохт ёфт нашуд. Лутфан аз меню фармоиши нав кушоед ё ба дастгирӣ муроҷиат кунед."
+            )
+            logging.error("Payment proof received for missing order #%s, user=%s", order_id, message.from_user.id)
+            return
         if order.status != OrderStatus.AWAITING_PAYMENT:
             # The SMS auto-confirm webhook (bank SMS forwarded from the
             # admin's phone) already matched and confirmed this order —
