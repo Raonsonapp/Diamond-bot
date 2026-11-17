@@ -2042,9 +2042,8 @@ async def recover_payment_proof_after_restart(message: Message, state: FSMContex
 @router.message(OrderFlow.awaiting_admin_review)
 async def awaiting_admin_review_reply(message: Message, state: FSMContext) -> None:
     await message.answer(
-        "⏳ Чеки шумо аллакай ба админ фиристода шудааст ва дар навбати баррасӣ қарор дорад. "
-        "Лутфан то тасдиқ интизор шавед — ин одатан 1-5 дақиқа тӯл мекашад. "
-        "Агар хеле дер шуд, аз 🆘 Дастгирӣ истифода баред."
+        "✅ Чеки шумо ба админ расид. Пас аз тасдиқи пардохт, фармоиш иҷро мешавад. "
+        "Лутфан каме интизор шавед."
     )
 
 
@@ -2056,15 +2055,25 @@ async def receive_review(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     order_id = data.get("order_id")
     await state.clear()
-    if not order_id:
-        return
 
-    async with get_session() as session:
-        order = await get_order(session, order_id)
-        product = await get_product(session, order.product_id)
-        await post_review_announcement(message.bot, session, order, product, message.text.strip())
+    if order_id:
+        try:
+            async with get_session() as session:
+                order = await get_order(session, order_id)
+                if order is not None:
+                    product = await get_product(session, order.product_id)
+                    if product is not None:
+                        await post_review_announcement(
+                            message.bot, session, order, product, message.text.strip()
+                        )
+        except Exception:
+            logging.exception("Could not publish customer review for order #%s", order_id)
 
-    await message.answer("Ташаккур барои шарҳи шумо! 🙏")
+    await message.answer(
+        "🙏 Ташаккур барои фикру мулоҳизаатон! Назари шумо барои мо муҳим аст.\n\n"
+        "📋 Менюи асосӣ — бахшро интихоб кунед:",
+        reply_markup=main_menu_keyboard(),
+    )
 
 
 @router.callback_query(F.data.startswith("review:skip:"))
@@ -2075,12 +2084,21 @@ async def skip_review(callback: CallbackQuery, state: FSMContext) -> None:
     order_id = int(callback.data.split(":")[2])
     await state.clear()
 
-    async with get_session() as session:
-        order = await get_order(session, order_id)
-        product = await get_product(session, order.product_id)
-        await post_review_announcement(callback.bot, session, order, product, None)
+    try:
+        async with get_session() as session:
+            order = await get_order(session, order_id)
+            if order is not None:
+                product = await get_product(session, order.product_id)
+                if product is not None:
+                    await post_review_announcement(callback.bot, session, order, product, None)
+    except Exception:
+        logging.exception("Could not publish skipped-review event for order #%s", order_id)
 
-    await _edit_navigation_message(callback, "Хуб, ташаккур барои харид! 🙏", reply_markup=None)
+    await _edit_navigation_message(
+        callback,
+        "🙏 Хуб, ташаккур барои харид!\n\n📋 Менюи асосӣ — бахшро интихоб кунед:",
+        reply_markup=main_menu_keyboard(),
+    )
     await callback.answer()
 
 
