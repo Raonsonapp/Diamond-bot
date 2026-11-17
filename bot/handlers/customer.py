@@ -2042,9 +2042,8 @@ async def recover_payment_proof_after_restart(message: Message, state: FSMContex
 @router.message(OrderFlow.awaiting_admin_review)
 async def awaiting_admin_review_reply(message: Message, state: FSMContext) -> None:
     await message.answer(
-        "⏳ Чеки шумо аллакай ба админ фиристода шудааст ва дар навбати баррасӣ қарор дорад. "
-        "Лутфан то тасдиқ интизор шавед — ин одатан 1-5 дақиқа тӯл мекашад. "
-        "Агар хеле дер шуд, аз 🆘 Дастгирӣ истифода баред."
+        "✅ Чеки шумо ба админ расид. Пас аз тасдиқи пардохт, фармоиш иҷро мешавад. "
+        "Лутфан каме интизор шавед."
     )
 
 
