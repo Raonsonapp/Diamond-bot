@@ -57,6 +57,10 @@ def build_dispatcher() -> Dispatcher:
                 command = body.split(maxsplit=1)[0][:40]
         elif callback is not None:
             command = f"callback:{(getattr(callback, 'data', '') or '')[:60]}"
+        elif message is not None and (getattr(message, "text", None) or "").strip().casefold() in {
+            "📋 меню", "меню", "🏠 меню"
+        }:
+            command = "reply:menu"
 
         logging.info(
             "UPDATE_INCOMING id=%s type=%s user_id=%s chat_id=%s action=%s",
@@ -264,17 +268,19 @@ async def run_polling(bot: Bot, dp: Dispatcher) -> None:
             )
             backoff = 1
             for update in updates:
-                # Advance only after Telegram has returned the update. Each
-                # event is dispatched once by this process; handler failures
-                # are logged without stopping the remaining update stream.
-                offset = update.update_id + 1
+                # Acknowledge an update to Telegram only after dispatch
+                # succeeds. If a receipt handler crashes, keep the same offset
+                # so Telegram can redeliver it instead of silently losing it.
                 try:
                     await dp.feed_update(bot, update)
                 except Exception:
                     logging.exception(
-                        "Unhandled update dispatch error; update_id=%s",
+                        "Unhandled update dispatch error; update_id=%s; update will be retried",
                         update.update_id,
                     )
+                    await asyncio.sleep(1)
+                    break
+                offset = update.update_id + 1
         except TelegramConflictError:
             logging.critical(
                 "Telegram 409 Conflict: another server is polling this bot token. "
@@ -335,7 +341,7 @@ async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
     await bot.set_webhook(
         url=webhook_url,
         secret_token=config.telegram_webhook_secret or None,
-        drop_pending_updates=True,
+        drop_pending_updates=False,
     )
 
     app = web.Application()
