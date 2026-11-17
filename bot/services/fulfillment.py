@@ -7,6 +7,7 @@ messages) instead of drifting apart.
 from __future__ import annotations
 
 import asyncio
+import html
 from dataclasses import dataclass
 
 from aiogram import Bot
@@ -58,7 +59,7 @@ async def prompt_for_review(bot: Bot, order: Order) -> None:
     async with get_session() as session:
         product = await get_product(session, order.product_id)
 
-    item_name = product.display_name if product is not None else "маҳсулоти фармоишшуда"
+    item_name = html.escape(product.display_name) if product is not None else "маҳсулоти фармоишшуда"
     key = StorageKey(bot_id=bot.id, chat_id=order.user_id, user_id=order.user_id)
     customer_state = FSMContext(storage=storage, key=key)
     await customer_state.set_state(OrderFlow.awaiting_review)
