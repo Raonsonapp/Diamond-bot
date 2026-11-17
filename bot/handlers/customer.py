@@ -6,6 +6,7 @@ from datetime import timezone
 from zoneinfo import ZoneInfo
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter, TelegramServerError
 from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -425,7 +426,12 @@ async def menu_reviews(callback: CallbackQuery) -> None:
 
 # The persistent bottom button is the only general-purpose text command.
 # Other arbitrary text outside an active input step is ignored.
-@router.message(F.text == "📋 Меню")
+@router.message(
+    F.text.func(
+        lambda value: isinstance(value, str)
+        and value.strip().casefold() in {"📋 меню", "меню", "🏠 меню"}
+    )
+)
 async def persistent_menu_button(message: Message, state: FSMContext) -> None:
     await state.clear()
     # Attach inline shop buttons to the video itself, rather than sending a
@@ -1830,6 +1836,13 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
 
     async with get_session() as session:
         order = await get_order(session, order_id)
+        if order is None:
+            await state.clear()
+            await status_message.edit_text(
+                "⚠️ Фармоиши шумо дар база ёфт нашуд. Лутфан ба дастгирӣ муроҷиат кунед."
+            )
+            logging.error("Payment proof received for missing order #%s, user=%s", order_id, message.from_user.id)
+            return
         group = await get_orders_by_group(session, order.cart_group_id) if order.cart_group_id else [order]
         products = [await get_product(session, o.product_id) for o in group]
         # Always list what was actually ordered — this used to only show
@@ -1852,14 +1865,27 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
         order = await get_order(session, order_id)
 
         if message.photo:
-            file_bytes = await message.bot.download(message.photo[-1].file_id)
-            proof_hash = hashlib.sha256(file_bytes.read()).hexdigest()
-            duplicate = await find_duplicate_proof(session, proof_hash, order_id)
-            order = await set_payment_proof_hash(session, order, proof_hash)
-            if duplicate is not None:
-                caption = (
-                    f"⚠️⚠️ ДИҚҚАТ: ҳамин расм қаблан барои фармоиши #{duplicate.id} "
-                    f"истифода шуда буд! Эҳтимоли фиреб — бодиққат санҷед.\n\n{caption}"
+            # Hashing is an optional duplicate-proof warning, not a prerequisite
+            # for forwarding the original Telegram file to the admin. Temporary
+            # Telegram download failures must never swallow a customer's receipt.
+            try:
+                file_bytes = await asyncio.wait_for(
+                    message.bot.download(message.photo[-1].file_id),
+                    timeout=12,
+                )
+                if file_bytes is not None:
+                    proof_hash = hashlib.sha256(file_bytes.read()).hexdigest()
+                    duplicate = await find_duplicate_proof(session, proof_hash, order_id)
+                    order = await set_payment_proof_hash(session, order, proof_hash)
+                    if duplicate is not None:
+                        caption = (
+                            f"⚠️⚠️ ДИҚҚАТ: ҳамин расм қаблан барои фармоиши #{duplicate.id} "
+                            f"истифода шуда буд! Эҳтимоли фиреб — бодиққат санҷед.\n\n{caption}"
+                        )
+            except Exception:
+                logging.exception(
+                    "Optional payment-proof hash failed for order #%s; forwarding original receipt",
+                    order_id,
                 )
         order = await set_proof_submitted(session, order)
 
@@ -1878,30 +1904,57 @@ async def receive_payment_proof(message: Message, state: FSMContext) -> None:
     delivered_to_admin = False
     last_admin_error: Exception | None = None
     for admin_target in admin_targets:
-        try:
-            if message.photo:
-                await message.bot.send_photo(
+        for attempt in range(2):
+            try:
+                if message.photo:
+                    await message.bot.send_photo(
+                        admin_target,
+                        photo=message.photo[-1].file_id,
+                        caption=caption,
+                        reply_markup=admin_order_keyboard(order),
+                    )
+                else:
+                    await message.bot.send_document(
+                        admin_target,
+                        document=message.document.file_id,
+                        caption=caption,
+                        reply_markup=admin_order_keyboard(order),
+                    )
+                delivered_to_admin = True
+                logging.info(
+                    "Payment proof for order #%s delivered to admin destination %s",
+                    order_id,
                     admin_target,
-                    photo=message.photo[-1].file_id,
-                    caption=caption,
-                    reply_markup=admin_order_keyboard(order),
                 )
-            else:
-                await message.bot.send_document(
+                break
+            except TelegramRetryAfter as exc:
+                last_admin_error = exc
+                if attempt == 0:
+                    await asyncio.sleep(min(max(int(exc.retry_after), 1), 30))
+                    continue
+                logging.exception(
+                    "Telegram rate limit prevented payment-proof delivery for order #%s to admin %s",
+                    order_id,
                     admin_target,
-                    document=message.document.file_id,
-                    caption=caption,
-                    reply_markup=admin_order_keyboard(order),
                 )
-            delivered_to_admin = True
-            logging.info(
-                "Payment proof for order #%s delivered to admin destination %s",
-                order_id,
-                admin_target,
-            )
-        except Exception as exc:
-            last_admin_error = exc
-            logging.exception("Could not forward payment proof for order #%s to admin %s", order_id, admin_target)
+            except (TelegramNetworkError, TelegramServerError) as exc:
+                last_admin_error = exc
+                if attempt == 0:
+                    await asyncio.sleep(1)
+                    continue
+                logging.exception(
+                    "Temporary Telegram outage prevented payment-proof delivery for order #%s to admin %s",
+                    order_id,
+                    admin_target,
+                )
+            except Exception as exc:
+                last_admin_error = exc
+                logging.exception(
+                    "Could not forward payment proof for order #%s to admin %s",
+                    order_id,
+                    admin_target,
+                )
+                break
 
     if not delivered_to_admin:
         # Keep the FSM on awaiting_payment_proof so the customer can retry after
