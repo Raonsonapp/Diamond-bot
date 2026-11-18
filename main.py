@@ -187,39 +187,77 @@ _INSTANCE_LOCK_ID = 8649779422
 
 
 async def _acquire_single_instance_lock() -> None:
+    """Acquire the one-worker lock, allowing an old Space worker to exit.
+
+    Hugging Face may briefly overlap the old container process and the new
+    process during a restart. Do not fail immediately in that handover
+    window, but never start polling unless this process owns the lock.
+    """
     global _INSTANCE_LOCK_CONNECTION, _INSTANCE_LOCK_FILE
+
+    import time
+
+    wait_seconds = 180
+    retry_seconds = 3
+    deadline = time.monotonic() + wait_seconds
 
     if engine.dialect.name == "postgresql":
         connection = await engine.connect()
-        acquired = await connection.scalar(
-            text("SELECT pg_try_advisory_lock(:lock_id)"),
-            {"lock_id": _INSTANCE_LOCK_ID},
-        )
-        if not acquired:
-            await connection.close()
-            raise RuntimeError(
-                "Another FF MARGEDAR worker already owns the bot lock. "
-                "Stop the duplicate deployment before starting this one."
-            )
-        _INSTANCE_LOCK_CONNECTION = connection
-        logging.info("Single-instance PostgreSQL advisory lock acquired")
-        return
+        try:
+            while True:
+                acquired = await connection.scalar(
+                    text("SELECT pg_try_advisory_lock(:lock_id)"),
+                    {"lock_id": _INSTANCE_LOCK_ID},
+                )
+                if acquired:
+                    _INSTANCE_LOCK_CONNECTION = connection
+                    logging.info("Single-instance PostgreSQL advisory lock acquired")
+                    return
 
-    # Hugging Face Spaces currently uses SQLite in some configurations.
-    # flock is released automatically if the process exits or is killed.
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(
+                        "Another FF MARGEDAR worker still owns the PostgreSQL bot lock "
+                        f"after {wait_seconds}s. The old worker must stop before polling starts."
+                    )
+                logging.warning(
+                    "Another worker still owns the PostgreSQL lock; waiting %.0fs before retry",
+                    min(retry_seconds, remaining),
+                )
+                await asyncio.sleep(min(retry_seconds, remaining))
+        except Exception:
+            if _INSTANCE_LOCK_CONNECTION is not connection:
+                await connection.close()
+            raise
+
+    # flock is released by the OS automatically when the owning process exits.
+    # Keep one file descriptor open while retrying; never unlink/recreate the
+    # lock file, since that could let two processes lock different inodes.
     import fcntl
 
-    lock_file = open("/tmp/ff-margedar-bot.lock", "w")
+    lock_file = open("/tmp/ff-margedar-bot.lock", "a+")
     try:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError as exc:
+        while True:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                _INSTANCE_LOCK_FILE = lock_file
+                logging.info("Single-instance process lock acquired")
+                return
+            except BlockingIOError:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(
+                        "Another FF MARGEDAR worker still owns the process lock "
+                        f"after {wait_seconds}s. The old worker must stop before polling starts."
+                    )
+                logging.warning(
+                    "Another worker still owns the process lock; waiting %.0fs before retry",
+                    min(retry_seconds, remaining),
+                )
+                await asyncio.sleep(min(retry_seconds, remaining))
+    except Exception:
         lock_file.close()
-        raise RuntimeError(
-            "Another FF MARGEDAR worker is already running in this container."
-        ) from exc
-    _INSTANCE_LOCK_FILE = lock_file
-    logging.info("Single-instance process lock acquired")
-
+        raise
 
 async def _release_single_instance_lock() -> None:
     global _INSTANCE_LOCK_CONNECTION, _INSTANCE_LOCK_FILE
