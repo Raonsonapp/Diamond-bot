@@ -26,6 +26,7 @@ class ProductCategory(str, enum.Enum):
     DIAMONDS = "diamonds"  # Free Fire diamonds — recipient is a player ID
     TELEGRAM = "telegram"  # Telegram Stars/Premium — recipient is a @username
     BIGO_LIVE = "bigo_live"  # Bigo Live diamonds (gifting currency) — recipient is a Bigo ID
+    PUBG_MOBILE = "pubg_mobile"  # PUBG Mobile UC and in-game packs
     FF_INDONESIA = "ff_indonesia"  # Free Fire Indonesia-server diamonds — much
     # cheaper per-diamond than the regular DIAMONDS tiers, so it needs its own
     # category (mixing the two would corrupt the custom-amount breakpoint
