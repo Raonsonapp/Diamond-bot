@@ -586,6 +586,15 @@ async def reply_about(message: Message, state: FSMContext) -> None:
     await message.answer(text, reply_markup=back_to_menu_keyboard())
 
 
+@router.callback_query(F.data == "game:pubg")
+async def choose_pubg_mobile(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await _open_catalog(
+        callback, state, ProductCategory.PUBG_MOBILE,
+        "🎯 <b>PUBG Mobile — UC ва хизматрасониҳо:</b>",
+    )
+
+
 @router.callback_query(F.data == "menu:games")
 async def menu_games(callback: CallbackQuery, state: FSMContext) -> None:
     # Acknowledge immediately to prevent Telegram's spinner from appearing stuck.
@@ -1208,6 +1217,8 @@ async def _recent_recipients_with_names(session, user_id: int, category: Product
 
 
 async def _recipient_prompt(category: ProductCategory) -> str:
+    if category == ProductCategory.PUBG_MOBILE:
+        return "Character ID-и PUBG Mobile-и худро"
     if category == ProductCategory.DIAMONDS:
         return "ID-и бозингари Free Fire-и худро (рақаме, ки дар профили худ мебинед)"
     if category == ProductCategory.FF_INDONESIA:
