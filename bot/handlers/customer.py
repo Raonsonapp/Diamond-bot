@@ -302,7 +302,7 @@ async def tutorial_command(message: Message) -> None:
     """Customer-facing Tajik text guide; no video or external emoji-pack links."""
     await message.answer(
         "🎮 <b>Дастури истифодаи FF MARGEDAR</b>\n\n"
-        "1️⃣ <b>Хариди алмос:</b> «🎮 Бозиҳо» → «💎 Free Fire — Алмосҳо» → бастаро интихоб кунед.\n"
+        "1️⃣ <b>Хариди маҳсулоти Free Fire:</b> «🎮 Бозиҳо» → минтақаро интихоб кунед → «Алмазҳо ва Ваучерҳо» ё «Level Up» → бастаро интихоб кунед.\n"
         "2️⃣ <b>ID-и бозингар:</b> ID-и дурусти Free Fire-ро ворид карда, фармоишро тасдиқ кунед.\n"
         "3️⃣ <b>Пардохт:</b> усули пардохтро интихоб карда, маблағи нишон додашударо пардохт намоед ва расидро фиристед.\n"
         "4️⃣ <b>Санҷиши чек:</b> админ расидро месанҷад. Фармоиш танҳо баъд аз тасдиқи пардохт иҷро мешавад.\n"
@@ -607,8 +607,12 @@ async def _open_catalog(
     try:
         async with get_session() as session:
             products = await list_active_products(session, category=category, telegram_kind=telegram_kind)
-            if catalog_filter == "diamonds":
-                products = [p for p in products if p.name[:1].isdigit()]
+            if catalog_filter in {"diamonds", "packages"}:
+                products = [
+                    p for p in products
+                    if p.name[:1].isdigit()
+                    or any(term in p.name.lower() for term in ("ваучер", "voucher", "lite", "weekly", "monthly"))
+                ]
             elif catalog_filter == "levelup":
                 products = [p for p in products if "level up" in p.name.lower()]
             elif catalog_filter == "vouchers":
@@ -1465,7 +1469,7 @@ async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) ->
     await _open_catalog(
         callback, state, category,
         f"🇮🇩 Бастаҳои Free Fire — {region}:",
-        catalog_filter="diamonds",
+        catalog_filter="packages",
     )
     await state.update_data(ff_region=region)
 
@@ -1477,14 +1481,15 @@ async def choose_free_fire_product_type(callback: CallbackQuery, state: FSMConte
     category = ProductCategory.DIAMONDS if region == "СНГ" else ProductCategory.FF_INDONESIA
     kind = callback.data.split(":", 1)[1]
     labels = {
-        "diamonds": "💎 Алмазҳои Free Fire",
+        "diamonds": "💎 Алмазҳо ва ваучерҳои Free Fire",
+        "packages": "💎 Алмазҳо ва ваучерҳои Free Fire",
         "levelup": "🎁 Free Fire — Level Up",
         "vouchers": "🎟️ Ваучерҳои Free Fire",
     }
     if kind not in labels:
         await callback.answer("Бахш ёфт нашуд.", show_alert=True)
         return
-    if region != "СНГ" and kind != "diamonds":
+    if region != "СНГ" and kind not in {"diamonds", "packages"}:
         await callback.answer("Ин бахш барои минтақаи СНГ дастрас аст.", show_alert=True)
         return
     await _open_catalog(
