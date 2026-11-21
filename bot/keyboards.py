@@ -96,6 +96,7 @@ def games_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [_button(text="🔥 Free Fire — СНГ", callback_data="region:ff_cis")],
             [_button(text="🇮🇩 Free Fire — Индонезия", callback_data="region:ff_indonesia")],
+            [_button(text="🎯 PUBG Mobile", callback_data="game:pubg")],
             [_button(text="🔙 Ба меню", callback_data="menu:main")],
         ]
     )
@@ -163,7 +164,9 @@ def _product_label(p: Product) -> str:
     # the competitor's list: diamond packs use a diamond, vouchers a ticket.
     if p.name[:1].isdigit():
         bonus = f" (+{p.bonus_diamonds} бонус)" if p.bonus_diamonds else ""
-        return f"💎 {p.diamonds}{bonus} {p.unit_label} — {format_price(p.price_somoni)} сомонӣ"
+        icon = "🎯" if p.category == ProductCategory.PUBG_MOBILE else "💎"
+        label = p.name if p.category == ProductCategory.PUBG_MOBILE else f"{p.diamonds}{bonus} {p.unit_label}"
+        return f"{icon} {label} — {format_price(p.price_somoni)} сомонӣ"
     name = p.name.lower()
     if "лайт" in name or "lite" in name or "ваучер" in name:
         icon = "🎟️"
