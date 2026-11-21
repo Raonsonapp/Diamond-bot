@@ -191,27 +191,150 @@ async def add_ff_indonesia(message: Message) -> None:
     await _add_product(message, ProductCategory.FF_INDONESIA, "/addffid")
 
 
+def _admin_products_keyboard(rows: list[list[tuple[str, str]]]):
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=label, callback_data=data)]
+            for row in rows for label, data in row
+        ]
+    )
+
+
 @router.message(Command("products"))
 async def list_products(message: Message) -> None:
+    """Open a structured admin catalog: game -> region -> service -> SKUs."""
     if not is_admin(message.from_user.id):
         await _reject_non_admin(message)
         return
+    markup = _admin_products_keyboard([
+        [("🔥 Free Fire", "adminproducts:game:ff")],
+        [("✈️ Telegram", "adminproducts:game:telegram")],
+        [("📡 Bigo Live", "adminproducts:game:bigo")],
+    ])
+    await message.answer("🛍 <b>Каталоги маҳсулот</b>\n\nАввал бозиро интихоб кунед:", reply_markup=markup)
 
-    async with get_session() as session:
-        products = await list_active_products(session)
 
-    if not products:
-        await message.answer("Ягон маҳсулот нест. Бо /addproduct ё /addstars илова кунед.")
+@router.callback_query(F.data.startswith("adminproducts:"))
+async def admin_products_navigation(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Дастрасӣ танҳо барои админ.", show_alert=True)
         return
 
-    lines = []
-    for p in products:
-        qty = f": {p.display_name}" if p.name[:1].isdigit() else ""
-        lines.append(
-            f"#{p.id} [{p.category.value}] {p.name}{qty} = {format_price(p.price_somoni)}с "
-            f"(харид {p.cost_somoni:.2f}с, фоида {p.margin_somoni:.2f}с)"
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    parts = callback.data.split(":")
+    action = parts[1] if len(parts) > 1 else "root"
+    title = "🛍 <b>Каталоги маҳсулот</b>"
+    rows: list[list[tuple[str, str]]] = []
+
+    if action == "game" and len(parts) == 3:
+        game = parts[2]
+        if game == "ff":
+            title += "\n\n🌍 Минтақаи Free Fire-ро интихоб кунед:"
+            rows = [
+                [("🌐 СНГ", "adminproducts:region:cis")],
+                [("🇮🇩 Индонезия", "adminproducts:region:id")],
+            ]
+        elif game == "telegram":
+            title += "\n\n✈️ Хизматрасонии Telegram-ро интихоб кунед:"
+            rows = [
+                [("⭐ Stars", "adminproducts:section:telegram:stars")],
+                [("💎 Premium", "adminproducts:section:telegram:premium")],
+            ]
+        elif game == "bigo":
+            async with get_session() as session:
+                products = await list_active_products(session, category=ProductCategory.BIGO_LIVE)
+            await _send_admin_product_list(callback, products, "📡 Bigo Live")
+            return
+        else:
+            await callback.answer("Бозӣ ёфт нашуд.", show_alert=True)
+            return
+
+    elif action == "region" and len(parts) == 3:
+        region = parts[2]
+        if region not in {"cis", "id"}:
+            await callback.answer("Минтақа ёфт нашуд.", show_alert=True)
+            return
+        title += "\n\n📦 Хизматрасониро интихоб кунед:"
+        rows = [
+            [("💎 Алмазҳо", f"adminproducts:section:{region}:diamonds")],
+            [("🎁 Level Up", f"adminproducts:section:{region}:levelup")],
+            [("🎟 Ваучерҳо", f"adminproducts:section:{region}:vouchers")],
+        ]
+
+    elif action == "section" and len(parts) == 4:
+        scope, service = parts[2], parts[3]
+        async with get_session() as session:
+            if scope == "telegram":
+                kind = service if service in {"stars", "premium"} else None
+                products = await list_active_products(session, category=ProductCategory.TELEGRAM, telegram_kind=kind)
+                label = "Telegram Stars" if kind == "stars" else "Telegram Premium"
+            elif scope in {"cis", "id"}:
+                category = ProductCategory.DIAMONDS if scope == "cis" else ProductCategory.FF_INDONESIA
+                products = await list_active_products(session, category=category)
+                if service == "levelup":
+                    products = [p for p in products if "level up" in p.name.lower()]
+                    label = f"Free Fire {'СНГ' if scope == 'cis' else 'Индонезия'} · Level Up"
+                elif service == "vouchers":
+                    products = [p for p in products if any(x in p.name.lower() for x in ("ваучер", "voucher", "lite", "weekly", "monthly"))]
+                    label = f"Free Fire {'СНГ' if scope == 'cis' else 'Индонезия'} · Ваучерҳо"
+                elif service == "diamonds":
+                    products = [p for p in products if p.name[:1].isdigit() and not any(x in p.name.lower() for x in ("ваучер", "voucher", "lite", "weekly", "monthly"))]
+                    label = f"Free Fire {'СНГ' if scope == 'cis' else 'Индонезия'} · Алмазҳо"
+                else:
+                    await callback.answer("Хизматрасонӣ ёфт нашуд.", show_alert=True)
+                    return
+            else:
+                await callback.answer("Бахш ёфт нашуд.", show_alert=True)
+                return
+        await _send_admin_product_list(callback, products, label)
+        return
+    else:
+        title += "\n\nБозиро интихоб кунед:"
+        rows = [
+            [("🔥 Free Fire", "adminproducts:game:ff")],
+            [("✈️ Telegram", "adminproducts:game:telegram")],
+            [("📡 Bigo Live", "adminproducts:game:bigo")],
+        ]
+
+    rows.append([("🏠 Менюи каталог", "adminproducts:root")])
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=label, callback_data=data) for label, data in row]
+            for row in rows
+        ]
+    )
+    await callback.message.edit_text(title, reply_markup=markup)
+    await callback.answer()
+
+
+async def _send_admin_product_list(callback: CallbackQuery, products: list[Product], label: str) -> None:
+    if not products:
+        await callback.message.edit_text(
+            f"📦 <b>{label}</b>\n\nҲоло дар ин бахш маҳсулоти фаъол нест.",
+            reply_markup=_admin_products_keyboard([
+                [("⬅️ Ба менюи каталог", "adminproducts:root")]
+            ]),
         )
-    await message.answer("\n".join(lines))
+        await callback.answer()
+        return
+
+    lines = [f"📦 <b>{label}</b>", ""]
+    for product in products:
+        lines.append(
+            f"#{product.id} · {product.display_name}\n"
+            f"💰 Фурӯш: {format_price(product.price_somoni)} сомонӣ"
+            f" | Харид: {product.cost_somoni:.2f}"
+            f" | Фоида: {product.margin_somoni:.2f} сомонӣ"
+        )
+    await callback.message.edit_text(
+        "\n\n".join(lines)[:3900],
+        reply_markup=_admin_products_keyboard([
+            [("⬅️ Ба менюи каталог", "adminproducts:root")]
+        ]),
+    )
+    await callback.answer()
 
 
 @router.message(Command("roundprices"))
