@@ -17,6 +17,18 @@ DEFAULT_PRODUCTS = [
 ]
 
 
+# Fixed customer-facing prices for Free Fire Level Up packages (Tajik somoni).
+# These are bundle prices, not per-diamond prices.
+LEVEL_UP_PRODUCTS = [
+    ("Level Up Package 6", 6, 5.95),
+    ("Level Up Package 10", 10, 8.92),
+    ("Level Up Package 15", 15, 8.92),
+    ("Level Up Package 20", 20, 8.92),
+    ("Level Up Package 25", 25, 8.92),
+    ("Level Up Package 30", 30, 10.90),
+]
+
+
 async def seed_default_products(session) -> None:
     """Migrate old bonus+base packs into one final pack and deactivate duplicates.
 
@@ -32,8 +44,7 @@ async def seed_default_products(session) -> None:
                 name=name, category=ProductCategory.DIAMONDS, diamonds=units,
                 bonus_diamonds=0, price_somoni=price, cost_somoni=price,
             ))
-        await session.commit()
-        return
+        products = []
 
     changed = False
     for name, units, price, legacy_units in DEFAULT_PRODUCTS:
@@ -72,5 +83,41 @@ async def seed_default_products(session) -> None:
                 duplicate.is_active = False
                 changed = True
 
-    if changed:
+    # Add/update Level Up SKUs in the СНГ Free Fire catalog. Preserve any
+    # existing FazerCards category/offer mapping and supplier cost.
+    for name, units, price in LEVEL_UP_PRODUCTS:
+        matches = [
+            p for p in products
+            if p.category == ProductCategory.DIAMONDS
+            and p.name.strip().casefold() == name.casefold()
+        ]
+        if not matches:
+            session.add(Product(
+                name=name,
+                category=ProductCategory.DIAMONDS,
+                diamonds=units,
+                bonus_diamonds=0,
+                price_somoni=price,
+                cost_somoni=0.0,
+                is_active=True,
+            ))
+            changed = True
+            continue
+
+        matches.sort(key=lambda p: p.id)
+        product = matches[0]
+        for attr, value in (
+            ("diamonds", units),
+            ("price_somoni", price),
+            ("is_active", True),
+        ):
+            if getattr(product, attr) != value:
+                setattr(product, attr, value)
+                changed = True
+        for duplicate in matches[1:]:
+            if duplicate.is_active:
+                duplicate.is_active = False
+                changed = True
+
+    if changed or session.new:
         await session.commit()
