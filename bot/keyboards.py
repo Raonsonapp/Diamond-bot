@@ -102,7 +102,7 @@ def games_menu_keyboard() -> InlineKeyboardMarkup:
 def free_fire_product_types_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button(text="💎 Алмазҳо ва 🎟️ Ваучерҳо", callback_data="fftype:packages")],
+            [_button(text="💎 Алмазҳо", callback_data="fftype:packages")],
             [_button(text="🎁 Level Up", callback_data="fftype:levelup")],
             [_button(text="⬅️ Иваз кардани минтақа", callback_data="ff:region")],
             [_button(text="🏠 Менюи асосӣ", callback_data="menu:main")],
