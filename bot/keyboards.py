@@ -105,7 +105,7 @@ def free_fire_product_types_keyboard() -> InlineKeyboardMarkup:
             [_button(text="💎 Алмазҳо", callback_data="fftype:diamonds")],
             [_button(text="🎁 Level Up", callback_data="fftype:levelup")],
             [_button(text="🎟️ Ваучерҳо", callback_data="fftype:vouchers")],
-            [_button(text="⬅️ Иваз кардани минтақа", callback_data="catalog:back")],
+            [_button(text="⬅️ Иваз кардани минтақа", callback_data="ff:region")],
             [_button(text="🏠 Менюи асосӣ", callback_data="menu:main")],
         ]
     )
@@ -176,7 +176,10 @@ def _product_label(p: Product) -> str:
 
 
 def products_keyboard(
-    products: list[Product], category: ProductCategory, telegram_kind: str | None = None
+    products: list[Product],
+    category: ProductCategory,
+    telegram_kind: str | None = None,
+    allow_cart: bool = True,
 ) -> InlineKeyboardMarkup:
     rows = [
         [_button(text=_product_label(p), callback_data=f"product:{p.id}")]
@@ -192,7 +195,7 @@ def products_keyboard(
         rows.append(
             [_button(text="✏️ Миқдори дигар", callback_data=f"product:custom:{category.value}")]
         )
-    if category == ProductCategory.DIAMONDS:
+    if category == ProductCategory.DIAMONDS and allow_cart:
         rows.append(
             [_button(text="🛒 Якчанд бастаро якҷоя харидан", callback_data=f"cartmode:{category.value}")]
         )
