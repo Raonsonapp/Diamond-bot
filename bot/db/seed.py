@@ -19,6 +19,39 @@ DEFAULT_PRODUCTS = [
 
 # Fixed customer-facing prices for Free Fire Level Up packages (Tajik somoni).
 # These are bundle prices, not per-diamond prices.
+PUBG_PRODUCTS = [
+    ("60 UC", 60, 9.71),
+    ("325 UC", 325, 45.45),
+    ("660 UC", 660, 90.64),
+    ("1800 UC", 1800, 223.55),
+    ("3850 UC", 3850, 424.23),
+    ("8100 UC", 8100, 872.20),
+    ("First Purchase Pack", 0, 10.90),
+    ("Prime (1 Month)", 0, 10.90),
+    ("Weekly Deal Pack 1", 0, 10.90),
+    ("60 WOW Coins", 60, 11.40),
+    ("Upgradable Firearm Materials Pack", 0, 30.21),
+    ("Prime (3 Months)", 0, 30.21),
+    ("Weekly Mythic Emblem Value Pack", 0, 30.21),
+    ("Weekly Deal Pack 2", 0, 30.21),
+    ("Mythic Emblem Pack", 0, 49.02),
+    ("325 WOW Coins", 325, 51.99),
+    ("Prime (6 Months)", 0, 58.92),
+    ("Elite Pass LV1-50", 0, 58.92),
+    ("Prime Plus (1 Month)", 0, 97.03),
+    ("660 WOW Coins", 660, 102.97),
+    ("Prime (12 Months)", 0, 116.34),
+    ("Elite Pass LV1-100", 0, 118.81),
+    ("1800 WOW Coins", 1800, 256.42),
+    ("Elite Pass Plus LV1-100", 0, 289.09),
+    ("Prime Plus (3 Months)", 0, 289.59),
+    ("3850 WOW Coins", 3850, 511.35),
+    ("Prime Plus (6 Months)", 0, 577.68),
+    ("8100 WOW Coins", 8100, 1021.69),
+    ("Prime Plus (12 Months)", 0, 1153.86),
+]
+
+
 LEVEL_UP_PRODUCTS = [
     ("Level Up Package 6", 6, 5.95),
     ("Level Up Package 10", 10, 8.92),
@@ -104,6 +137,32 @@ async def seed_default_products(session) -> None:
             ("price_somoni", price),
             ("is_active", True),
         ):
+            if getattr(product, attr) != value:
+                setattr(product, attr, value)
+                changed = True
+        for duplicate in matches[1:]:
+            if duplicate.is_active:
+                duplicate.is_active = False
+                changed = True
+
+    # Add/update PUBG Mobile catalog; all prices include a 1.00 somoni markup.
+    for name, units, price in PUBG_PRODUCTS:
+        matches = [
+            p for p in products
+            if p.category == ProductCategory.PUBG_MOBILE
+            and p.name.strip().casefold() == name.casefold()
+        ]
+        if not matches:
+            session.add(Product(
+                name=name, category=ProductCategory.PUBG_MOBILE,
+                diamonds=units, bonus_diamonds=0, price_somoni=price,
+                cost_somoni=0.0, is_active=True,
+            ))
+            changed = True
+            continue
+        matches.sort(key=lambda p: p.id)
+        product = matches[0]
+        for attr, value in (("diamonds", units), ("price_somoni", price), ("is_active", True)):
             if getattr(product, attr) != value:
                 setattr(product, attr, value)
                 changed = True
