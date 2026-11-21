@@ -289,6 +289,13 @@ async def _register_and_continue(message: Message, state: FSMContext, from_user,
     await _show_main_menu(message, state, from_user.id, from_user.language_code or "ru")
 
 
+@router.message(Command("products"))
+async def customer_products_command(message: Message, state: FSMContext) -> None:
+    """Open the customer catalog: game -> region -> product section -> package."""
+    await state.clear()
+    await message.answer("🎮 <b>Бозиро интихоб кунед:</b>", reply_markup=games_menu_keyboard())
+
+
 @router.message(Command("help"))
 async def tutorial_command(message: Message) -> None:
     """Customer-facing Tajik text guide; no video or external emoji-pack links."""
@@ -587,13 +594,27 @@ async def menu_games(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 async def _open_catalog(
-    callback: CallbackQuery, state: FSMContext, category: ProductCategory, title: str, telegram_kind: str | None = None
+    callback: CallbackQuery,
+    state: FSMContext,
+    category: ProductCategory,
+    title: str,
+    telegram_kind: str | None = None,
+    catalog_filter: str | None = None,
 ) -> None:
     # Answer the callback before any database work; Telegram requires this promptly.
     await callback.answer()
     try:
         async with get_session() as session:
             products = await list_active_products(session, category=category, telegram_kind=telegram_kind)
+            if catalog_filter == "diamonds":
+                products = [p for p in products if p.name[:1].isdigit()]
+            elif catalog_filter == "levelup":
+                products = [p for p in products if "level up" in p.name.lower()]
+            elif catalog_filter == "vouchers":
+                products = [
+                    p for p in products
+                    if any(term in p.name.lower() for term in ("ваучер", "voucher", "lite", "weekly", "monthly"))
+                ]
             promo_active = await apply_customer_prices(session, products, callback.from_user.id)
 
         if not products:
@@ -604,10 +625,14 @@ async def _open_catalog(
             return
 
         # Remember the parent section for the Back button on package/product screens.
-        await state.update_data(catalog_category=category.value, catalog_telegram_kind=telegram_kind)
+        await state.update_data(
+            catalog_category=category.value,
+            catalog_telegram_kind=telegram_kind,
+            catalog_filter=catalog_filter,
+        )
         # Keep the catalog compact: product icons and prices are shown on buttons.
         display_title = title + ("\n\n🎉 <b>Нархи махсус фаъол аст!</b> Шумо 5 нафарро даъват кардаед ва ҳадди ақал 1 нафарашон харид кардааст." if promo_active else "")
-        await _edit_navigation_message(callback, display_title, products_keyboard(products, category, telegram_kind))
+        await _edit_navigation_message(callback, display_title, products_keyboard(products, category, telegram_kind, allow_cart=(catalog_filter in (None, "diamonds")))
         await state.set_state(OrderFlow.choosing_product)
     except Exception:
         await callback.message.answer(
@@ -636,17 +661,27 @@ async def catalog_back(callback: CallbackQuery, state: FSMContext) -> None:
     """Return from package/product selection to its parent section."""
     data = await state.get_data()
     category_value = data.get("catalog_category")
+    catalog_filter = data.get("catalog_filter")
+    ff_region = data.get("ff_region")
     await callback.answer()
     await state.clear()
 
     if category_value in {ProductCategory.DIAMONDS.value, ProductCategory.FF_INDONESIA.value}:
-        await _edit_navigation_message(
-            callback,
-            "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
-            "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
-            "🇮🇩 <b>Индонезия</b> — ID Server",
-            free_fire_region_keyboard(),
-        )
+        if ff_region == "СНГ" and catalog_filter:
+            await state.update_data(ff_region=ff_region, catalog_category=category_value)
+            await _edit_navigation_message(
+                callback,
+                "🔥 <b>Free Fire — СНГ</b>\\n\\nБахши маҳсулотро интихоб кунед:",
+                free_fire_product_types_keyboard(),
+            )
+        else:
+            await _edit_navigation_message(
+                callback,
+                "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\\n\\n"
+                "🌐 <b>СНГ</b> — Тоҷикистон / Россия\\n"
+                "🇮🇩 <b>Индонезия</b> — ID Server",
+                free_fire_region_keyboard(),
+            )
     elif category_value == ProductCategory.TELEGRAM.value:
         await _edit_navigation_message(callback, "✈️ Хизматро интихоб кунед:", telegram_menu_keyboard())
     elif category_value == ProductCategory.BIGO_LIVE.value:
@@ -1401,16 +1436,47 @@ async def reuse_saved_id(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.in_({"region:ff_cis", "region:ff_indonesia"}))
 async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) -> None:
-    # Region is selected once, before package selection and player ID entry.
     region = "СНГ" if callback.data == "region:ff_cis" else "Индонезия"
-    category = (
-        ProductCategory.DIAMONDS if region == "СНГ"
-        else ProductCategory.FF_INDONESIA
-    )
+    category = ProductCategory.DIAMONDS if region == "СНГ" else ProductCategory.FF_INDONESIA
     await state.clear()
+    await state.update_data(ff_region=region)
+    if region == "СНГ":
+        await callback.answer()
+        await _edit_navigation_message(
+            callback,
+            "🔥 <b>Free Fire — СНГ</b>\\n\\nБахши маҳсулотро интихоб кунед:",
+            free_fire_product_types_keyboard(),
+        )
+        return
     await _open_catalog(
         callback, state, category,
-        f"{'🌐' if region == 'СНГ' else '🇮🇩'} Бастаҳои Free Fire — {region}:",
+        f"🇮🇩 Бастаҳои Free Fire — {region}:",
+        catalog_filter="diamonds",
+    )
+    await state.update_data(ff_region=region)
+
+
+@router.callback_query(F.data.startswith("fftype:"))
+async def choose_free_fire_product_type(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    region = data.get("ff_region", "СНГ")
+    category = ProductCategory.DIAMONDS if region == "СНГ" else ProductCategory.FF_INDONESIA
+    kind = callback.data.split(":", 1)[1]
+    labels = {
+        "diamonds": "💎 Алмазҳои Free Fire",
+        "levelup": "🎁 Free Fire — Level Up",
+        "vouchers": "🎟️ Ваучерҳои Free Fire",
+    }
+    if kind not in labels:
+        await callback.answer("Бахш ёфт нашуд.", show_alert=True)
+        return
+    if region != "СНГ" and kind != "diamonds":
+        await callback.answer("Ин бахш барои минтақаи СНГ дастрас аст.", show_alert=True)
+        return
+    await _open_catalog(
+        callback, state, category,
+        f"{labels[kind]} — {region}:",
+        catalog_filter=kind,
     )
     await state.update_data(ff_region=region)
 
