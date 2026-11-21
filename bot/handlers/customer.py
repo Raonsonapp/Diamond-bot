@@ -1416,7 +1416,7 @@ async def enter_player_id(message: Message, state: FSMContext) -> None:
 
     recipient = message.text.strip()
 
-    if product.category in (ProductCategory.DIAMONDS, ProductCategory.BIGO_LIVE, ProductCategory.FF_INDONESIA):
+    if product.category in (ProductCategory.DIAMONDS, ProductCategory.BIGO_LIVE, ProductCategory.FF_INDONESIA, ProductCategory.PUBG_MOBILE):
         if not recipient.isdigit() or not (5 <= len(recipient) <= 15):
             await message.answer("ID-и нодуруст. Лутфан танҳо рақамҳои ID-и худро ворид кунед.")
             return
