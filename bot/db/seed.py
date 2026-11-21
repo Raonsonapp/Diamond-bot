@@ -38,13 +38,6 @@ async def seed_default_products(session) -> None:
     """
     result = await session.execute(select(Product))
     products = list(result.scalars().all())
-    if not products:
-        for name, units, price, _legacy in DEFAULT_PRODUCTS:
-            session.add(Product(
-                name=name, category=ProductCategory.DIAMONDS, diamonds=units,
-                bonus_diamonds=0, price_somoni=price, cost_somoni=price,
-            ))
-        products = []
 
     changed = False
     for name, units, price, legacy_units in DEFAULT_PRODUCTS:
