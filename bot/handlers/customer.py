@@ -43,6 +43,7 @@ from bot.keyboards import (
     cart_select_keyboard,
     confirm_order_keyboard,
     free_fire_region_keyboard,
+    free_fire_product_types_keyboard,
     change_payment_method_keyboard,
     contact_keyboard,
     games_menu_keyboard,
