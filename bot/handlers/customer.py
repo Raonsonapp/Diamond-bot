@@ -671,14 +671,14 @@ async def catalog_back(callback: CallbackQuery, state: FSMContext) -> None:
             await state.update_data(ff_region=ff_region, catalog_category=category_value)
             await _edit_navigation_message(
                 callback,
-                "🔥 <b>Free Fire — СНГ</b>\\n\\nБахши маҳсулотро интихоб кунед:",
+                "🔥 <b>Free Fire — СНГ</b>\n\nБахши маҳсулотро интихоб кунед:",
                 free_fire_product_types_keyboard(),
             )
         else:
             await _edit_navigation_message(
                 callback,
-                "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\\n\\n"
-                "🌐 <b>СНГ</b> — Тоҷикистон / Россия\\n"
+                "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
+                "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
                 "🇮🇩 <b>Индонезия</b> — ID Server",
                 free_fire_region_keyboard(),
             )
@@ -1440,8 +1440,8 @@ async def free_fire_change_region(callback: CallbackQuery, state: FSMContext) ->
     await callback.answer()
     await _edit_navigation_message(
         callback,
-        "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\\n\\n"
-        "🌐 <b>СНГ</b> — Тоҷикистон / Россия\\n"
+        "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
+        "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
         "🇮🇩 <b>Индонезия</b> — ID Server",
         free_fire_region_keyboard(),
     )
@@ -1457,7 +1457,7 @@ async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) ->
         await callback.answer()
         await _edit_navigation_message(
             callback,
-            "🔥 <b>Free Fire — СНГ</b>\\n\\nБахши маҳсулотро интихоб кунед:",
+            "🔥 <b>Free Fire — СНГ</b>\n\nБахши маҳсулотро интихоб кунед:",
             free_fire_product_types_keyboard(),
         )
         return
