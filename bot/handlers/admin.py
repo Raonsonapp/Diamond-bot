@@ -258,9 +258,8 @@ async def admin_products_navigation(callback: CallbackQuery) -> None:
             return
         title += "\n\n📦 Хизматрасониро интихоб кунед:"
         rows = [
-            [("💎 Алмазҳо", f"adminproducts:section:{region}:diamonds")],
+            [("💎 Алмазҳо ва 🎟 Ваучерҳо", f"adminproducts:section:{region}:diamonds_vouchers")],
             [("🎁 Level Up", f"adminproducts:section:{region}:levelup")],
-            [("🎟 Ваучерҳо", f"adminproducts:section:{region}:vouchers")],
         ]
 
     elif action == "section" and len(parts) == 4:
@@ -276,12 +275,9 @@ async def admin_products_navigation(callback: CallbackQuery) -> None:
                 if service == "levelup":
                     products = [p for p in products if "level up" in p.name.lower()]
                     label = f"Free Fire {'СНГ' if scope == 'cis' else 'Индонезия'} · Level Up"
-                elif service == "vouchers":
-                    products = [p for p in products if any(x in p.name.lower() for x in ("ваучер", "voucher", "lite", "weekly", "monthly"))]
-                    label = f"Free Fire {'СНГ' if scope == 'cis' else 'Индонезия'} · Ваучерҳо"
-                elif service == "diamonds":
-                    products = [p for p in products if p.name[:1].isdigit() and not any(x in p.name.lower() for x in ("ваучер", "voucher", "lite", "weekly", "monthly"))]
-                    label = f"Free Fire {'СНГ' if scope == 'cis' else 'Индонезия'} · Алмазҳо"
+                elif service == "diamonds_vouchers":
+                    products = [p for p in products if "level up" not in p.name.lower()]
+                    label = f"Free Fire {'СНГ' if scope == 'cis' else 'Индонезия'} · Алмазҳо ва Ваучерҳо"
                 else:
                     await callback.answer("Хизматрасонӣ ёфт нашуд.", show_alert=True)
                     return
