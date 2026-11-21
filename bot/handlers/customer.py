@@ -654,8 +654,8 @@ async def menu_buy_diamonds(callback: CallbackQuery, state: FSMContext) -> None:
     await _edit_navigation_message(
         callback,
         "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
-        "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
-        "🇮🇩 <b>Индонезия</b> — ID Server\n\n"
+        "🌐 <b>СНГ</b>\n"
+        "🇮🇩 <b>ИНДОНЕЗИЯ</b>\n\n"
         "🔎 Пеш аз пардохт ID ва минтақа санҷида мешаванд.",
         free_fire_region_keyboard(),
     )
@@ -683,8 +683,8 @@ async def catalog_back(callback: CallbackQuery, state: FSMContext) -> None:
             await _edit_navigation_message(
                 callback,
                 "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
-                "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
-                "🇮🇩 <b>Индонезия</b> — ID Server",
+                "🌐 <b>СНГ</b>\n"
+                "🇮🇩 <b>ИНДОНЕЗИЯ</b>",
                 free_fire_region_keyboard(),
             )
     elif category_value == ProductCategory.TELEGRAM.value:
@@ -728,8 +728,8 @@ async def menu_buy_ff_indonesia(callback: CallbackQuery, state: FSMContext) -> N
     await state.clear()
     await callback.message.answer(
         "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
-        "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
-        "🇮🇩 <b>Индонезия</b> — ID Server\n\n"
+        "🌐 <b>СНГ</b>\n"
+        "🇮🇩 <b>ИНДОНЕЗИЯ</b>\n\n"
         "🔎 Пеш аз пардохт ID ва минтақа санҷида мешаванд.",
         reply_markup=free_fire_region_keyboard(),
     )
@@ -1446,8 +1446,8 @@ async def free_fire_change_region(callback: CallbackQuery, state: FSMContext) ->
     await _edit_navigation_message(
         callback,
         "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\n\n"
-        "🌐 <b>СНГ</b> — Тоҷикистон / Россия\n"
-        "🇮🇩 <b>Индонезия</b> — ID Server",
+        "🌐 <b>СНГ</b>\n"
+        "🇮🇩 <b>ИНДОНЕЗИЯ</b>",
         free_fire_region_keyboard(),
     )
 
