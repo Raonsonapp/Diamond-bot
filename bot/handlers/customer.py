@@ -1434,6 +1434,19 @@ async def reuse_saved_id(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "ff:region")
+async def free_fire_change_region(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer()
+    await _edit_navigation_message(
+        callback,
+        "💎 <b>Free Fire · Минтақаро интихоб кунед</b>\\n\\n"
+        "🌐 <b>СНГ</b> — Тоҷикистон / Россия\\n"
+        "🇮🇩 <b>Индонезия</b> — ID Server",
+        free_fire_region_keyboard(),
+    )
+
+
 @router.callback_query(F.data.in_({"region:ff_cis", "region:ff_indonesia"}))
 async def choose_free_fire_region(callback: CallbackQuery, state: FSMContext) -> None:
     region = "СНГ" if callback.data == "region:ff_cis" else "Индонезия"
