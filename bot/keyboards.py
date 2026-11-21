@@ -91,9 +91,11 @@ def review_channel_keyboard() -> InlineKeyboardMarkup:
 
 
 def games_menu_keyboard() -> InlineKeyboardMarkup:
+    """Show each Free Fire region as a distinct game/catalog entry."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button(text="🔥 Free Fire", callback_data="menu:buy_diamonds")],
+            [_button(text="🔥 Free Fire — СНГ", callback_data="region:ff_cis")],
+            [_button(text="🇮🇩 Free Fire — Индонезия", callback_data="region:ff_indonesia")],
             [_button(text="🔙 Ба меню", callback_data="menu:main")],
         ]
     )
