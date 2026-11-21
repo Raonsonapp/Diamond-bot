@@ -110,6 +110,7 @@ async def _set_bot_commands(bot: Bot) -> None:
     reply-keyboard, which stays the primary navigation."""
     user_commands = [
         BotCommand(command="start", description="🏠 Менюи асосӣ"),
+        BotCommand(command="products", description="🛍️ Каталоги маҳсулот"),
         BotCommand(command="myorders", description="📦 Фармоишҳои ман"),
         BotCommand(command="wallet", description="👛 Ҳамён ва пур кардани тавозун"),
         BotCommand(command="apikey", description="🔑 Калиди API-и шахсӣ"),
