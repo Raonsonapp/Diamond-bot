@@ -632,7 +632,7 @@ async def _open_catalog(
         )
         # Keep the catalog compact: product icons and prices are shown on buttons.
         display_title = title + ("\n\n🎉 <b>Нархи махсус фаъол аст!</b> Шумо 5 нафарро даъват кардаед ва ҳадди ақал 1 нафарашон харид кардааст." if promo_active else "")
-        await _edit_navigation_message(callback, display_title, products_keyboard(products, category, telegram_kind, allow_cart=(catalog_filter in (None, "diamonds"))))
+        await _edit_navigation_message(callback, display_title, products_keyboard(products, category, telegram_kind, allow_cart=(catalog_filter is None)))
         await state.set_state(OrderFlow.choosing_product)
     except Exception:
         await callback.message.answer(
