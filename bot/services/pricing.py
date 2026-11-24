@@ -53,25 +53,5 @@ def quote_custom_price(diamonds: int, breakpoints: list[Breakpoint]) -> tuple[fl
 
 
 async def apply_customer_prices(session, products: list, user_id: int) -> bool:
-    """Return whether the customer qualifies for referral pricing.
-
-    Do not change catalog prices here: this function is called before the
-    recipient Free Fire ID is selected, so applying a discount here would
-    incorrectly discount every ID. The special-ID workflow must apply any
-    discount only after a recipient ID is explicitly registered as special.
-    """
-    from bot.config import config
-    from bot.db.repo import count_referrals, has_referral_with_purchase
-    from datetime import datetime, timezone
-
-    admin_ids = set(config.admin_user_ids or [])
-    if config.admin_chat_id:
-        admin_ids.add(config.admin_chat_id)
-    if user_id in admin_ids:
-        return False
-
-    referral_count = await count_referrals(session, user_id)
-    has_purchase = await has_referral_with_purchase(
-        session, user_id, datetime(2000, 1, 1, tzinfo=timezone.utc)
-    )
-    return referral_count >= 5 and has_purchase
+    """Price discounts are disabled for all customers; catalog prices always apply."""
+    return False
