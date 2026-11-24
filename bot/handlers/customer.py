@@ -65,7 +65,6 @@ from bot.keyboards import (
 from bot.services.contest import maybe_declare_contest_winner
 from bot.services.payments import get_payment_provider
 from bot.services.pricing import apply_customer_prices, quote_custom_price
-from bot.services.referral_rewards import maybe_credit_referral_milestone
 from bot.services.sponsor import is_subscribed_to_sponsor_channel
 from bot.states import ApiAccessFlow, OrderFlow, WalletTopupFlow
 from bot.texts import FAQ_TEXT, TERMS_TEXT
@@ -280,7 +279,6 @@ async def _register_and_continue(message: Message, state: FSMContext, from_user,
 
     if is_new_user and referred_by is not None:
         await maybe_declare_contest_winner(message.bot, referred_by)
-        await maybe_credit_referral_milestone(message.bot, referred_by)
 
     await state.clear()
     if user.accepted_terms_at is None:
@@ -504,31 +502,10 @@ async def reply_referral(message: Message, state: FSMContext) -> None:
         invited = await count_referrals(session, message.from_user.id)
 
     text = (
-        "🤝 <b>БАРНОМАИ РЕФЕРАЛӢ</b>\n\n"
-        f"🔗 <b>Линки шумо:</b>\n{link}\n\n"
-        f"👥 <b>Даъватшудагон:</b> {invited} нафар\n"
-        f"💰 <b>Бонуси ҷамъшуда:</b> {user.referral_balance:.2f} сомонӣ\n\n"
-        "━━━━━━━━━━━━━━\n"
-        "ℹ️ <b>Нархҳо барои ҳамаи муштариён якхелаанд.</b> Ҳоло тахфифи шахсӣ ё рефералӣ ба нархи маҳсулот дода намешавад.\n\n"
-        "━━━━━━━━━━━━━━\n"
-        "🎁 <b>ҶОИЗАҲОИ РЕФЕРАЛӢ</b>\n\n"
-        "👥 5 нафар + 1 харид — 🎟 1 ваучери Лайт\n"
-        "👥 10 нафар + 2 харид — 🎟 2 ваучери Лайт\n"
-        "👥 15 нафар + 3 харид — 💎 110 алмос\n"
-        "👥 20 нафар + 5 харид — 🎁 1 ваучери ҳафтаина\n"
-        "━━━━━━━━━━━━━━\n"
-        "💸 <b>БОНУС АЗ ҲАР ХАРИД — 5%</b>\n\n"
-        "🧾 10 сомонӣ → <b>+0.50 с.</b>\n"
-        "🧾 20 сомонӣ → <b>+1.00 с.</b>\n"
-        "🧾 50 сомонӣ → <b>+2.50 с.</b>\n"
-        "━━━━━━━━━━━━━━\n"
-        "📌 <b>ЧӢ ТАВР ГИРИФТАН?</b>\n\n"
-        "1️⃣ Дӯст аз линки шумо ба бот медарояд.\n"
-        "2️⃣ Ӯ харид мекунад.\n"
-        "3️⃣ Харид бояд расонида шавад.\n"
-        "4️⃣ Барои ҷоиза шумораи харидҳои дар боло нишондодашуда ҳатмист.\n\n"
-        "🎁 Ҷоизаҳоро админ мефиристад.\n"
-        "💰 Бонуси 5% ба баланси рефералии шумо мегузарад."
+        "🤝 <b>ДАЪВАТИ ДӮСТОН</b>\\n\\n"
+        f"🔗 <b>Линки даъвати шумо:</b>\\n{link}\\n\\n"
+        f"👥 <b>Даъватшудагон:</b> {invited} нафар\\n\\n"
+        "ℹ️ Барномаи ҷоизаҳо ва бонусҳои рефералӣ ғайрифаъол аст."
     )
     await message.answer(text, reply_markup=referral_menu_keyboard())
 
@@ -949,32 +926,10 @@ async def menu_referral(callback: CallbackQuery) -> None:
         invited = await count_referrals(session, callback.from_user.id)
 
     text = (
-        "🤝 Барномаи рефералӣ\n\n"
-        f"🔗 Линки даъвати шумо:\n{link}\n\n"
-        f"👥 Даъватшудагон: {invited} нафар\n"
-        f"💰 Балансӣ рефералӣ: {user.referral_balance:.2f} сомонӣ\n\n"
-        "━━━━━━━━━━━━━━\n"
-        "ℹ️ <b>Тахфифи нархҳо ҳоло ғайрифаъол аст.</b> Ҳамаи муштариён бо нархи ягонаи каталог харид мекунанд.\n"
-        "━━━━━━━━━━━━━━\n"
-        "🎁 <b>ҶОИЗАҲОИ РЕФЕРАЛӢ</b>\n"
-        "👥 <b>5 нафар</b> + 1 харид → 🎟 1 ваучери Лайт\n"
-        "👥 <b>10 нафар</b> + 2 харид → 🎟 2 ваучери Лайт\n"
-        "👥 <b>15 нафар</b> + 3 харид → 💎 110 алмос\n"
-        "👥 <b>20 нафар</b> + 5 харид → 🎁 1 ваучери ҳафтаина\n"
-        "━━━━━━━━━━━━━━\n"
-        "💸 <b>БОНУС: 5% АЗ ҲАР ХАРИД</b>\n"
-        "Харид 10 сомонӣ → +0.50 с.\n"
-        "Харид 20 сомонӣ → +1.00 с.\n"
-        "Харид 50 сомонӣ → +2.50 с.\n"
-        "━━━━━━━━━━━━━━\n"
-        "📌 <b>ЧӢ ТАВР ГИРИФТАН?</b>\n"
-        "1️⃣ Дӯст аз линки шумо ба бот медарояд.\n"
-        "2️⃣ Ӯ харид мекунад.\n"
-        "3️⃣ Харид расонида шавад — танҳо баъд ҳисоб мешавад.\n"
-        "4️⃣ Барои ҳар ҷоиза шумораи харидҳои шартӣ ҳатмист.\n"
-        "🎁 Ҷоизаҳоро админ мефиристад.\n"
-        "💰 Бонуси 5% ба баланси рефералии шумо мегузарад.\n"
-        "━━━━━━━━━━━━━━"
+        "🤝 <b>ДАЪВАТИ ДӮСТОН</b>\\n\\n"
+        f"🔗 <b>Линки даъвати шумо:</b>\\n{link}\\n\\n"
+        f"👥 <b>Даъватшудагон:</b> {invited} нафар\\n\\n"
+        "ℹ️ Барномаи ҷоизаҳо ва бонусҳои рефералӣ ғайрифаъол аст."
     )
     await _edit_navigation_message(callback, text, reply_markup=referral_menu_keyboard())
     await callback.answer()
@@ -982,68 +937,12 @@ async def menu_referral(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "menu:bonus")
 async def menu_bonus(callback: CallbackQuery) -> None:
-    """Show referral bonus rules, live progress, and special-ID allowance."""
-    from sqlalchemy import func, select
-    from bot.db.models import Order, OrderStatus
-
-    bot_user = await callback.bot.get_me()
-    link = f"https://t.me/{bot_user.username}?start=ref_{callback.from_user.id}"
-
-    async with get_session() as session:
-        invited = await count_referrals(session, callback.from_user.id)
-        result = await session.execute(
-            select(func.count(func.distinct(Order.user_id)))
-            .join(User, User.id == Order.user_id)
-            .where(
-                User.referred_by == callback.from_user.id,
-                Order.status.in_([OrderStatus.PAID, OrderStatus.DELIVERING, OrderStatus.DELIVERED]),
-            )
-        )
-        buyers = int(result.scalar_one() or 0)
-        user = await get_user(session, callback.from_user.id)
-
-    # The largest qualified tier applies; limits are cumulative across tiers.
-    if invited >= 15 and buyers >= 3:
-        id_limit = 20
-        tier_text = "🏆 Зинаи 3 фаъол аст: то 20 ID-и махсус"
-    elif invited >= 10 and buyers >= 2:
-        id_limit = 8
-        tier_text = "🥈 Зинаи 2 фаъол аст: то 8 ID-и махсус дар маҷмӯъ"
-    elif invited >= 5 and buyers >= 1:
-        id_limit = 3
-        tier_text = "🥉 Зинаи 1 фаъол аст: то 3 ID-и махсус"
-    else:
-        id_limit = 0
-        tier_text = "🔒 Функсияи ID-и махсус ҳоло баста аст"
-
-    if invited < 5 or buyers < 1:
-        next_condition = f"🎯 Барои кушодан: {max(0, 5-invited)} даъвати дигар ва {max(0, 1-buyers)} хариди шартӣ."
-    elif invited < 10 or buyers < 2:
-        next_condition = f"🚀 Зинаи навбатӣ: то 10 даъват ва 2 харид. Ҳоло: {invited} даъват, {buyers} харид."
-    elif invited < 15 or buyers < 3:
-        next_condition = f"🚀 Зинаи навбатӣ: то 15 даъват ва 3 харид. Ҳоло: {invited} даъват, {buyers} харид."
-    else:
-        next_condition = "🎉 Шумо ба зинаи баландтарини ID-и махсус расидед."
-
-    text = (
-        "🎁 <b>БОНУСИ FF MARGEDAR</b>\n"
-        "━━━━━━━━━━━━━━\n"
-        "ℹ️ <b>ТАХФИФИ НАРХҲО ҒАЙРИФАЪОЛ АСТ</b>\n"
-        "Ҳамаи муштариён бо нархи ягонаи каталог харид мекунанд. Барои ҳеҷ кас тахфифи 3% ҳисоб намешавад.\n\n"
-        "📊 <b>ҲОЛАТИ РЕФЕРАЛИИ ШУМО</b>\n"
-        f"📍 {invited} даъват · {buyers} харид аз ҷониби даъватшудагон\n\n"
-        "🎁 <b>ҶОИЗАҲОИ РЕФЕРАЛӢ</b>\n"
-        "🥉 5 нафар + 1 хариди пардохтшуда → 1 ваучери Лайт\n"
-        "🥈 10 нафар + 2 хариди пардохтшуда → 2 ваучери Лайт\n"
-        "🏆 15 нафар + 3 хариди пардохтшуда → 110 алмаз\n\n"
-        "💸 <b>БОНУС: 5% АЗ ҲАР ХАРИД</b>\n"
-        "Харид 10 сомонӣ → +0.50 с.\n"
-        "Харид 20 сомонӣ → +1.00 с.\n"
-        "Харид 50 сомонӣ → +2.50 с.\n\n"
-        "📌 Ҷоизаҳои рефералӣ ва бонуси 5% нигоҳ дошта мешаванд; тахфифи нархи маҳсулот вуҷуд надорад.\n\n"
-        f"🔗 <b>Линки даъвати шумо:</b>\n{link}"
+    await _edit_navigation_message(
+        callback,
+        "🎁 <b>БОНУСҲО ҒАЙРИФАЪОЛАНД</b>\\n\\n"
+        "Ҳоло барои даъвати дӯстон ҷоиза, бонуси 5% ё тахфифи махсус дода намешавад.",
+        reply_markup=back_to_menu_keyboard(),
     )
-    await _edit_navigation_message(callback, text, reply_markup=back_to_menu_keyboard())
     await callback.answer()
 
 
