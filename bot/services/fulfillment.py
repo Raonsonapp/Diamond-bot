@@ -18,7 +18,6 @@ from bot.config import config
 from bot.db.models import Order, OrderStatus
 from bot.db.repo import (
     adjust_fazercards_balance,
-    credit_referral_balance,
     get_fazercards_balance,
     get_order,
     get_orders_by_group,
@@ -34,21 +33,10 @@ from bot.services.contest import maybe_declare_contest_winner
 from bot.services.delivery import get_delivery_provider
 from bot.states import OrderFlow
 
-REFERRAL_BONUS_RATE = 0.05
-
-
 @dataclass
 class FulfillmentResult:
     order: Order
     auto_delivered: bool
-
-
-async def _credit_referral(session, order: Order) -> None:
-    buyer = await get_user(session, order.user_id)
-    if buyer is None or buyer.referred_by is None:
-        return
-    bonus = round(order.amount_somoni * REFERRAL_BONUS_RATE, 2)
-    await credit_referral_balance(session, buyer.referred_by, bonus)
 
 
 async def prompt_for_review(bot: Bot, order: Order) -> None:
@@ -281,7 +269,6 @@ async def _attempt_delivery(
             fresh = await get_order(session, o.id)
             note = f"delivery_ref={r.reference}" if r.reference else None
             fresh = await set_order_status(session, fresh, OrderStatus.DELIVERED, admin_note=note)
-            await _credit_referral(session, fresh)
             delivered.append(fresh)
         # `success` here only ever comes from a real FazerCards call (see
         # DeliveryProvider.deliver — ManualDeliveryProvider never returns
@@ -443,9 +430,6 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
     async with get_session() as session:
         fresh_order = await get_order(session, order_id)
         buyer = await get_user(session, fresh_order.user_id) if fresh_order else None
-    if buyer is not None and buyer.referred_by is not None:
-        from bot.services.referral_rewards import maybe_credit_referral_milestone
-        await maybe_credit_referral_milestone(bot, buyer.referred_by)
     return FulfillmentResult(order=fresh_order, auto_delivered=True)
 
 
@@ -462,7 +446,6 @@ async def mark_delivered_and_notify(bot: Bot, order_id: int) -> Order | None:
         for o in group:
             fresh = await set_order_status(session, o, OrderStatus.DELIVERED)
             products[fresh.id] = await get_product(session, fresh.product_id)
-            await _credit_referral(session, fresh)
             delivered.append(fresh)
 
     await _finish_progress_bar(bot, order, order.progress_message_id)
@@ -482,13 +465,4 @@ async def mark_delivered_and_notify(bot: Bot, order_id: int) -> Order | None:
     await _send_success_receipt(bot, delivered, products)
 
     await prompt_for_review(bot, delivered[0])
-    from bot.services.referral_rewards import maybe_credit_referral_milestone
-    async with get_session() as session:
-        referrer_ids = set()
-        for delivered_order in delivered:
-            buyer = await get_user(session, delivered_order.user_id)
-            if buyer is not None and buyer.referred_by is not None:
-                referrer_ids.add(buyer.referred_by)
-    for referrer_id in referrer_ids:
-        await maybe_credit_referral_milestone(bot, referrer_id)
     return delivered[0]
