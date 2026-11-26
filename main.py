@@ -21,6 +21,7 @@ from sqlalchemy import text
 from bot.fsm_storage import storage
 from bot.handlers import admin, customer, adsgram_admin
 from bot.services.sms_webhook import register_sms_webhook
+from bot.keyboards import initialize_custom_emoji_icons
 
 logging.basicConfig(level=logging.INFO)
 
@@ -455,6 +456,7 @@ async def main() -> None:
     bot = Bot(token=config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     try:
         await init_db()
+        await initialize_custom_emoji_icons(bot)
         dp = build_dispatcher()
         await _set_bot_commands(bot)
 
