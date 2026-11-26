@@ -35,7 +35,7 @@ def _custom_icon(emoji: str) -> str | None:
 
 
 def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardButton:
-    """Choose a native Telegram button color by action; Telegram supports only blue, green and red."""
+    """Create a centered inline button label with its emoji kept inside the text."""
     if style is None:
         label = text.lower()
         if any(word in label for word in ("дастгир", "бекор", "рад", "❌")):
@@ -47,25 +47,14 @@ def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardB
             style = "success"
         else:
             style = "primary"
-    icon_emoji = kwargs.pop("icon_emoji", None)
-    wide = kwargs.pop("wide", False)
-    custom_id = _custom_icon(icon_emoji) if icon_emoji else None
-    if custom_id and icon_emoji and text.startswith(icon_emoji + " "):
-        text = text[len(icon_emoji) + 1:]
-    if wide:
-        # Symmetric Braille-blank padding keeps the label visually centered
-        # while making one-button rows consistently wide on Telegram clients.
-        target_width = 48
-        remaining = max(0, target_width - len(text))
-        left = remaining // 2
-        right = remaining - left
-        text = ("\u2800" * left) + text + ("\u2800" * right)
-    return InlineKeyboardButton(
-        text=text,
-        style=style,
-        icon_custom_emoji_id=custom_id,
-        **kwargs,
-    )
+
+    # Keep the emoji as part of the button text. Telegram centers the complete
+    # label (emoji + wording) naturally; a separate icon_custom_emoji_id pins
+    # the icon to the left and makes the wording look off-center.
+    kwargs.pop("icon_emoji", None)
+    kwargs.pop("wide", None)
+    kwargs.pop("icon_custom_emoji_id", None)
+    return InlineKeyboardButton(text=text, style=style, **kwargs)
 
 
 def persistent_menu_keyboard() -> ReplyKeyboardMarkup:
