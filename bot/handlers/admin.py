@@ -1342,7 +1342,7 @@ async def fzr_map_levelup(message: Message) -> None:
             if len(chunk) + len(line) + 1 > 3800:
                 await message.answer(chunk)
                 chunk = ""
-            chunk += line + "\\n"
+            chunk += line + "\n"
         if chunk:
             await message.answer(chunk)
     except FazerCardsError as exc:
