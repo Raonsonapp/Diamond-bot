@@ -5,6 +5,33 @@ from bot.db.models import Order, Product, ProductCategory
 from bot.formatting import format_price
 
 
+# Custom emoji icons are loaded from the owner's Telegram emoji pack at startup.
+# If the pack is unavailable or the bot cannot use custom emoji, ordinary
+# Unicode emoji remain as a safe fallback.
+CUSTOM_EMOJI_IDS: dict[str, str] = {}
+
+
+async def initialize_custom_emoji_icons(bot) -> None:
+    """Load custom emoji IDs from https://t.me/addemoji/FFMargedar."""
+    try:
+        sticker_set = await bot.get_sticker_set(name="FFMargedar")
+        loaded: dict[str, str] = {}
+        for sticker in sticker_set.stickers:
+            emoji = getattr(sticker, "emoji", None)
+            custom_id = getattr(sticker, "custom_emoji_id", None)
+            if emoji and custom_id:
+                loaded.setdefault(emoji, custom_id)
+        CUSTOM_EMOJI_IDS.clear()
+        CUSTOM_EMOJI_IDS.update(loaded)
+        logging.info("Loaded %s custom emoji button icons from FFMargedar pack", len(loaded))
+    except Exception:
+        logging.exception("Could not load FFMargedar custom emoji pack; using standard button icons")
+
+
+def _custom_icon(emoji: str) -> str | None:
+    return CUSTOM_EMOJI_IDS.get(emoji)
+
+
 def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardButton:
     """Choose a native Telegram button color by action; Telegram supports only blue, green and red."""
     if style is None:
@@ -18,7 +45,16 @@ def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardB
             style = "success"
         else:
             style = "primary"
-    return InlineKeyboardButton(text=text, style=style, **kwargs)
+    icon_emoji = kwargs.pop("icon_emoji", None)
+    custom_id = _custom_icon(icon_emoji) if icon_emoji else None
+    if custom_id and icon_emoji and text.startswith(icon_emoji + " "):
+        text = text[len(icon_emoji) + 1:]
+    return InlineKeyboardButton(
+        text=text,
+        style=style,
+        icon_custom_emoji_id=custom_id,
+        **kwargs,
+    )
 
 
 def persistent_menu_keyboard() -> ReplyKeyboardMarkup:
@@ -94,9 +130,9 @@ def games_menu_keyboard() -> InlineKeyboardMarkup:
     """Show each Free Fire region as a distinct game/catalog entry."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button(text="🔥 Free Fire — СНГ", callback_data="region:ff_cis")],
-            [_button(text="🇮🇩 Free Fire — Индонезия", callback_data="region:ff_indonesia")],
-            [_button(text="🎯 PUBG Mobile", callback_data="game:pubg")],
+            [_button(text="🔥 Free Fire — СНГ", callback_data="region:ff_cis", icon_emoji="🔥")],
+            [_button(text="🇮🇩 Free Fire — Индонезия", callback_data="region:ff_indonesia", icon_emoji="🔥")],
+            [_button(text="🎯 PUBG Mobile", callback_data="game:pubg", icon_emoji="🎯")],
             [_button(text="🔙 Ба меню", callback_data="menu:main")],
         ]
     )
@@ -116,8 +152,8 @@ def free_fire_product_types_keyboard() -> InlineKeyboardMarkup:
 def telegram_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button(text="⭐ Telegram Stars", callback_data="menu:telegram_stars")],
-            [_button(text="💎 Telegram Premium", callback_data="menu:telegram_premium")],
+            [_button(text="⭐ Telegram Stars", callback_data="menu:telegram_stars", icon_emoji="⭐")],
+            [_button(text="💎 Telegram Premium", callback_data="menu:telegram_premium", icon_emoji="💎")],
             [_button(text="🔙 Ба меню", callback_data="menu:main")],
         ]
     )
