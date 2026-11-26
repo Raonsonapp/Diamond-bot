@@ -1315,8 +1315,8 @@ async def fzr_map_levelup(message: Message) -> None:
                         offer_id = str(offer.get("offer_id", "")).strip()
                         # Require the exact Level Up package number; never infer
                         # a mapping from a merely similar price or unrelated SKU.
-                        expected = re.search(r"level\\s*up\\s*package\\s*(\\d+)", product.name, re.I)
-                        offered = re.search(r"level\\s*up\\s*package\\s*(\\d+)", offer_name, re.I)
+                        expected = re.search(r"level\s*up\s*package\s*(\d+)", product.name, re.I)
+                        offered = re.search(r"level\s*up\s*package\s*(\d+)", offer_name, re.I)
                         if expected and offered and expected.group(1) == offered.group(1) and offer_id:
                             matches.append((category_id, offer_id, offer_name))
 
