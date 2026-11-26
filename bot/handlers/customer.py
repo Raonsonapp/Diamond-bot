@@ -10,7 +10,7 @@ from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter, Telegra
 from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, FSInputFile, Message
 from sqlalchemy import select
 
 from bot.config import config
@@ -459,10 +459,27 @@ async def persistent_menu_button(message: Message, state: FSMContext) -> None:
 
 
 
+async def _send_games_menu(message: Message) -> None:
+    """Show real game logos from repository assets with their actions."""
+    ff_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Free Fire — СНГ", callback_data="region:ff_cis")],
+        [InlineKeyboardButton(text="🇮🇩 Free Fire — Индонезия", callback_data="region:ff_indonesia")],
+    ])
+    pubg_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎯 Интихоби PUBG Mobile", callback_data="game:pubg")],
+        [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
+    ])
+    await message.answer_photo(FSInputFile("assets/Logo/Free_Fire.png"),
+        caption="🔥 <b>FREE FIRE</b>\nМинтақаро интихоб кунед:",
+        reply_markup=ff_keyboard, parse_mode="HTML")
+    await message.answer_photo(FSInputFile("assets/Logo/Pubg_Mobile.png"),
+        caption="🎯 <b>PUBG MOBILE</b>\nUC ва хизматрасониҳои бозиро интихоб кунед:",
+        reply_markup=pubg_keyboard, parse_mode="HTML")
+
 @router.message(F.text == "🎮 Бозиҳо")
 async def reply_games(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer("🎮 Бозиро интихоб кунед:", reply_markup=games_menu_keyboard())
+    await _send_games_menu(message)
 
 
 @router.message(F.text == "✈️ Telegram")
@@ -574,7 +591,11 @@ async def menu_games(callback: CallbackQuery, state: FSMContext) -> None:
     # Acknowledge immediately to prevent Telegram's spinner from appearing stuck.
     await callback.answer()
     await state.clear()
-    await _edit_navigation_message(callback, "🎮 Бозиро интихоб кунед:", games_menu_keyboard())
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await _send_games_menu(callback.message)
 
 
 async def _open_catalog(
@@ -673,7 +694,11 @@ async def catalog_back(callback: CallbackQuery, state: FSMContext) -> None:
     elif category_value == ProductCategory.TELEGRAM.value:
         await _edit_navigation_message(callback, "✈️ Хизматро интихоб кунед:", telegram_menu_keyboard())
     elif category_value == ProductCategory.BIGO_LIVE.value:
-        await _edit_navigation_message(callback, "🎮 Бозиро интихоб кунед:", games_menu_keyboard())
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await _send_games_menu(callback.message)
     else:
         await _edit_navigation_message(callback, "📋 Менюи асосӣ — бахшро интихоб кунед:", main_menu_keyboard())
 
