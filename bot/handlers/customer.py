@@ -475,6 +475,24 @@ async def _send_games_menu(message: Message) -> None:
     await message.answer_photo(FSInputFile("assets/Logo/Pubg_Mobile.png"),
         caption="🎯 <b>PUBG MOBILE</b>\nUC ва хизматрасониҳои бозиро интихоб кунед:",
         reply_markup=pubg_keyboard, parse_mode="HTML")
+    await message.answer_photo(
+        FSInputFile("assets/Logo/Telegram_Stars.png"),
+        caption="⭐ <b>TELEGRAM STARS</b>\nStars харидан:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⭐ Харидани Stars", callback_data="menu:telegram_stars")],
+            [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
+        ]),
+        parse_mode="HTML",
+    )
+    await message.answer_photo(
+        FSInputFile("assets/Logo/Telegram_Premium.png"),
+        caption="💎 <b>TELEGRAM PREMIUM</b>\nОбунаи Premium харидан:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💎 Харидани Premium", callback_data="menu:telegram_premium")],
+            [InlineKeyboardButton(text="🔙 Ба меню", callback_data="menu:main")],
+        ]),
+        parse_mode="HTML",
+    )
 
 @router.message(F.text == "🎮 Бозиҳо")
 async def reply_games(message: Message, state: FSMContext) -> None:
