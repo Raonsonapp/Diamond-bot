@@ -48,9 +48,18 @@ def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardB
         else:
             style = "primary"
     icon_emoji = kwargs.pop("icon_emoji", None)
+    wide = kwargs.pop("wide", False)
     custom_id = _custom_icon(icon_emoji) if icon_emoji else None
     if custom_id and icon_emoji and text.startswith(icon_emoji + " "):
         text = text[len(icon_emoji) + 1:]
+    if wide:
+        # Symmetric Braille-blank padding keeps the label visually centered
+        # while making one-button rows consistently wide on Telegram clients.
+        target_width = 48
+        remaining = max(0, target_width - len(text))
+        left = remaining // 2
+        right = remaining - left
+        text = ("\u2800" * left) + text + ("\u2800" * right)
     return InlineKeyboardButton(
         text=text,
         style=style,
@@ -130,25 +139,23 @@ def review_channel_keyboard() -> InlineKeyboardMarkup:
 
 def games_menu_keyboard() -> InlineKeyboardMarkup:
     """Uniform wide game buttons with centered labels."""
-    pad = "\u2800" * 16
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button(text=f"🔥 Free Fire — СНГ{pad}", callback_data="region:ff_cis", icon_emoji="🔥")],
-            [_button(text=f"🔥 Free Fire — Индонезия{pad}", callback_data="region:ff_indonesia", icon_emoji="🔥")],
-            [_button(text=f"🎯 PUBG Mobile{pad}", callback_data="game:pubg", icon_emoji="🎯")],
-            [_button(text=f"🔙 Ба меню{pad}", callback_data="menu:main")],
+            [_button(text="🔥 Free Fire — СНГ", callback_data="region:ff_cis", icon_emoji="🔥", wide=True)],
+            [_button(text="🔥 Free Fire — Индонезия", callback_data="region:ff_indonesia", icon_emoji="🔥", wide=True)],
+            [_button(text="🎯 PUBG Mobile", callback_data="game:pubg", icon_emoji="🎯", wide=True)],
+            [_button(text="🔙 Ба меню", callback_data="menu:main", wide=True)],
         ]
     )
 
 
 def free_fire_product_types_keyboard() -> InlineKeyboardMarkup:
-    pad = "\u2800" * 16
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button(text=f"💎 Алмазҳо{pad}", callback_data="fftype:packages")],
-            [_button(text=f"🎁 Level Up{pad}", callback_data="fftype:levelup")],
-            [_button(text=f"⬅️ Иваз кардани минтақа{pad}", callback_data="ff:region")],
-            [_button(text=f"🏠 Менюи асосӣ{pad}", callback_data="menu:main")],
+            [_button(text="💎 Алмазҳо", callback_data="fftype:packages", wide=True)],
+            [_button(text="🎁 Level Up", callback_data="fftype:levelup", wide=True)],
+            [_button(text="⬅️ Иваз кардани минтақа", callback_data="ff:region", wide=True)],
+            [_button(text="🏠 Менюи асосӣ", callback_data="menu:main", wide=True)],
         ]
     )
 
@@ -225,11 +232,10 @@ def products_keyboard(
     telegram_kind: str | None = None,
     allow_cart: bool = True,
 ) -> InlineKeyboardMarkup:
-    # Uniform invisible padding makes one-column catalog buttons wider;
-    # Telegram centers the complete label inside each button.
-    pad = "\u2800" * 12
+    # Symmetric invisible padding widens one-column catalog buttons and
+    # centers the product label rather than leaving it at the left edge.
     rows = [
-        [_button(text=f"{_product_label(p)}{pad}", callback_data=f"product:{p.id}")]
+        [_button(text=_product_label(p), callback_data=f"product:{p.id}", wide=True)]
         for p in products
     ]
     # Free Fire (fixed official denominations only, per the admin) and
@@ -247,10 +253,10 @@ def products_keyboard(
             [_button(text="🛒 Якчанд бастаро якҷоя харидан", callback_data=f"cartmode:{category.value}")]
         )
     rows.append(
-        [_button(text=f"⬅️ Бозгашт{pad}", callback_data="catalog:back")]
+        [_button(text="⬅️ Бозгашт", callback_data="catalog:back", wide=True)]
     )
     rows.append(
-        [_button(text=f"🏠 Менюи асосӣ{pad}", callback_data="menu:main")]
+        [_button(text="🏠 Менюи асосӣ", callback_data="menu:main", wide=True)]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
