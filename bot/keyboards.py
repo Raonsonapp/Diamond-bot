@@ -129,27 +129,26 @@ def review_channel_keyboard() -> InlineKeyboardMarkup:
 
 
 def games_menu_keyboard() -> InlineKeyboardMarkup:
-    """Full-width, one-action-per-row game picker with visible icon fallbacks."""
-    # Braille blank padding widens Telegram's content-sized inline buttons
-    # without adding visible punctuation to the labels.
-    pad = "\u2800" * 10
+    """Uniform wide game buttons with centered labels."""
+    pad = "\u2800" * 16
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button(text=f"🔥  Free Fire — СНГ{pad}", callback_data="region:ff_cis", icon_emoji="🔥")],
-            [_button(text=f"🔥  Free Fire — Индонезия{pad}", callback_data="region:ff_indonesia", icon_emoji="🔥")],
-            [_button(text=f"🎯  PUBG Mobile{pad}", callback_data="game:pubg", icon_emoji="🎯")],
-            [_button(text=f"🔙  Ба меню{pad}", callback_data="menu:main")],
+            [_button(text=f"🔥 Free Fire — СНГ{pad}", callback_data="region:ff_cis", icon_emoji="🔥")],
+            [_button(text=f"🔥 Free Fire — Индонезия{pad}", callback_data="region:ff_indonesia", icon_emoji="🔥")],
+            [_button(text=f"🎯 PUBG Mobile{pad}", callback_data="game:pubg", icon_emoji="🎯")],
+            [_button(text=f"🔙 Ба меню{pad}", callback_data="menu:main")],
         ]
     )
 
 
 def free_fire_product_types_keyboard() -> InlineKeyboardMarkup:
+    pad = "\u2800" * 16
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button(text="💎 Алмазҳо", callback_data="fftype:packages")],
-            [_button(text="🎁 Level Up", callback_data="fftype:levelup")],
-            [_button(text="⬅️ Иваз кардани минтақа", callback_data="ff:region")],
-            [_button(text="🏠 Менюи асосӣ", callback_data="menu:main")],
+            [_button(text=f"💎 Алмазҳо{pad}", callback_data="fftype:packages")],
+            [_button(text=f"🎁 Level Up{pad}", callback_data="fftype:levelup")],
+            [_button(text=f"⬅️ Иваз кардани минтақа{pad}", callback_data="ff:region")],
+            [_button(text=f"🏠 Менюи асосӣ{pad}", callback_data="menu:main")],
         ]
     )
 
@@ -226,8 +225,11 @@ def products_keyboard(
     telegram_kind: str | None = None,
     allow_cart: bool = True,
 ) -> InlineKeyboardMarkup:
+    # Uniform invisible padding makes one-column catalog buttons wider;
+    # Telegram centers the complete label inside each button.
+    pad = "\u2800" * 12
     rows = [
-        [_button(text=_product_label(p), callback_data=f"product:{p.id}")]
+        [_button(text=f"{_product_label(p)}{pad}", callback_data=f"product:{p.id}")]
         for p in products
     ]
     # Free Fire (fixed official denominations only, per the admin) and
@@ -245,10 +247,10 @@ def products_keyboard(
             [_button(text="🛒 Якчанд бастаро якҷоя харидан", callback_data=f"cartmode:{category.value}")]
         )
     rows.append(
-        [_button(text="⬅️ Бозгашт", callback_data="catalog:back")]
+        [_button(text=f"⬅️ Бозгашт{pad}", callback_data="catalog:back")]
     )
     rows.append(
-        [_button(text="🏠 Менюи асосӣ", callback_data="menu:main")]
+        [_button(text=f"🏠 Менюи асосӣ{pad}", callback_data="menu:main")]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
