@@ -129,13 +129,16 @@ def review_channel_keyboard() -> InlineKeyboardMarkup:
 
 
 def games_menu_keyboard() -> InlineKeyboardMarkup:
-    """Show each Free Fire region as a distinct game/catalog entry."""
+    """Full-width, one-action-per-row game picker with visible icon fallbacks."""
+    # Braille blank padding widens Telegram's content-sized inline buttons
+    # without adding visible punctuation to the labels.
+    pad = "\u2800" * 10
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button(text="🔥 Free Fire — СНГ", callback_data="region:ff_cis", icon_emoji="🔥")],
-            [_button(text="🇮🇩 Free Fire — Индонезия", callback_data="region:ff_indonesia", icon_emoji="🔥")],
-            [_button(text="🎯 PUBG Mobile", callback_data="game:pubg", icon_emoji="🎯")],
-            [_button(text="🔙 Ба меню", callback_data="menu:main")],
+            [_button(text=f"🔥  Free Fire — СНГ{pad}", callback_data="region:ff_cis", icon_emoji="🔥")],
+            [_button(text=f"🔥  Free Fire — Индонезия{pad}", callback_data="region:ff_indonesia", icon_emoji="🔥")],
+            [_button(text=f"🎯  PUBG Mobile{pad}", callback_data="game:pubg", icon_emoji="🎯")],
+            [_button(text=f"🔙  Ба меню{pad}", callback_data="menu:main")],
         ]
     )
 
