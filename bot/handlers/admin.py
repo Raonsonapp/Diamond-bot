@@ -1256,6 +1256,101 @@ async def fzr_offers(message: Message) -> None:
     await message.answer(text[:4000])
 
 
+@router.message(Command("fzr_map_levelup"))
+async def fzr_map_levelup(message: Message) -> None:
+    """Safely map Level Up SKUs only when the live FazerCards match is unique."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    from bot.services.fazercards import FazerCardsError, get_topup_offers, list_topup_categories
+
+    await message.answer("🔎 Категорияҳо ва offer-ҳои воқеии FazerCards санҷида мешаванд...")
+    try:
+        data = await list_topup_categories(limit=500)
+        categories = data.get("items", [])
+        async with get_session() as session:
+            cis_products = [
+                p for p in await list_active_products(session, category=ProductCategory.DIAMONDS)
+                if "level up" in p.name.lower()
+            ]
+            id_products = [
+                p for p in await list_active_products(session, category=ProductCategory.FF_INDONESIA)
+                if "level up" in p.name.lower()
+            ]
+
+        reports = []
+        for region, products, region_hints in (
+            ("СНГ", cis_products, ("cis", "ru", "russia")),
+            ("Индонезия", id_products, ("indonesia", "ind", "_id")),
+        ):
+            if not products:
+                reports.append(f"ℹ️ {region}: маҳсулоти Level Up дар база ёфт нашуд.")
+                continue
+
+            region_categories = [
+                item for item in categories
+                if "free fire" in str(item.get("name", "")).lower()
+                and any(hint in str(item.get("category_id", "")).lower() for hint in region_hints)
+            ]
+            if not region_categories:
+                reports.append(f"⚠️ {region}: категорияи Free Fire барои ин минтақа дар API ёфт нашуд.")
+                continue
+
+            offers_by_category = []
+            for category_item in region_categories:
+                category_id = str(category_item.get("category_id", ""))
+                try:
+                    offer_data = await get_topup_offers(category_id)
+                except FazerCardsError as exc:
+                    reports.append(f"⚠️ {region} / {category_id}: {exc}")
+                    continue
+                offers_by_category.append((category_id, offer_data.get("offers", [])))
+
+            for product in products:
+                matches = []
+                for category_id, offers in offers_by_category:
+                    for offer in offers:
+                        offer_name = str(offer.get("name", "")).strip().lower()
+                        offer_id = str(offer.get("offer_id", "")).strip()
+                        # Require the exact Level Up package number; never infer
+                        # a mapping from a merely similar price or unrelated SKU.
+                        expected = re.search(r"level\\s*up\\s*package\\s*(\\d+)", product.name, re.I)
+                        offered = re.search(r"level\\s*up\\s*package\\s*(\\d+)", offer_name, re.I)
+                        if expected and offered and expected.group(1) == offered.group(1) and offer_id:
+                            matches.append((category_id, offer_id, offer_name))
+
+                if len(matches) == 1:
+                    category_id, offer_id, offer_name = matches[0]
+                    async with get_session() as session:
+                        current = await get_product(session, product.id)
+                        if current is None:
+                            reports.append(f"⚠️ #{product.id} {product.name}: маҳсулот ёфт нашуд.")
+                            continue
+                        await set_product_fzr_mapping(session, current, category_id, offer_id)
+                    reports.append(f"✅ #{product.id} {product.name} → {category_id} / {offer_id} ({offer_name})")
+                elif len(matches) == 0:
+                    reports.append(f"⏸ #{product.id} {product.name}: offer-и мувофиқи дақиқ ёфт нашуд; mapping дастнорас монд.")
+                else:
+                    choices = ", ".join(f"{cat}/{off}" for cat, off, _ in matches[:4])
+                    reports.append(f"⚠️ #{product.id} {product.name}: чанд мувофиқат ёфт шуд; худкор пайваст нашуд: {choices}")
+
+        if not reports:
+            reports.append("⚠️ Маҳсулоти Level Up барои санҷиш ёфт нашуд.")
+        chunk = ""
+        for line in reports:
+            if len(chunk) + len(line) + 1 > 3800:
+                await message.answer(chunk)
+                chunk = ""
+            chunk += line + "\\n"
+        if chunk:
+            await message.answer(chunk)
+    except FazerCardsError as exc:
+        await message.answer(f"⚠️ Хатои FazerCards API: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        await message.answer(f"⚠️ Санҷиши Level Up анҷом нашуд: {exc}")
+
+
 @router.message(Command("fzr_validate_id"))
 async def fzr_validate_id(message: Message) -> None:
     if not is_admin(message.from_user.id):
