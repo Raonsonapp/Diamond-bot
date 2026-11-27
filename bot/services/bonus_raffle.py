@@ -25,14 +25,20 @@ async def register_delivered_orders(bot, orders: list[Order]) -> None:
         await session.flush()
 
         while True:
-            pending = list((await session.scalars(
+            pending_entries = list((await session.scalars(
                 select(BonusRaffleEntry)
                 .where(BonusRaffleEntry.round_number.is_(None))
                 .order_by(BonusRaffleEntry.id)
-                .limit(RAFFLE_SIZE)
             )).all())
-            if len(pending) < RAFFLE_SIZE:
+            # One entry per distinct customer in each draw, even if that
+            # customer placed several orders during the same round.
+            unique_entries = {}
+            for entry in pending_entries:
+                unique_entries.setdefault(entry.user_id, entry)
+            if len(unique_entries) < RAFFLE_SIZE:
                 break
+            participants = list(unique_entries.values())[:RAFFLE_SIZE]
+            participant_ids = {entry.user_id for entry in participants}
 
             previous_round = await session.scalar(
                 select(BonusRaffleDraw.round_number)
@@ -40,10 +46,11 @@ async def register_delivered_orders(bot, orders: list[Order]) -> None:
                 .limit(1)
             )
             round_number = (previous_round or 0) + 1
-            winner = random.SystemRandom().choice(pending)
-            for entry in pending:
-                entry.round_number = round_number
-                entry.is_winner = entry.id == winner.id
+            winner = random.SystemRandom().choice(participants)
+            for entry in pending_entries:
+                if entry.user_id in participant_ids:
+                    entry.round_number = round_number
+                    entry.is_winner = entry.id == winner.id
             session.add(BonusRaffleDraw(
                 round_number=round_number,
                 winner_user_id=winner.user_id,
