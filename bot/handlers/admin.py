@@ -64,8 +64,8 @@ async def raffle_pending_command(message: Message) -> None:
             f"Давр #{draw.round_number} — ғолиб ID <code>{draw.winner_user_id}</code> "
             f"— фармоиш #{draw.winner_order_id} — {draw.prize_name}"
         )
-    lines.append("\\nПас аз супоридани ваучер: /raffle_awarded <рақами_давр>")
-    await message.answer("\\n".join(lines))
+    lines.append("\nПас аз супоридани ваучер: /raffle_awarded <code>рақами_давр</code>")
+    await message.answer("\n".join(lines))
 
 
 @router.message(Command("raffle_awarded"))
@@ -74,7 +74,7 @@ async def raffle_awarded_command(message: Message) -> None:
         return
     parts = (message.text or "").split()
     if len(parts) != 2 or not parts[1].isdigit():
-        await message.answer("Истифода: /raffle_awarded <рақами_давр>\\nМисол: /raffle_awarded 1")
+        await message.answer("Истифода: /raffle_awarded <code>рақами_давр</code>\nМисол: /raffle_awarded 1")
         return
     async with get_session() as session:
         draw = await session.scalar(
