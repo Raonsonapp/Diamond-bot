@@ -27,6 +27,7 @@ from bot.db.repo import (
     set_progress_message_id,
 )
 from bot.db.session import get_session
+from bot.services.bonus_raffle import register_delivered_orders
 from bot.fsm_storage import storage
 from bot.keyboards import review_prompt_keyboard
 from bot.services.contest import maybe_declare_contest_winner
@@ -295,6 +296,7 @@ async def _attempt_delivery(
     await _send_success_receipt(bot, delivered, products)
 
     await prompt_for_review(bot, delivered[0])
+    await register_delivered_orders(bot, delivered)
     return True, results
 
 
@@ -465,4 +467,5 @@ async def mark_delivered_and_notify(bot: Bot, order_id: int) -> Order | None:
     await _send_success_receipt(bot, delivered, products)
 
     await prompt_for_review(bot, delivered[0])
+    await register_delivered_orders(bot, delivered)
     return delivered[0]
