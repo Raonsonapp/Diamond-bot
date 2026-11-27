@@ -953,10 +953,16 @@ async def menu_referral(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "menu:bonus")
 async def menu_bonus(callback: CallbackQuery) -> None:
+    text = (
+        "🎊 <b>ХАЗИНАИ ТУҲФАҲОИ FF MARGEDAR</b>\n\n"
+        "Ин бахш барои эълони аксияҳо ва пешниҳодҳои махсуси мост.\n\n"
+        "📌 <b>Вазъияти ҳозира:</b> аксияи бонусӣ фаъол нест.\n"
+        "🛍 Харидҳо бо нархҳои ягонаи каталог анҷом дода мешаванд.\n\n"
+        "🔔 Ҳангоми оғози аксияи нав, шартҳо ва муҳлати он дар ҳамин бахш нашр мешаванд."
+    )
     await _edit_navigation_message(
         callback,
-        "🎁 <b>БОНУСҲО ҒАЙРИФАЪОЛАНД</b>\\n\\n"
-        "Ҳоло барои даъвати дӯстон ҷоиза, бонуси 5% ё тахфифи махсус дода намешавад.",
+        text,
         reply_markup=back_to_menu_keyboard(),
     )
     await callback.answer()
