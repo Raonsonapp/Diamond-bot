@@ -94,7 +94,7 @@ async def register_delivered_orders(bot, orders: list[Order]) -> None:
 
 async def get_raffle_status(session) -> tuple[int, dict | None]:
     pending_count = await session.scalar(
-        select(func.count(BonusRaffleEntry.id))
+        select(func.count(func.distinct(BonusRaffleEntry.user_id)))
         .where(BonusRaffleEntry.round_number.is_(None))
     )
     latest = await session.scalar(
