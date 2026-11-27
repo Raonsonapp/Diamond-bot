@@ -1,4 +1,5 @@
 import logging
+import re
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
@@ -11,6 +12,8 @@ from bot.formatting import format_price
 # If the pack is unavailable or the bot cannot use custom emoji, ordinary
 # Unicode emoji remain as a safe fallback.
 CUSTOM_EMOJI_IDS: dict[str, str] = {}
+
+_BUTTON_EMOJI_RE = re.compile(r"[\\U0001F000-\\U0001FAFF\\U0001FC00-\\U0001FFFF\\u2300-\\u23FF\\u2600-\\u27BF\\uFE0E\\uFE0F\\u200D\\u20E3\\U0001F1E6-\\U0001F1FF]+")
 
 
 async def initialize_custom_emoji_icons(bot) -> None:
@@ -48,22 +51,22 @@ def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardB
         else:
             style = "primary"
 
-    # Keep the emoji as part of the button text. Telegram centers the complete
-    # label (emoji + wording) naturally; a separate icon_custom_emoji_id pins
-    # the icon to the left and makes the wording look off-center.
+    # Remove all emoji from button labels and center the remaining text.
     kwargs.pop("icon_emoji", None)
     kwargs.pop("wide", None)
     kwargs.pop("icon_custom_emoji_id", None)
+    text = _BUTTON_EMOJI_RE.sub("", text)
+    text = re.sub(r"\\s{2,}", " ", text).strip()
     return InlineKeyboardButton(text=text, style=style, **kwargs)
 
 
 def persistent_menu_keyboard() -> ReplyKeyboardMarkup:
     """A single persistent bottom button, like the competitor bot's Menu button."""
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📋 Меню", style="primary")]],
+        keyboard=[[KeyboardButton(text="Меню", style="primary")]],
         resize_keyboard=True,
         is_persistent=True,
-        input_field_placeholder="📋 Менюро пахш кунед",
+        input_field_placeholder="Менюро пахш кунед",
     )
 
 
