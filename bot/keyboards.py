@@ -13,7 +13,7 @@ from bot.formatting import format_price
 # Unicode emoji remain as a safe fallback.
 CUSTOM_EMOJI_IDS: dict[str, str] = {}
 
-_BUTTON_EMOJI_RE = re.compile(r"[\\U0001F000-\\U0001FAFF\\U0001FC00-\\U0001FFFF\\u2300-\\u23FF\\u2600-\\u27BF\\uFE0E\\uFE0F\\u200D\\u20E3\\U0001F1E6-\\U0001F1FF]+")
+_BUTTON_EMOJI_RE = re.compile(r"[\U0001F000-\U0001FAFF\U0001FC00-\U0001FFFF\u2300-\u23FF\u2600-\u27BF\uFE0E\uFE0F\u200D\u20E3\U0001F1E6-\U0001F1FF]+")
 
 
 async def initialize_custom_emoji_icons(bot) -> None:
@@ -38,7 +38,7 @@ def _custom_icon(emoji: str) -> str | None:
 
 
 def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardButton:
-    """Create a centered inline button label with its emoji kept inside the text."""
+    """Create a centered inline button label without emoji."""
     if style is None:
         label = text.lower()
         if any(word in label for word in ("дастгир", "бекор", "рад", "❌")):
