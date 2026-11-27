@@ -38,7 +38,7 @@ def _custom_icon(emoji: str) -> str | None:
 
 
 def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardButton:
-    """Create a centered inline button label without emoji."""
+    """Create a centered inline button label while preserving its Unicode emoji."""
     if style is None:
         label = text.lower()
         if any(word in label for word in ("дастгир", "бекор", "рад", "❌")):
@@ -51,19 +51,18 @@ def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardB
         else:
             style = "primary"
 
-    # Remove all emoji from button labels and center the remaining text.
+    # These are not valid InlineKeyboardButton fields in the current Bot API.
+    # Keep emoji in the actual text so Telegram displays them beside every label.
     kwargs.pop("icon_emoji", None)
     kwargs.pop("wide", None)
     kwargs.pop("icon_custom_emoji_id", None)
-    text = _BUTTON_EMOJI_RE.sub("", text)
-    text = re.sub(r"\s{2,}", " ", text).strip()
     return InlineKeyboardButton(text=text, style=style, **kwargs)
 
 
 def persistent_menu_keyboard() -> ReplyKeyboardMarkup:
     """A single persistent bottom button, like the competitor bot's Menu button."""
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="Меню", style="primary")]],
+        keyboard=[[KeyboardButton(text="📋 Меню", style="primary")]],
         resize_keyboard=True,
         is_persistent=True,
         input_field_placeholder="Менюро пахш кунед",
