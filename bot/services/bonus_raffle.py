@@ -61,10 +61,10 @@ async def register_delivered_orders(bot, orders: list[Order]) -> None:
         try:
             await bot.send_message(
                 draw["user_id"],
-                "🎉 <b>ШУМО ҒОЛИБИ ҚУРЪАКАШӢ ШУДЕД!</b>\\n\\n"
-                f"🏆 Даври №{draw['round']}\\n"
-                f"🎁 Мукофот: <b>{PRIZE_NAME}</b>\\n"
-                f"🧾 Фармоиши иштирок: #{draw['order_id']}\\n\\n"
+                "🎉 <b>ШУМО ҒОЛИБИ ҚУРЪАКАШӢ ШУДЕД!</b>\n\n"
+                f"🏆 Даври №{draw['round']}\n"
+                f"🎁 Мукофот: <b>{PRIZE_NAME}</b>\n"
+                f"🧾 Фармоиши иштирок: #{draw['order_id']}\n\n"
                 "Маъмури FF MARGEDAR барои супоридани туҳфа бо шумо тамос мегирад. 💚",
             )
         except Exception:
@@ -74,11 +74,11 @@ async def register_delivered_orders(bot, orders: list[Order]) -> None:
             try:
                 await bot.send_message(
                     config.admin_chat_id,
-                    "🎁 <b>Ғолиби нави қуръакашӣ</b>\\n"
-                    f"Давр: #{draw['round']}\\n"
-                    f"Ғолиб ID: <code>{draw['user_id']}</code>\\n"
-                    f"Фармоиш: #{draw['order_id']}\\n"
-                    f"Мукофот: {PRIZE_NAME}\\n"
+                    "🎁 <b>Ғолиби нави қуръакашӣ</b>\n"
+                    f"Давр: #{draw['round']}\n"
+                    f"Ғолиб ID: <code>{draw['user_id']}</code>\n"
+                    f"Фармоиш: #{draw['order_id']}\n"
+                    f"Мукофот: {PRIZE_NAME}\n"
                     "⚠️ Ваучерро дастӣ супоред.",
                 )
             except Exception:
