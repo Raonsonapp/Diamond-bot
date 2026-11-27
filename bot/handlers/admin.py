@@ -8,7 +8,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import config
-from bot.db.models import Base, BotSetting, Order, OrderStatus, Product, ProductCategory, User
+from bot.db.models import Base, BonusRaffleDraw, BotSetting, Order, OrderStatus, Product, ProductCategory, User
 from bot.db.repo import (
     adjust_fazercards_balance,
     contest_leaderboard,
@@ -43,6 +43,52 @@ from bot.services.fulfillment import clear_awaiting_review, confirm_and_deliver,
 from bot.services.adsgram import get_ad_stats
 
 router = Router(name="admin")
+
+
+@router.message(Command("raffle_pending"))
+async def raffle_pending_command(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        return
+    async with get_session() as session:
+        draws = list((await session.scalars(
+            select(BonusRaffleDraw)
+            .where(BonusRaffleDraw.prize_delivered.is_(False))
+            .order_by(BonusRaffleDraw.round_number)
+        )).all())
+    if not draws:
+        await message.answer("Ҳоло ягон ваучери қуръакашӣ барои супоридан намондааст.")
+        return
+    lines = ["🎁 <b>Ваучерҳои ҳанӯз насупоридашуда</b>"]
+    for draw in draws:
+        lines.append(
+            f"Давр #{draw.round_number} — ғолиб ID <code>{draw.winner_user_id}</code> "
+            f"— фармоиш #{draw.winner_order_id} — {draw.prize_name}"
+        )
+    lines.append("\\nПас аз супоридани ваучер: /raffle_awarded <рақами_давр>")
+    await message.answer("\\n".join(lines))
+
+
+@router.message(Command("raffle_awarded"))
+async def raffle_awarded_command(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        return
+    parts = (message.text or "").split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        await message.answer("Истифода: /raffle_awarded <рақами_давр>\\nМисол: /raffle_awarded 1")
+        return
+    async with get_session() as session:
+        draw = await session.scalar(
+            select(BonusRaffleDraw).where(BonusRaffleDraw.round_number == int(parts[1]))
+        )
+        if draw is None:
+            await message.answer("Ин даври қуръакашӣ ёфт нашуд.")
+            return
+        if draw.prize_delivered:
+            await message.answer("Ваучери ин давр аллакай ҳамчун супоридашуда қайд шудааст.")
+            return
+        draw.prize_delivered = True
+        await session.commit()
+    await message.answer(f"✅ Ваучери даври #{parts[1]} ҳамчун супоридашуда қайд шуд.")
 
 
 @router.message(Command("myid"))
