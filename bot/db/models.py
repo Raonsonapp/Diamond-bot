@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -322,3 +322,28 @@ class ReferralMilestoneAward(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "milestone", name="uq_referral_milestone_award"),
     )
+
+
+class BonusRaffleEntry(Base):
+    """One ticket for each successfully delivered purchase in the 25-order raffle."""
+    __tablename__ = "bot_bonus_raffle_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[int] = mapped_column(Integer, ForeignKey("bot_orders.id"), unique=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"), index=True)
+    round_number: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    is_winner: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BonusRaffleDraw(Base):
+    """Persistent record of each completed 25-purchase draw."""
+    __tablename__ = "bot_bonus_raffle_draws"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    round_number: Mapped[int] = mapped_column(Integer, unique=True)
+    winner_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bot_users.id"))
+    winner_order_id: Mapped[int] = mapped_column(Integer, ForeignKey("bot_orders.id"))
+    prize_name: Mapped[str] = mapped_column(String(128), default="Ваучери Lite (90 алмаз)")
+    prize_delivered: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
