@@ -56,7 +56,7 @@ def _button(*, text: str, style: str | None = None, **kwargs) -> InlineKeyboardB
     kwargs.pop("wide", None)
     kwargs.pop("icon_custom_emoji_id", None)
     text = _BUTTON_EMOJI_RE.sub("", text)
-    text = re.sub(r"\\s{2,}", " ", text).strip()
+    text = re.sub(r"\s{2,}", " ", text).strip()
     return InlineKeyboardButton(text=text, style=style, **kwargs)
 
 
