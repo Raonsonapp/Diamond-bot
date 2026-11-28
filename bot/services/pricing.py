@@ -58,7 +58,7 @@ def quote_custom_price(diamonds: int, breakpoints: list[Breakpoint]) -> tuple[fl
 
 SPECIAL_USERNAMES_KEY = "special_price_usernames"
 SPECIAL_PRICES = {
-    110: 8.50, 341: 25.95, 572: 43.76, 1166: 84.65,
+    110: 8.50, 341: 25.95, 572: 41.10, 1166: 78.50,
     2398: 153.90, 6160: 399.00,
     90: 4.50, 450: 15.50, 2600: 59.90,
 }
