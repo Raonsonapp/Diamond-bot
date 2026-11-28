@@ -148,6 +148,7 @@ async def _set_bot_commands(bot: Bot) -> None:
         BotCommand(command="walletpending", description="👛 Пардохтҳои ҳамёни интизор"),
         BotCommand(command="walletapprove", description="✅ Тасдиқи пардохти ҳамён"),
         BotCommand(command="paid", description="✅ Тасдиқи дастии пардохт"),
+        BotCommand(command="admindonate", description="💎 Донати ройгони админӣ"),
         BotCommand(command="underpaid", description="⚠️ Фармоишҳои кампардохт"),
         BotCommand(command="underpaidok", description="🧾 Тасдиқи кампардохт"),
         BotCommand(command="delivered", description="🚚 Қайд кардани ирсоли маҳсулот"),
