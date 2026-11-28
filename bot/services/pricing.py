@@ -12,6 +12,10 @@ follows the same bulk-discount curve in between.
 
 from __future__ import annotations
 
+import json
+
+from bot.db.models import BotSetting, User
+
 Breakpoint = tuple[int, float, float]  # (diamonds, price_somoni, cost_somoni)
 
 
@@ -52,6 +56,31 @@ def quote_custom_price(diamonds: int, breakpoints: list[Breakpoint]) -> tuple[fl
     raise RuntimeError("unreachable")
 
 
+SPECIAL_USERNAMES_KEY = "special_price_usernames"
+SPECIAL_PRICES = {
+    110: 8.50, 341: 25.95, 572: 43.76, 1166: 84.65,
+    2398: 153.90, 6160: 399.00,
+    90: 4.50, 450: 15.50, 2600: 59.90,
+}
+
+
 async def apply_customer_prices(session, products: list, user_id: int) -> bool:
-    """Price discounts are disabled for all customers; catalog prices always apply."""
-    return False
+    """Apply the legacy/special catalog only to explicitly approved usernames."""
+    user = await session.get(User, user_id)
+    username = (user.username or "").lstrip("@").casefold() if user else ""
+    if not username:
+        return False
+    setting = await session.get(BotSetting, SPECIAL_USERNAMES_KEY)
+    try:
+        allowed = set(json.loads(setting.value)) if setting and setting.value else set()
+    except (TypeError, ValueError):
+        allowed = set()
+    if username not in allowed:
+        return False
+    applied = False
+    for product in products:
+        special_price = SPECIAL_PRICES.get(product.diamonds)
+        if special_price is not None and product.category == "diamonds":
+            product.price_somoni = special_price
+            applied = True
+    return applied
