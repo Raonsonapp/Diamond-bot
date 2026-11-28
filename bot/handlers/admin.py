@@ -1,5 +1,6 @@
 import asyncio
 import re
+import json
 
 from sqlalchemy import delete, func, select
 
@@ -43,6 +44,70 @@ from bot.services.fulfillment import clear_awaiting_review, confirm_and_deliver,
 from bot.services.adsgram import get_ad_stats
 
 router = Router(name="admin")
+
+
+@router.message(Command("specialadd"))
+async def special_price_add(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    parts = (message.text or "").split()
+    if len(parts) != 2 or not re.fullmatch(r"@?[A-Za-z0-9_]{5,32}", parts[1]):
+        await message.answer("Истифода: /specialadd @username")
+        return
+    username = parts[1].lstrip("@").casefold()
+    async with get_session() as session:
+        raw = await get_setting(session, "special_price_usernames", "[]")
+        try:
+            names = set(json.loads(raw or "[]"))
+        except (TypeError, ValueError):
+            names = set()
+        names.add(username)
+        await set_setting(session, "special_price_usernames", json.dumps(sorted(names)))
+    await message.answer(f"✅ @{username} ба рӯйхати нархҳои махсус илова шуд.")
+
+
+@router.message(Command("specialremove"))
+async def special_price_remove(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    parts = (message.text or "").split()
+    if len(parts) != 2 or not re.fullmatch(r"@?[A-Za-z0-9_]{5,32}", parts[1]):
+        await message.answer("Истифода: /specialremove @username")
+        return
+    username = parts[1].lstrip("@").casefold()
+    async with get_session() as session:
+        raw = await get_setting(session, "special_price_usernames", "[]")
+        try:
+            names = set(json.loads(raw or "[]"))
+        except (TypeError, ValueError):
+            names = set()
+        existed = username in names
+        names.discard(username)
+        await set_setting(session, "special_price_usernames", json.dumps(sorted(names)))
+    await message.answer(
+        f"✅ @{username} аз рӯйхати махсус хориҷ шуд." if existed
+        else f"ℹ️ @{username} дар рӯйхат набуд."
+    )
+
+
+@router.message(Command("speciallist"))
+async def special_price_list(message: Message) -> None:
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+    async with get_session() as session:
+        raw = await get_setting(session, "special_price_usernames", "[]")
+    try:
+        names = sorted(set(json.loads(raw or "[]")))
+    except (TypeError, ValueError):
+        names = []
+    if not names:
+        await message.answer("📋 Рӯйхати нархҳои махсус ҳоло холӣ аст.")
+        return
+    await message.answer("📋 <b>Истифодабарандагони нархи махсус:</b>\n" +
+                         "\n".join(f"• @{name}" for name in names))
 
 
 @router.message(Command("raffle_pending"))
