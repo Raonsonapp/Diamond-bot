@@ -2034,6 +2034,8 @@ async def recover_payment_proof_after_restart(message: Message, state: FSMContex
     from bot.db.models import Order
     from sqlalchemy import select
 
+    from bot.db.models import WalletTopupRequest
+
     async with get_session() as session:
         result = await session.execute(
             select(Order)
@@ -2046,10 +2048,32 @@ async def recover_payment_proof_after_restart(message: Message, state: FSMContex
         )
         order = result.scalar_one_or_none()
 
+        # MemoryStorage is cleared whenever the bot process restarts. A wallet
+        # top-up receipt must therefore be recoverable just like an order proof.
+        wallet_result = await session.execute(
+            select(WalletTopupRequest)
+            .where(
+                WalletTopupRequest.user_id == message.from_user.id,
+                WalletTopupRequest.status == "pending",
+            )
+            .order_by(WalletTopupRequest.created_at.desc())
+            .limit(1)
+        )
+        wallet_request = wallet_result.scalar_one_or_none()
+
+    if order is None and wallet_request is not None:
+        await state.set_state(WalletTopupFlow.awaiting_proof)
+        await state.update_data(
+            wallet_topup_request_id=wallet_request.id,
+            wallet_topup_amount=int(wallet_request.amount_somoni),
+        )
+        await wallet_topup_receive_proof(message, state)
+        return
+
     if order is None:
         await message.answer(
-            "📷 Расм қабул шуд, аммо фармоиши интизори пардохт ёфт нашуд. "
-            "Лутфан аз «📋 Меню» фармоишро аз нав кушоед ё ба дастгирӣ муроҷиат кунед."
+            "📷 Расм қабул шуд, аммо дархости интизори пардохт ёфт нашуд. "
+            "Лутфан /wallet-ро кушоед ё ба дастгирӣ муроҷиат кунед."
         )
         return
 
