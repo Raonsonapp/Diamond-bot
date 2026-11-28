@@ -282,7 +282,7 @@ async def _attempt_delivery(
             await adjust_fazercards_balance(session, -spent)
 
     if len(delivered) > 1:
-        summary = "\n".join(f"{_item_line(o, products[o.id])} → {o.ff_player_id}" for o in delivered)
+        summary = "\n".join(f"{_item_line(o, products[o.id])} | ID Free Fire: {o.ff_player_id}" for o in delivered)
         await bot.send_message(
             primary.user_id,
             f"🎉 Ҳама маҳсулоти фармоиши шумо ирсол шуд:\n{summary}",
@@ -291,7 +291,7 @@ async def _attempt_delivery(
         product = products[delivered[0].id]
         await bot.send_message(
             primary.user_id,
-            f"🎉 {product.display_name} ба аккаунти шумо ({delivered[0].ff_player_id}) ирсол шуд!",
+            f"🎉 {product.display_name} ба аккаунти шумо фиристода шуд!\n🎮 ID Free Fire: <code>{html.escape(str(delivered[0].ff_player_id))}</code>",
         )
     await _send_success_receipt(bot, delivered, products)
 
