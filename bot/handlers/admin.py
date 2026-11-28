@@ -20,6 +20,8 @@ from bot.db.repo import (
     get_order,
     get_orders_by_group,
     get_product,
+    create_order,
+    upsert_user,
     get_setting,
     get_user,
     has_referral_with_purchase,
@@ -985,6 +987,65 @@ async def mark_delivered(callback: CallbackQuery, bot: Bot) -> None:
 
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.answer("Қайд шуд ҳамчун ирсолшуда.")
+
+
+@router.message(Command("admindonate"))
+async def admin_donate_command(message: Message) -> None:
+    """Create a complimentary Free Fire diamond order for the admin, without payment/proof review."""
+    if not is_admin(message.from_user.id):
+        await _reject_non_admin(message)
+        return
+
+    parts = (message.text or "").split()
+    if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isalnum():
+        await message.answer(
+            "💎 <b>Донати админӣ</b>\n"
+            "Истифода: <code>/admindonate product_id FreeFire_ID</code>\n"
+            "Мисол: <code>/admindonate 3 123456789</code>\n"
+            "ID-и бастаашро аз фармони /products бинед."
+        )
+        return
+
+    product_id = int(parts[1])
+    player_id = parts[2]
+    async with get_session() as session:
+        product = await get_product(session, product_id)
+        if product is None or not product.is_active:
+            await message.answer("⚠️ Ин баста ёфт нашуд ё фаъол нест. /products-ро бинед.")
+            return
+        if product.category != ProductCategory.DIAMONDS:
+            await message.answer("⚠️ Ин фармон танҳо барои бастаҳои Free Fire (СНГ) аст.")
+            return
+        await upsert_user(
+            session, message.from_user.id,
+            message.from_user.username,
+            message.from_user.full_name,
+        )
+        order = await create_order(
+            session=session,
+            user_id=message.from_user.id,
+            product=product,
+            ff_player_id=player_id,
+            payment_provider="admin_complimentary",
+            paid_with_referral_balance=False,
+        )
+
+    result = await confirm_and_deliver(message.bot, order.id)
+    if result is None:
+        await message.answer(f"⚠️ Фармоиши админӣ #{order.id} сохта шуд, аммо тасдиқ нашуд.")
+        return
+    if result.auto_delivered:
+        await message.answer(
+            f"✅ Донати админӣ бомуваффақият фиристода шуд!\n"
+            f"📦 {product.display_name}\n🎮 ID: <code>{player_id}</code>\n"
+            f"🧾 Фармоиш: #{order.id}\n💰 Пардохт/чек талаб нашуд."
+        )
+    else:
+        await message.answer(
+            f"⚠️ Фармоиши админӣ #{order.id} сохта ва ҳамчун пардохтшуда тасдиқ шуд, "
+            "аммо таҳвили худкор анҷом нашуд. Агар дастӣ фиристодӣ, "
+            f"<code>/delivered {order.id}</code> зан."
+        )
 
 
 @router.message(Command("paid"))
