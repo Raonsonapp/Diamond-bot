@@ -2380,20 +2380,56 @@ async def wallet_topup_receive_proof(message: Message, state: FSMContext) -> Non
         f"🆔 User ID: <code>{message.from_user.id}</code>\n\n"
         "❗️ Пеш аз тасдиқ, маблағи воқеан воридшударо дар барномаи бонк санҷед."
     )
-    if not config.admin_chat_id:
-        await message.answer("⚠️ Админ дар бот танзим нашудааст (ADMIN_CHAT_ID). Чек қабул шуд, аммо ба админ фиристода нашуд.")
+    # Send wallet top-up receipts to every configured admin, including ADMIN_USER_IDS.
+    admin_targets: list[int] = list(config.admin_user_ids)
+    if config.admin_chat_id and config.admin_chat_id not in admin_targets:
+        admin_targets.append(config.admin_chat_id)
+
+    if not admin_targets:
+        await message.answer(
+            "⚠️ Адреси админҳо танзим нашудааст. Чек қабул нашуд; лутфан бо дастгирӣ тамос гиред."
+        )
         return
-    try:
-        if message.photo:
-            await message.bot.send_photo(config.admin_chat_id, message.photo[-1].file_id, caption=caption, reply_markup=admin_keyboard)
-        else:
-            await message.bot.send_document(config.admin_chat_id, message.document.file_id, caption=caption, reply_markup=admin_keyboard)
-    except Exception:
-        await message.answer("Фиристодани чек ба админ муваффақ нашуд. Лутфан баъдтар дубора кӯшиш кунед.")
+
+    delivered_to_admin = False
+    failed_targets: list[int] = []
+    for admin_target in admin_targets:
+        try:
+            if message.photo:
+                await message.bot.send_photo(
+                    admin_target, message.photo[-1].file_id,
+                    caption=caption, reply_markup=admin_keyboard,
+                )
+            else:
+                await message.bot.send_document(
+                    admin_target, message.document.file_id,
+                    caption=caption, reply_markup=admin_keyboard,
+                )
+            delivered_to_admin = True
+        except Exception:
+            logging.exception(
+                "Failed to forward wallet top-up receipt #%s to admin %s",
+                req_id, admin_target,
+            )
+            failed_targets.append(admin_target)
+
+    if not delivered_to_admin:
+        await message.answer(
+            "❌ Фиристодани чек ба админҳо муваффақ нашуд. "
+            "Чек дар бот нигоҳ дошта нашуд; лутфан дубора фиристед ё бо дастгирӣ тамос гиред."
+        )
         return
 
     await state.clear()
-    await message.answer(f"✅ Чек барои дархости #{req_id} ба админ фиристода шуд. Баланс баъди санҷиш пур мешавад.")
+    if failed_targets:
+        logging.warning(
+            "Wallet top-up receipt #%s was not delivered to admin destinations: %s",
+            req_id, failed_targets,
+        )
+    await message.answer(
+        f"✅ Чек барои дархости #{req_id} ба админ фиристода шуд. "
+        "Баланс баъди санҷиш пур мешавад."
+    )
 
 
 @router.message(Command("apikey"))
