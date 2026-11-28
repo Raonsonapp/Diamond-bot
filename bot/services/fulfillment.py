@@ -127,7 +127,7 @@ async def _send_success_receipt(bot: Bot, orders: list[Order], products: dict[in
             "✅ <b>МУВАФФАҚ</b>\n"
             f"Фармоиш №: <code>#{primary.id}</code>\n"
             f"Маҳсулот: {items_block}\n"
-            f"ID аккаунт: <code>{primary.ff_player_id}</code>\n"
+            f"ID Free Fire: <code>{primary.ff_player_id}</code>\n"
             f"Усули пардохт: {method}\n"
             f"Сана: {when}\n"
             f"Маблағ: {total:.2f} сомонӣ",
@@ -420,11 +420,34 @@ async def confirm_and_deliver(bot: Bot, order_id: int, payment_reference: str | 
         # whole recheck window on something that can never complete.
         is_terminal_failure = any(r is not None and r.message.startswith("⛔") for _, r in results)
         if config.admin_chat_id:
-            lines = [f"⚠️ Таҳвили худкор барои фармоиши #{order.id} нашуд — лутфан санҷед ва дастӣ иҷро карда, 'Delivered'-ро занед:"]
+            lines = [
+                f"⚠️ <b>Таҳвили худкор иҷро нашуд</b>",
+                f"🧾 Фармоиш: <b>#{order.id}</b>",
+                "",
+            ]
             for o, r in results:
-                reason = r.message if r is not None else "delivery provider raised NotImplementedError"
-                lines.append(f"#{o.id} ({o.ff_player_id}): {reason}")
-            await bot.send_message(config.admin_chat_id, "\n".join(lines)[:4000])
+                product = products.get(o.id)
+                product_name = html.escape(product.display_name) if product is not None else "Маҳсулоти номаълум"
+                lines.extend([
+                    f"📦 Маҳсулот: <b>{product_name}</b>",
+                    f"🎮 ID Free Fire: <code>{html.escape(str(o.ff_player_id))}</code>",
+                ])
+                raw_reason = (r.message if r is not None else "") or ""
+                if "Подписка неактивна" in raw_reason or "subscription inactive" in raw_reason.lower():
+                    lines.append(
+                        "🔌 Сабаб: обунаи хидмати таҳвили худкори FazerCards фаъол нест. "
+                        "Обуна бояд тамдид карда шавад."
+                    )
+                elif raw_reason.startswith("⛔"):
+                    lines.append("⛔ Сабаб: провайдер фармоишро рад кард. ID Free Fire ва маблағи балансро санҷед.")
+                else:
+                    lines.append("🛠 Сабаб: хидмати таҳвили худкор ҳоло ҷавоби тасдиқшуда надод.")
+                lines.append("")
+            lines.extend([
+                "📌 Амали зарурӣ: сабаби хатогиро ислоҳ кунед ё фармоишро дастӣ иҷро намоед.",
+                "✅ Танҳо баъд аз ворид шудани алмос тугмаи «Delivered»-ро пахш кунед.",
+            ])
+            await bot.send_message(config.admin_chat_id, "\n".join(lines)[:4000], parse_mode="HTML")
         if not is_terminal_failure:
             asyncio.create_task(_delayed_recheck(bot, order.id))
         return FulfillmentResult(order=order, auto_delivered=False)
