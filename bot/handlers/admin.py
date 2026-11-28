@@ -2018,7 +2018,7 @@ async def wallet_pending(message: Message) -> None:
             f"#{r.id} — user {r.user_id} — {r.amount_somoni:.2f} сомонӣ"
             for r in requests
         )
-        + "\n\nТасдиқ: /walletapprove &lt;request_id&gt; &lt;payment_reference&gt;"
+        + "\n\nТасдиқ: /walletapprove 10"
     )
 
 
@@ -2031,14 +2031,14 @@ async def wallet_approve(message: Message) -> None:
     from datetime import datetime, timezone
     from bot.db.models import WalletTopupRequest, WalletTransaction, User
 
-    parts = (message.text or "").split(maxsplit=2)
-    if len(parts) != 3 or not parts[1].isdigit() or not parts[2].strip():
-        await message.answer("Истифода: /walletapprove &lt;request_id&gt; &lt;payment_reference&gt;")
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) != 2 or not parts[1].isdigit():
+        await message.answer("Истифода: /walletapprove 10")
         return
-    req_id, payment_ref = int(parts[1]), parts[2].strip()
-    if len(payment_ref) > 100:
-        await message.answer("Reference аз ҳад дароз аст.")
-        return
+    req_id = int(parts[1])
+    # The admin has already checked the real incoming transfer in the bank.
+    # A manually generated reference keeps the command short and unique.
+    payment_ref = f"admin_verified_topup:{req_id}"
 
     credited_user_id = None
     amount = 0.0
